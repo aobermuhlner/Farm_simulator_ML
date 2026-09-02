@@ -1,0 +1,56 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
+
+context: |
+  Domain: educational web app that teaches ML concepts through an agricultural
+  simulation. Students run a robot apple farm: the robot should pick red apples
+  (high value), skip green ones, and discard wormy ones.
+
+  Learning goal: students tune a small set of hyperparameters (network depth/width,
+  regularization strength, dropout) and see the consequences — under-regularized
+  models overfit to one "perfect" red apple, over-regularized models lose the
+  worm distinction. Models/weights are pretrained per configuration and results
+  may be shaped so the teaching points land clearly.
+
+  Flow: farm overview page -> pick a task (apple harvest is the only one for now)
+  -> configure -> run a simulated month -> earnings scored per apple category.
+  Training set is browsable so students can inspect the data; test runs sample
+  ~20% of a larger set as "this harvest".
+
+  Constraints: hosted on GitHub (static hosting, inference in the browser or
+  precomputed - no backend). Simple, nice-looking UI, few options per screen.
+  Laptop-first, mobile later. Theory available behind help buttons.
+  Later tasks (e.g. animal skin-disease screening where false positives are
+  preferable to false negatives) should plug into the same task/config structure.
+
+  Tech stack: not decided yet.
