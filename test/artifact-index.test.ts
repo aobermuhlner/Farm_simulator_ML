@@ -238,6 +238,14 @@ describe('the training history', () => {
     expect(issues.some((entry) => entry.code === 'history-length-mismatch')).toBe(true)
   })
 
+  it('refuses an accuracy that is not a share', () => {
+    const issues = fileIssues((draft) => {
+      draft.history[3].valAccuracy = 1.4
+    })
+    expect(issues.some((entry) => entry.code === 'malformed-history')).toBe(true)
+    expect(messages(issues)).toContain('valAccuracy')
+  })
+
   it('refuses a configuration with no history at all', () => {
     const issues = fileIssues((draft) => {
       draft.history = []

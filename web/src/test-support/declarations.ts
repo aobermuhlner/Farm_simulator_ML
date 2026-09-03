@@ -110,7 +110,11 @@ export function unrelatedArtifact(): PredictionArtifact {
     categories: ['healthy', 'diseased'],
     configurations: {
       sensitivitylow: {
-        history: [],
+        history: [
+          { epoch: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
+          { epoch: 2, trainLoss: 0.6, valLoss: 0.68, trainAccuracy: 0.7, valAccuracy: 0.62 },
+          { epoch: 3, trainLoss: 0.4, valLoss: 0.55, trainAccuracy: 0.86, valAccuracy: 0.71 },
+        ],
         predictions: {
           training: { 'a-1': [0.9, 0.1] },
           pool: { 'a-1': [0.8, 0.2], 'a-2': [0.3, 0.7], 'a-3': [0.55, 0.45] },

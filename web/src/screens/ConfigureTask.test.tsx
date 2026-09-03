@@ -23,6 +23,7 @@ function renderApple() {
       declaration={apple}
       loadEntry={entryLoader(appleArtifact())}
       truth={appleTruth()}
+      replayMs={0}
       onBack={() => {}}
     />,
   )
@@ -33,11 +34,23 @@ function knobSelect(label: string): HTMLSelectElement {
   return screen.getByLabelText(label) as HTMLSelectElement
 }
 
+/**
+ * Trains the configuration in the knobs and then runs a month over it.
+ *
+ * Two presses, because they are two phases: training fetches the configuration's
+ * predictions and plays its run back, and only a trained model can be harvested. The
+ * replay is collapsed to nothing here, so the second button is there as soon as the
+ * fetch settles.
+ */
 async function run(): Promise<void> {
-  await userEvent.click(screen.getByRole('button', { name: 'Run a month' }))
-  // The run fetches its configuration's predictions, so it finishes a tick later; the
-  // button carries its own pending label back to idle when it does.
-  await waitFor(() => screen.getByRole('button', { name: 'Run a month' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
+}
+
+/** Trains only — for the cases where a month must not have been run. */
+async function train(): Promise<void> {
+  await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
+  await waitFor(() => screen.getByRole('button', { name: 'Train model' }))
 }
 
 /** The report region, so queries do not also match the form above it. */
@@ -114,6 +127,7 @@ describe('the configuration screen renders from knob declarations', () => {
         declaration={other}
         loadEntry={entryLoader(unrelatedArtifact())}
         truth={unrelatedTruth()}
+        replayMs={0}
         onBack={() => {}}
       />,
     )
@@ -183,7 +197,7 @@ describe('running a harvest', () => {
   it('derives no outcome of its own when the engine refuses', async () => {
     renderApple()
     await userEvent.selectOptions(knobSelect('Patterns per block'), '2')
-    await run()
+    await train()
 
     expect(screen.queryByText(/Total earnings/)).toBeNull()
     expect(screen.getByRole('alert')).toBeDefined()
@@ -235,7 +249,7 @@ describe('refusals', () => {
   it('explains an unprecomputed configuration and names it', async () => {
     renderApple()
     await userEvent.selectOptions(knobSelect('Patterns per block'), '2')
-    await run()
+    await train()
 
     const alert = screen.getByRole('alert')
     expect(alert.textContent).toContain('blocks2-channels32-regularization1-dropout0')
@@ -262,10 +276,11 @@ describe('refusals', () => {
           })
         }
         truth={appleTruth()}
+        replayMs={0}
         onBack={() => {}}
       />,
     )
-    await run()
+    await train()
 
     const alert = screen.getByRole('alert')
     expect(alert.textContent).toContain('9.9.9')

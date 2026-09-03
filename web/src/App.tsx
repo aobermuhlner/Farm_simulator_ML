@@ -36,6 +36,8 @@ export interface AppProps {
     | { ok: true; value: ConfigurationEntry }
     | { ok: false; issues: readonly ValidationIssue[] }
   >
+  /** Passed through to the task screen; injected by tests to skip the replay. */
+  readonly replayMs?: number
 }
 
 type Loading =
@@ -43,7 +45,7 @@ type Loading =
   | { readonly state: 'loaded'; readonly tasks: readonly LoadedTask[] }
   | { readonly state: 'refused'; readonly issues: readonly ValidationIssue[] }
 
-export function App({ load = loadShippedTasks, loadEntry = loadConfiguration }: AppProps) {
+export function App({ load = loadShippedTasks, loadEntry = loadConfiguration, replayMs }: AppProps) {
   const [loading, setLoading] = useState<Loading>({ state: 'loading' })
   const [selected, setSelected] = useState<string | undefined>(undefined)
 
@@ -96,6 +98,7 @@ export function App({ load = loadShippedTasks, loadEntry = loadConfiguration }: 
           loadEntry={(configurationId) => loadEntry(open, configurationId)}
           truth={open.truth}
           loadSplit={loadSplit}
+          replayMs={replayMs}
           onBack={() => setSelected(undefined)}
         />
       )}

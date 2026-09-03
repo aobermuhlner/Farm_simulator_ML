@@ -14,27 +14,37 @@
         {
           "epoch": 1,
           "trainLoss": 1.02,
-          "valLoss": 1.05
+          "valLoss": 1.05,
+          "trainAccuracy": 0.363,
+          "valAccuracy": 0.344
         },
         {
           "epoch": 2,
           "trainLoss": 0.91,
-          "valLoss": 0.94
+          "valLoss": 0.94,
+          "trainAccuracy": 0.431,
+          "valAccuracy": 0.413
         },
         {
           "epoch": 3,
           "trainLoss": 0.86,
-          "valLoss": 0.89
+          "valLoss": 0.89,
+          "trainAccuracy": 0.463,
+          "valAccuracy": 0.444
         },
         {
           "epoch": 4,
           "trainLoss": 0.84,
-          "valLoss": 0.88
+          "valLoss": 0.88,
+          "trainAccuracy": 0.475,
+          "valAccuracy": 0.45
         },
         {
           "epoch": 5,
           "trainLoss": 0.83,
-          "valLoss": 0.87
+          "valLoss": 0.87,
+          "trainAccuracy": 0.481,
+          "valAccuracy": 0.456
         }
       ],
       "predictions": {
@@ -100,27 +110,37 @@
         {
           "epoch": 1,
           "trainLoss": 0.98,
-          "valLoss": 1.0
+          "valLoss": 1,
+          "trainAccuracy": 0.388,
+          "valAccuracy": 0.375
         },
         {
           "epoch": 2,
           "trainLoss": 0.61,
-          "valLoss": 0.82
+          "valLoss": 0.82,
+          "trainAccuracy": 0.619,
+          "valAccuracy": 0.488
         },
         {
           "epoch": 3,
           "trainLoss": 0.33,
-          "valLoss": 0.79
+          "valLoss": 0.79,
+          "trainAccuracy": 0.794,
+          "valAccuracy": 0.506
         },
         {
           "epoch": 4,
           "trainLoss": 0.14,
-          "valLoss": 0.95
+          "valLoss": 0.95,
+          "trainAccuracy": 0.913,
+          "valAccuracy": 0.406
         },
         {
           "epoch": 5,
           "trainLoss": 0.05,
-          "valLoss": 1.21
+          "valLoss": 1.21,
+          "trainAccuracy": 0.969,
+          "valAccuracy": 0.244
         }
       ],
       "predictions": {
@@ -185,28 +205,38 @@
       "history": [
         {
           "epoch": 1,
-          "trainLoss": 1.0,
-          "valLoss": 1.012
+          "trainLoss": 1,
+          "valLoss": 1.012,
+          "trainAccuracy": 0.375,
+          "valAccuracy": 0.368
         },
         {
           "epoch": 2,
           "trainLoss": 0.805,
-          "valLoss": 0.829
+          "valLoss": 0.829,
+          "trainAccuracy": 0.497,
+          "valAccuracy": 0.482
         },
         {
           "epoch": 3,
           "trainLoss": 0.61,
-          "valLoss": 0.646
+          "valLoss": 0.646,
+          "trainAccuracy": 0.619,
+          "valAccuracy": 0.596
         },
         {
           "epoch": 4,
           "trainLoss": 0.415,
-          "valLoss": 0.463
+          "valLoss": 0.463,
+          "trainAccuracy": 0.741,
+          "valAccuracy": 0.711
         },
         {
           "epoch": 5,
           "trainLoss": 0.22,
-          "valLoss": 0.28
+          "valLoss": 0.28,
+          "trainAccuracy": 0.863,
+          "valAccuracy": 0.825
         }
       ],
       "predictions": {
@@ -272,27 +302,37 @@
         {
           "epoch": 1,
           "trainLoss": 1.05,
-          "valLoss": 1.06
+          "valLoss": 1.06,
+          "trainAccuracy": 0.344,
+          "valAccuracy": 0.338
         },
         {
           "epoch": 2,
           "trainLoss": 0.893,
-          "valLoss": 0.913
+          "valLoss": 0.913,
+          "trainAccuracy": 0.442,
+          "valAccuracy": 0.429
         },
         {
           "epoch": 3,
           "trainLoss": 0.735,
-          "valLoss": 0.765
+          "valLoss": 0.765,
+          "trainAccuracy": 0.541,
+          "valAccuracy": 0.522
         },
         {
           "epoch": 4,
           "trainLoss": 0.577,
-          "valLoss": 0.617
+          "valLoss": 0.617,
+          "trainAccuracy": 0.639,
+          "valAccuracy": 0.614
         },
         {
           "epoch": 5,
           "trainLoss": 0.42,
-          "valLoss": 0.47
+          "valLoss": 0.47,
+          "trainAccuracy": 0.738,
+          "valAccuracy": 0.706
         }
       ],
       "predictions": {
@@ -358,27 +398,37 @@
         {
           "epoch": 1,
           "trainLoss": 0.98,
-          "valLoss": 1.04
+          "valLoss": 1.04,
+          "trainAccuracy": 0.388,
+          "valAccuracy": 0.35
         },
         {
           "epoch": 2,
           "trainLoss": 0.765,
-          "valLoss": 0.885
+          "valLoss": 0.885,
+          "trainAccuracy": 0.522,
+          "valAccuracy": 0.447
         },
         {
           "epoch": 3,
           "trainLoss": 0.55,
-          "valLoss": 0.73
+          "valLoss": 0.73,
+          "trainAccuracy": 0.656,
+          "valAccuracy": 0.544
         },
         {
           "epoch": 4,
           "trainLoss": 0.335,
-          "valLoss": 0.575
+          "valLoss": 0.575,
+          "trainAccuracy": 0.791,
+          "valAccuracy": 0.641
         },
         {
           "epoch": 5,
           "trainLoss": 0.12,
-          "valLoss": 0.42
+          "valLoss": 0.42,
+          "trainAccuracy": 0.925,
+          "valAccuracy": 0.738
         }
       ],
       "predictions": {
@@ -444,27 +494,37 @@
         {
           "epoch": 1,
           "trainLoss": 1.04,
-          "valLoss": 1.054
+          "valLoss": 1.054,
+          "trainAccuracy": 0.35,
+          "valAccuracy": 0.341
         },
         {
           "epoch": 2,
           "trainLoss": 0.875,
-          "valLoss": 0.903
+          "valLoss": 0.903,
+          "trainAccuracy": 0.453,
+          "valAccuracy": 0.436
         },
         {
           "epoch": 3,
           "trainLoss": 0.71,
-          "valLoss": 0.752
+          "valLoss": 0.752,
+          "trainAccuracy": 0.556,
+          "valAccuracy": 0.53
         },
         {
           "epoch": 4,
           "trainLoss": 0.545,
-          "valLoss": 0.601
+          "valLoss": 0.601,
+          "trainAccuracy": 0.659,
+          "valAccuracy": 0.624
         },
         {
           "epoch": 5,
           "trainLoss": 0.38,
-          "valLoss": 0.45
+          "valLoss": 0.45,
+          "trainAccuracy": 0.763,
+          "valAccuracy": 0.719
         }
       ],
       "predictions": {
@@ -530,27 +590,37 @@
         {
           "epoch": 1,
           "trainLoss": 0.95,
-          "valLoss": 1.04
+          "valLoss": 1.04,
+          "trainAccuracy": 0.406,
+          "valAccuracy": 0.35
         },
         {
           "epoch": 2,
           "trainLoss": 0.725,
-          "valLoss": 0.905
+          "valLoss": 0.905,
+          "trainAccuracy": 0.547,
+          "valAccuracy": 0.434
         },
         {
           "epoch": 3,
           "trainLoss": 0.5,
-          "valLoss": 0.77
+          "valLoss": 0.77,
+          "trainAccuracy": 0.688,
+          "valAccuracy": 0.519
         },
         {
           "epoch": 4,
           "trainLoss": 0.275,
-          "valLoss": 0.635
+          "valLoss": 0.635,
+          "trainAccuracy": 0.828,
+          "valAccuracy": 0.603
         },
         {
           "epoch": 5,
           "trainLoss": 0.05,
-          "valLoss": 0.5
+          "valLoss": 0.5,
+          "trainAccuracy": 0.969,
+          "valAccuracy": 0.688
         }
       ],
       "predictions": {
@@ -616,27 +686,37 @@
         {
           "epoch": 1,
           "trainLoss": 1.08,
-          "valLoss": 1.088
+          "valLoss": 1.088,
+          "trainAccuracy": 0.325,
+          "valAccuracy": 0.32
         },
         {
           "epoch": 2,
           "trainLoss": 0.96,
-          "valLoss": 0.976
+          "valLoss": 0.976,
+          "trainAccuracy": 0.4,
+          "valAccuracy": 0.39
         },
         {
           "epoch": 3,
           "trainLoss": 0.84,
-          "valLoss": 0.864
+          "valLoss": 0.864,
+          "trainAccuracy": 0.475,
+          "valAccuracy": 0.46
         },
         {
           "epoch": 4,
           "trainLoss": 0.72,
-          "valLoss": 0.752
+          "valLoss": 0.752,
+          "trainAccuracy": 0.55,
+          "valAccuracy": 0.53
         },
         {
           "epoch": 5,
           "trainLoss": 0.6,
-          "valLoss": 0.64
+          "valLoss": 0.64,
+          "trainAccuracy": 0.625,
+          "valAccuracy": 0.6
         }
       ],
       "predictions": {
@@ -702,27 +782,37 @@
         {
           "epoch": 1,
           "trainLoss": 1.06,
-          "valLoss": 1.07
+          "valLoss": 1.07,
+          "trainAccuracy": 0.338,
+          "valAccuracy": 0.331
         },
         {
           "epoch": 2,
           "trainLoss": 0.96,
-          "valLoss": 0.98
+          "valLoss": 0.98,
+          "trainAccuracy": 0.4,
+          "valAccuracy": 0.388
         },
         {
           "epoch": 3,
           "trainLoss": 0.86,
-          "valLoss": 0.89
+          "valLoss": 0.89,
+          "trainAccuracy": 0.463,
+          "valAccuracy": 0.444
         },
         {
           "epoch": 4,
           "trainLoss": 0.76,
-          "valLoss": 0.8
+          "valLoss": 0.8,
+          "trainAccuracy": 0.525,
+          "valAccuracy": 0.5
         },
         {
           "epoch": 5,
           "trainLoss": 0.66,
-          "valLoss": 0.71
+          "valLoss": 0.71,
+          "trainAccuracy": 0.588,
+          "valAccuracy": 0.556
         }
       ],
       "predictions": {

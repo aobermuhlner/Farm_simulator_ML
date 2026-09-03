@@ -95,6 +95,14 @@ Three findings, all of which the game design has to live with:
 No shaping was applied, and none is needed: the lesson lands in the harvest breakdown as
 measured.
 
+## What a run records
+
+Per epoch: the loss over the fitted images and over the held-out ones, and the accuracy
+over each — the share whose highest-probability category is the true one. The accuracies
+are measured in the same evaluation pass as the losses, so the four figures of an epoch
+describe one and the same model state. The web app replays them; nothing derives an
+accuracy from a loss.
+
 ## Layout
 
 - `farm_training/` — the pipeline: `pool` and `images` read the pool the way the app

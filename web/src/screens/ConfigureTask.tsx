@@ -21,6 +21,7 @@ import { ArchitectureDiagram } from '../components/architecture/ArchitectureDiag
 import { defaultKnobValues, identifyConfiguration, runPool, type KnobValues } from '../model/run.js'
 import { Report } from './Report.js'
 import { TrainingBrowser } from './TrainingBrowser.js'
+import { TrainingRun } from './TrainingRun.js'
 
 export interface ConfigureTaskProps {
   readonly declaration: TaskDeclaration
@@ -42,6 +43,11 @@ export interface ConfigureTaskProps {
    * stage would unmount it — `design.md`.
    */
   readonly loadSplit?: () => Promise<Loaded<TrainingSplitView>>
+  /**
+   * How long the training replay takes. Injected by tests, which have no reason to
+   * sit through it; the screen otherwise uses the pacing the replay declares.
+   */
+  readonly replayMs?: number
 }
 
 /** A finished run, remembered with the configuration that produced it. */
@@ -50,18 +56,37 @@ interface Finished {
   readonly outcome: RunOutcome
 }
 
+/**
+ * How far the student has got with the configuration in the knobs.
+ *
+ * Two phases, deliberately separated: a model is trained first and read on its curves,
+ * and only then can a month be run over it. Pressing one button and reading earnings
+ * conflates "is this model any good" with "did the farm make money", which is the
+ * question the curves are there to answer first.
+ */
+type Stage =
+  | { readonly kind: 'untrained' }
+  | { readonly kind: 'fetching' }
+  /** The replay is playing, or has played, for this configuration's fetched entry. */
+  | {
+      readonly kind: 'training' | 'trained'
+      readonly configurationId: string
+      readonly entry: ConfigurationEntry
+    }
+
 export function ConfigureTask({
   declaration,
   loadEntry,
   truth,
   onBack,
   loadSplit,
+  replayMs,
 }: ConfigureTaskProps) {
   const [values, setValues] = useState<KnobValues>(() => defaultKnobValues(declaration))
   const [finished, setFinished] = useState<Finished | undefined>(undefined)
   const [refusal, setRefusal] = useState<readonly ValidationIssue[] | undefined>(undefined)
   const [browsing, setBrowsing] = useState(false)
-  const [running, setRunning] = useState(false)
+  const [stage, setStage] = useState<Stage>({ kind: 'untrained' })
 
   const identified = identifyConfiguration(declaration, values)
   const currentId = identified.ok ? identified.id : undefined
@@ -75,28 +100,41 @@ export function ConfigureTask({
     // A report belongs to the configuration that produced it. Clearing the
     // refusal too, so a stale explanation never sits under new knob values.
     setRefusal(undefined)
+    // A trained model belongs to its configuration even more strictly than a report
+    // does: there is no honest way to show one configuration's curves under another's
+    // knobs, so the replay goes and the student trains again.
+    setStage({ kind: 'untrained' })
   }
 
-  async function run(): Promise<void> {
+  async function train(): Promise<void> {
     const identified = identifyConfiguration(declaration, values)
     if (!identified.ok) {
       setRefusal(identified.issues)
       setFinished(undefined)
+      setStage({ kind: 'untrained' })
       return
     }
 
-    setRunning(true)
+    setStage({ kind: 'fetching' })
+    setFinished(undefined)
     // Fetched per run rather than held: a student who never chooses a configuration
     // never transfers it, and one they return to is served from the browser's cache.
     const loaded = await loadEntry(identified.id)
-    setRunning(false)
     if (!loaded.ok) {
       setRefusal(loaded.issues)
-      setFinished(undefined)
+      setStage({ kind: 'untrained' })
       return
     }
 
-    const result = runPool(declaration, values, loaded.value, truth)
+    setRefusal(undefined)
+    setStage({ kind: 'training', configurationId: identified.id, entry: loaded.value })
+  }
+
+  /** Runs the month over the model just trained — the entry is already in hand. */
+  function harvest(): void {
+    if (stage.kind !== 'trained') return
+
+    const result = runPool(declaration, values, stage.entry, truth)
     if (!result.ok) {
       setRefusal(result.issues)
       setFinished(undefined)
@@ -143,7 +181,7 @@ export function ConfigureTask({
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          void run()
+          void train()
         }}
       >
         <div className="configure-columns">
@@ -168,8 +206,12 @@ export function ConfigureTask({
           </p>
         )}
 
-        <button type="submit" disabled={running}>
-          {running ? 'Running a month…' : 'Run a month'}
+        <button type="submit" disabled={stage.kind === 'fetching' || stage.kind === 'training'}>
+          {stage.kind === 'fetching'
+            ? 'Loading the model…'
+            : stage.kind === 'training'
+              ? 'Training…'
+              : 'Train model'}
         </button>
       </form>
 
@@ -180,6 +222,28 @@ export function ConfigureTask({
       {refusal === undefined ? null : (
         <Issues title="This run did not happen" issues={refusal} />
       )}
+
+      {stage.kind === 'training' || stage.kind === 'trained' ? (
+        <TrainingRun
+          key={stage.configurationId}
+          history={stage.entry.history}
+          configurationId={stage.configurationId}
+          durationMs={replayMs}
+          onFinished={() =>
+            setStage((current) =>
+              current.kind === 'training' ? { ...current, kind: 'trained' } : current,
+            )
+          }
+        />
+      ) : null}
+
+      {stage.kind === 'trained' ? (
+        <p>
+          <button type="button" onClick={harvest}>
+            Run a month
+          </button>
+        </p>
+      ) : null}
 
       {finished === undefined ? null : (
         <Report

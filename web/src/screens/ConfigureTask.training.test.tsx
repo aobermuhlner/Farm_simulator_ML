@@ -32,6 +32,7 @@ function renderApple(load: () => Promise<Loaded<TrainingSplitView>> = () =>
       loadEntry={entryLoader(appleArtifact())}
       truth={appleTruth()}
       loadSplit={load}
+      replayMs={0}
       onBack={() => {}}
     />,
   )
@@ -65,11 +66,11 @@ describe('reaching the training data', () => {
   it('returns to the configuration screen', async () => {
     renderApple()
     await openBrowser()
-    expect(screen.queryByRole('button', { name: 'Run a month' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Train model' })).toBeNull()
 
     await leaveBrowser()
 
-    expect(screen.getByRole('button', { name: 'Run a month' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Train model' })).toBeDefined()
     for (const knob of apple.knobs) {
       expect(screen.getByLabelText(knob.label), `no control for ${knob.id}`).toBeDefined()
     }
@@ -81,6 +82,7 @@ describe('reaching the training data', () => {
         declaration={apple}
         loadEntry={entryLoader(appleArtifact())}
         truth={appleTruth()}
+        replayMs={0}
         onBack={() => {}}
       />,
     )

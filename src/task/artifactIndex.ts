@@ -359,6 +359,21 @@ function readHistory(
         return undefined
       }
     }
+    // Accuracies are shares, and a value outside 0..1 is not one — refused rather than
+    // clamped, because a replay showing 140% is a broken artifact, not a display bug.
+    for (const field of ['trainAccuracy', 'valAccuracy'] as const) {
+      const value = entry[field]
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+        issues.push(
+          issue(
+            'malformed-history',
+            `Configuration "${id}" epoch ${expected} records no usable ${field}; accuracies are shares in 0 to 1.`,
+            id,
+          ),
+        )
+        return undefined
+      }
+    }
   }
   return raw as readonly TrainingEpoch[]
 }

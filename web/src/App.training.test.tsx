@@ -70,7 +70,7 @@ function serveManifest(): { readonly calls: () => number } {
 describe('the training browser through the shell', () => {
   it('opens the split straight from a task, with no run first', async () => {
     serveManifest()
-    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} />)
+    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} replayMs={0} />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
     await userEvent.click(screen.getByRole('button', { name: 'See the training data' }))
@@ -83,7 +83,7 @@ describe('the training browser through the shell', () => {
 
   it('fetches the pool only once the browser is opened', async () => {
     const served = serveManifest()
-    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} />)
+    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} replayMs={0} />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
     expect(served.calls()).toBe(0)
@@ -94,15 +94,16 @@ describe('the training browser through the shell', () => {
     expect(served.calls()).toBe(1)
   })
 
-  it('goes back to the settings and on to a run', async () => {
+  it('goes back to the settings, trains, and on to a run', async () => {
     serveManifest()
-    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} />)
+    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} replayMs={0} />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
     await userEvent.click(screen.getByRole('button', { name: 'See the training data' }))
     await screen.findByRole('table')
     await userEvent.click(screen.getByRole('button', { name: 'Back to the settings' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Run a month' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
 
     expect(await screen.findByRole('region', { name: 'Run report' })).toBeDefined()
   })

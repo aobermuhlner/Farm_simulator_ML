@@ -200,3 +200,144 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
     grid-template-columns: minmax(20rem, 1fr) minmax(15rem, 20rem);
   }
 }
+
+/* The training replay: a run the student watches rather than a row they read. */
+
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.training-run {
+  margin: 1.5rem 0;
+  padding: 1rem 1.25rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  transition: border-color 300ms ease, box-shadow 300ms ease;
+}
+
+.training-run.running { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+
+.training-run.finished {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.training-run > h2 { margin: 0 0 0.2rem; }
+
+.training-run.running > h2::after {
+  content: '';
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-start: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+.replay-note { font-size: 0.85rem; color: color-mix(in srgb, var(--ink) 68%, transparent); margin: 0 0 0.9rem; }
+
+.epoch-line { display: flex; align-items: center; gap: 0.75rem; }
+.epoch-count { font-variant-numeric: tabular-nums; font-size: 0.9rem; white-space: nowrap; }
+
+.epoch-bar {
+  flex: 1;
+  block-size: 0.5rem;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+  overflow: hidden;
+}
+
+.epoch-bar-fill {
+  display: block;
+  block-size: 100%;
+  background: var(--accent);
+  transition: inline-size 120ms linear;
+}
+
+.live-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 1.1rem 0 0.4rem;
+}
+
+.live-figures .figure { display: grid; gap: 0.1rem; }
+.live-figures dt { font-size: 0.75rem; color: color-mix(in srgb, var(--ink) 65%, transparent); }
+
+.live-figures dd {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-figures .headline { grid-column: 1 / -1; }
+.live-figures .headline dd { font-size: 2.6rem; line-height: 1.1; color: var(--accent); }
+
+.training-run.finished .headline dd { animation: land 420ms ease-out; }
+
+@keyframes land {
+  from { transform: scale(0.86); opacity: 0.5; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.curves { display: grid; gap: 1rem; margin-top: 1rem; }
+
+@media (min-width: 40rem) {
+  .curves { grid-template-columns: 1fr 1fr; }
+}
+
+.curve { margin: 0; }
+.curve > figcaption { font-size: 0.8rem; color: color-mix(in srgb, var(--ink) 70%, transparent); }
+.curve-drawing { inline-size: 100%; block-size: auto; }
+
+.curve-drawing .grid line { stroke: color-mix(in srgb, var(--line) 70%, transparent); stroke-width: 0.5; }
+
+.curve-drawing .grid text {
+  font-size: 6px;
+  text-anchor: end;
+  fill: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.curve-drawing .grid text.axis { text-anchor: middle; }
+.curve-drawing .grid text.start { text-anchor: start; }
+
+.curve-drawing polyline { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.curve-drawing .fitted polyline, .curve-drawing .fitted .head { stroke: var(--accent); fill: none; }
+.curve-drawing .fitted .head { fill: var(--accent); }
+
+.curve-drawing .held-out polyline { stroke: var(--warn); stroke-dasharray: 4 2.5; }
+.curve-drawing .held-out .head { fill: var(--warn); }
+
+.legend { font-size: 0.78rem; color: color-mix(in srgb, var(--ink) 65%, transparent); margin: 0.6rem 0 0; }
+
+.legend .key {
+  display: inline-block;
+  inline-size: 1.1rem;
+  block-size: 0.2rem;
+  border-radius: 0.1rem;
+  margin: 0 0.35rem 0 1rem;
+  vertical-align: middle;
+}
+
+.legend .key:first-child { margin-inline-start: 0; }
+.legend .key.fitted { background: var(--accent); }
+.legend .key.held-out { background: var(--warn); }
+
+@media (prefers-reduced-motion: reduce) {
+  .training-run.running > h2::after,
+  .training-run.finished .headline dd { animation: none; }
+  .epoch-bar-fill { transition: none; }
+}

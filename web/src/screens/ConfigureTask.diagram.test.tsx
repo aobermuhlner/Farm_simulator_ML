@@ -45,6 +45,7 @@ function render_(declaration: TaskDeclaration) {
       declaration={declaration}
       loadEntry={entryLoader(appleArtifact())}
       truth={appleTruth()}
+      replayMs={0}
       onBack={() => {}}
     />,
   )
@@ -57,6 +58,7 @@ function renderOther(declaration: TaskDeclaration) {
       declaration={declaration}
       loadEntry={entryLoader(unrelatedArtifact())}
       truth={unrelatedTruth()}
+      replayMs={0}
       onBack={() => {}}
     />,
   )
@@ -138,7 +140,7 @@ describe('the diagram beside the settings', () => {
   it('needs no run to appear', () => {
     render_(apple)
 
-    expect(screen.getByRole('button', { name: 'Run a month' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Train model' })).toBeDefined()
     expect(drawing().getAttribute('aria-label')).toContain('blocks')
   })
 })
@@ -219,10 +221,13 @@ describe('a task that declares no diagram', () => {
     const other = unrelatedDeclaration()
     renderOther(other)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Run a month' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
 
     expect(screen.getByRole('region', { name: 'Run report' })).toBeDefined()
-    expect(screen.queryByRole('img')).toBeNull()
+    // The replay draws curves, which are images too — so this asks specifically whether
+    // an architecture was drawn. None is declared, so none should be.
+    expect(document.querySelector('.network-drawing, .cnn-drawing')).toBeNull()
   })
 })
 

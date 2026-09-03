@@ -41,7 +41,7 @@ def fake_result(pool, declaration, configuration_id="blocks2-channels8-regulariz
         seed=7,
         architecture=Architecture(blocks=2, channels=(8, 16), spatial=(64, 32), parameters=1),
         hyperparameters={"optimizer": "adam"},
-        history=(Epoch(1, 1.0, 1.1), Epoch(2, 0.9, 1.0)),
+        history=(Epoch(1, 1.0, 1.1, 0.5, 0.4), Epoch(2, 0.9, 1.0, 0.7, 0.6)),
         predictions={
             split: {image_id: list(uniform) for image_id in ids} for split, ids in pool.order.items()
         },
@@ -100,7 +100,7 @@ def test_an_image_the_manifest_does_not_declare_refuses(tmp_path, declaration, p
 
 def test_a_history_with_a_gap_refuses(tmp_path, declaration, pool):
     result = fake_result(pool, declaration)
-    broken = RunResult(**{**result.__dict__, "history": (Epoch(1, 1.0, 1.0), Epoch(3, 0.9, 0.9))})
+    broken = RunResult(**{**result.__dict__, "history": (Epoch(1, 1.0, 1.0, 0.5, 0.5), Epoch(3, 0.9, 0.9, 0.6, 0.6))})
     with pytest.raises(ArtifactError, match="blocks2-channels8"):
         write_artifact(declaration, pool, [broken], tmp_path, PIPELINE)
 

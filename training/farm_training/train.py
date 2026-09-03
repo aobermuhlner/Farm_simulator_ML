@@ -94,7 +94,13 @@ def main(argv: list[str] | None = None) -> int:
         (run_dir / "history.json").write_text(
             json.dumps(
                 [
-                    {"epoch": e.epoch, "trainLoss": e.train_loss, "valLoss": e.val_loss}
+                    {
+                        "epoch": e.epoch,
+                        "trainLoss": e.train_loss,
+                        "valLoss": e.val_loss,
+                        "trainAccuracy": e.train_accuracy,
+                        "valAccuracy": e.val_accuracy,
+                    }
                     for e in result.history
                 ],
                 indent=2,
@@ -105,7 +111,8 @@ def main(argv: list[str] | None = None) -> int:
 
         print(
             f"{result.configuration_id}  {result.architecture.parameters:>8,} params  "
-            f"{elapsed:6.1f}s  train {last.train_loss:.4f}  val {last.val_loss:.4f}"
+            f"{elapsed:6.1f}s  train {last.train_loss:.4f}/{last.train_accuracy:.1%}  "
+            f"val {last.val_loss:.4f}/{last.val_accuracy:.1%}"
         )
 
     target = write_artifact(declaration, pool, results, args.out)

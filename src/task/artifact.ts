@@ -24,6 +24,15 @@ export interface TrainingEpoch {
   readonly epoch: number
   readonly trainLoss: number
   readonly valLoss: number
+  /**
+   * Share of images the model called correctly after this epoch, in 0..1 — over the
+   * images it was fitted on, and over the held-out ones.
+   *
+   * Measured during training rather than derived here: it is the state of the model at
+   * that epoch, and only the pipeline ever had it.
+   */
+  readonly trainAccuracy: number
+  readonly valAccuracy: number
 }
 
 /** Image id to probability distribution over the task's declared categories. */

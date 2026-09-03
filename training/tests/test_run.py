@@ -55,6 +55,12 @@ def test_losses_are_measured_and_finite(result):
         assert entry.train_loss > 0
 
 
+def test_accuracies_are_measured_as_shares(result):
+    for entry in result.history:
+        assert 0.0 <= entry.train_accuracy <= 1.0
+        assert 0.0 <= entry.val_accuracy <= 1.0
+
+
 def test_every_pool_image_gets_a_distribution(result, pool, declaration):
     for split, images in result.predictions.items():
         assert set(images) == set(pool.order[split])
@@ -72,8 +78,8 @@ def test_held_out_images_sit_under_the_training_split(result, pool):
 
 def test_the_same_seed_reproduces_the_history(declaration, pool, decoded, knobs, result):
     again = train_configuration(declaration, pool, decoded, knobs, seed=7, epochs=SHORT_RUN)
-    assert [(e.epoch, e.train_loss, e.val_loss) for e in again.history] == [
-        (e.epoch, e.train_loss, e.val_loss) for e in result.history
+    assert [(e.epoch, e.train_loss, e.val_loss, e.train_accuracy, e.val_accuracy) for e in again.history] == [
+        (e.epoch, e.train_loss, e.val_loss, e.train_accuracy, e.val_accuracy) for e in result.history
     ]
     assert again.predictions == result.predictions
 

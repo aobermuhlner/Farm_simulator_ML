@@ -143,6 +143,8 @@ def _predictions_document(
                 "epoch": entry.epoch,
                 "trainLoss": round(entry.train_loss, 6),
                 "valLoss": round(entry.val_loss, 6),
+                "trainAccuracy": round(entry.train_accuracy, 6),
+                "valAccuracy": round(entry.val_accuracy, 6),
             }
             for entry in result.history
         ],

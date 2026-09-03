@@ -56,7 +56,13 @@ interface ConfigurationFile {
   readonly schemaVersion: string
   readonly taskId: string
   readonly configurationId: string
-  readonly history: readonly { epoch: number; trainLoss: number; valLoss: number }[]
+  readonly history: readonly {
+    epoch: number
+    trainLoss: number
+    valLoss: number
+    trainAccuracy: number
+    valAccuracy: number
+  }[]
   readonly predictions: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>>
 }
 
@@ -169,6 +175,11 @@ describe('every covered configuration is complete', () => {
     for (const entry of file.history) {
       expect(Number.isFinite(entry.trainLoss)).toBe(true)
       expect(Number.isFinite(entry.valLoss)).toBe(true)
+      // Measured per epoch, and shares: the replay reads these as percentages.
+      expect(entry.trainAccuracy).toBeGreaterThanOrEqual(0)
+      expect(entry.trainAccuracy).toBeLessThanOrEqual(1)
+      expect(entry.valAccuracy).toBeGreaterThanOrEqual(0)
+      expect(entry.valAccuracy).toBeLessThanOrEqual(1)
     }
   })
 })

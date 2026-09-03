@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { LoadedTask } from './data/load.js'
@@ -25,18 +25,23 @@ function loads(...tasks: readonly LoadedTask[]) {
   return () => Promise.resolve({ ok: true as const, value: tasks })
 }
 
-/** Every render below goes through the shell with its entry loader injected. */
+/**
+ * Every render below goes through the shell with its entry loader injected, and with
+ * the training replay collapsed to nothing — these tests are about the stages, not the
+ * pacing, and `TrainingRun`'s own suite owns the animation.
+ */
 function renderApp(...tasks: readonly LoadedTask[]) {
-  return render(<App load={loads(...tasks)} loadEntry={loadEntryFor} />)
+  return render(<App load={loads(...tasks)} loadEntry={loadEntryFor} replayMs={0} />)
 }
 
 async function openTask(title: string): Promise<void> {
   await userEvent.click(await screen.findByRole('button', { name: `Open ${title}` }))
 }
 
+/** Trains the model in the knobs, then runs the month over it. */
 async function runMonth(): Promise<void> {
-  await userEvent.click(screen.getByRole('button', { name: 'Run a month' }))
-  await waitFor(() => screen.getByRole('button', { name: 'Run a month' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
 }
 
 describe('the four stages of the simulator', () => {

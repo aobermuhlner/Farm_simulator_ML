@@ -3,7 +3,9 @@
 The training loss is measured over the fitted images and the validation loss over the
 held-out ones, both in evaluation mode after the epoch's updates — so the two curves a
 student reads differ because of what the model saw, not because dropout was on for one
-of them and off for the other.
+of them and off for the other. Accuracy is measured in the same pass and on the same
+images, because the replay shows it climbing beside the loss and a number measured
+somewhere else would be a different model's.
 
 No held-out image reaches the optimizer. That is the whole reason the role exists, and
 it is the one thing in here worth checking twice.
@@ -54,6 +56,9 @@ class Epoch:
     epoch: int
     train_loss: float
     val_loss: float
+    #: Share of images whose highest-probability category is the true one, in 0..1.
+    train_accuracy: float
+    val_accuracy: float
 
 
 @dataclass(frozen=True)
@@ -86,14 +91,20 @@ def _tensor(pixels: np.ndarray) -> torch.Tensor:
 
 
 @torch.no_grad()
-def _mean_loss(model: nn.Module, criterion: nn.Module, pixels: torch.Tensor, targets: torch.Tensor) -> float:
+def _measure(
+    model: nn.Module, criterion: nn.Module, pixels: torch.Tensor, targets: torch.Tensor
+) -> tuple[float, float]:
+    """Mean loss and accuracy over one set of images, from a single evaluation pass."""
     model.eval()
     total = 0.0
+    hits = 0
     for start in range(0, len(targets), BATCH_SIZE):
         batch = pixels[start : start + BATCH_SIZE]
         labels = targets[start : start + BATCH_SIZE]
-        total += criterion(model(batch), labels).item() * len(labels)
-    return total / len(targets)
+        outputs = model(batch)
+        total += criterion(outputs, labels).item() * len(labels)
+        hits += int((outputs.argmax(dim=1) == labels).sum().item())
+    return total / len(targets), hits / len(targets)
 
 
 @torch.no_grad()
@@ -148,11 +159,15 @@ def train_configuration(
             loss.backward()
             optimizer.step()
 
+        train_loss, train_accuracy = _measure(model, criterion, fitted_pixels, fitted_targets)
+        val_loss, val_accuracy = _measure(model, criterion, held_out_pixels, held_out_targets)
         history.append(
             Epoch(
                 epoch=epoch,
-                train_loss=_mean_loss(model, criterion, fitted_pixels, fitted_targets),
-                val_loss=_mean_loss(model, criterion, held_out_pixels, held_out_targets),
+                train_loss=train_loss,
+                val_loss=val_loss,
+                train_accuracy=train_accuracy,
+                val_accuracy=val_accuracy,
             )
         )
 
