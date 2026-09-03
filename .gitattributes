@@ -1,0 +1,8 @@
+# The generated pool must round-trip byte-identically.
+#
+# `npm run pool:generate` writes the manifest with LF endings and the committed pool is
+# the check that generation is reproducible. Without this, a checkout on a machine with
+# `core.autocrlf` on would rewrite the manifest to CRLF, and the next regeneration would
+# report the whole file as changed — a dirty tree that says nothing about the pool.
+pools/apple-harvest/manifest.json text eol=lf
+pools/apple-harvest/*.png binary
