@@ -27,7 +27,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "c04f50849f458daa86d09263f74b4307bf06fe21",
+        "revision": "4d051a2492fbee25b6cd569b5396b39bc0b90745",
         "dirty": false
       },
       "hyperparameters": {
@@ -67,7 +67,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "c04f50849f458daa86d09263f74b4307bf06fe21",
+        "revision": "4d051a2492fbee25b6cd569b5396b39bc0b90745",
         "dirty": false
       },
       "hyperparameters": {
@@ -107,7 +107,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "c04f50849f458daa86d09263f74b4307bf06fe21",
+        "revision": "4d051a2492fbee25b6cd569b5396b39bc0b90745",
         "dirty": false
       },
       "hyperparameters": {
