@@ -4,7 +4,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { regionFor } from '../../../src/pool/index.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
-import { DATA_URLS } from '../data/paths.js'
+import { dataUrlFor } from '../data/paths.js'
 import type { TrainingSplitView } from '../data/pool.js'
 import { loadTrainingSplit } from '../data/pool.js'
 import { appleDeclaration } from '../test-support/declarations.js'
@@ -26,8 +26,8 @@ const split = appleTrainingSplit()
 const manifest = appleManifest()
 
 const POOL_PATHS = {
-  manifest: DATA_URLS.applePoolManifest,
-  atlases: DATA_URLS.applePoolAtlases,
+  manifest: 'data/pools/apple-harvest/manifest.json',
+  atlases: dataUrlFor('pools/apple-harvest') ?? '',
 }
 
 /** The label the task attaches most value to getting right. */
@@ -40,11 +40,10 @@ function payoffOf(categoryId: string): number {
 }
 
 /** Renders the browser over a split that is already in hand. */
-async function renderSplit(view: TrainingSplitView = split, fixtureBacked = true): Promise<void> {
+async function renderSplit(view: TrainingSplitView = split): Promise<void> {
   render(
     <TrainingBrowser
       load={() => Promise.resolve({ ok: true, value: view })}
-      fixtureBacked={fixtureBacked}
       onBack={() => {}}
     />,
   )
@@ -63,7 +62,6 @@ async function renderManifest(served: unknown): Promise<void> {
   render(
     <TrainingBrowser
       load={() => loadTrainingSplit(POOL_PATHS, apple)}
-      fixtureBacked
       onBack={() => {}}
     />,
   )
@@ -243,7 +241,6 @@ describe('what is deliberately absent', () => {
     const { container } = render(
       <TrainingBrowser
         load={() => Promise.resolve({ ok: true, value: split })}
-        fixtureBacked
         onBack={() => {}}
       />,
     )
@@ -279,7 +276,6 @@ describe('what is deliberately absent', () => {
     const { container } = render(
       <TrainingBrowser
         load={() => Promise.resolve({ ok: true, value: split })}
-        fixtureBacked
         onBack={() => {}}
       />,
     )
@@ -292,19 +288,19 @@ describe('what is deliberately absent', () => {
 })
 
 describe('which pool is on screen', () => {
-  it('says the images shown are not the images a run scored', async () => {
-    await renderSplit(split, true)
-
-    const notice = screen.getByRole('note')
-
-    expect(notice.textContent).toContain('not counts of the images below')
-    expect(notice.textContent).toContain('stand-in')
-  })
-
-  it('makes no such claim once the run scores this pool', async () => {
-    await renderSplit(split, false)
+  it('makes no claim that these are not the images a run scores', async () => {
+    // They are. One pool per task, browsed and scored — so the notice that used to warn
+    // otherwise is gone rather than left standing as a stale caveat.
+    await renderSplit(split)
 
     expect(screen.queryByRole('note')).toBeNull()
+  })
+
+  it('shows the same images the shipped task is scored over', async () => {
+    await renderSplit(split)
+
+    expect(screen.queryAllByRole('img')).toHaveLength(split.images.length)
+    expect(split.images.length).toBe(200)
   })
 })
 
@@ -323,7 +319,6 @@ describe('a pool that will not load', () => {
             field: POOL_PATHS.manifest,
           },
         ])}
-        fixtureBacked
         onBack={() => {}}
       />,
     )

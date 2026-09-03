@@ -1,13 +1,19 @@
 /**
  * That the pool is reachable from the app's data mounts.
  *
- * Nothing in the shipped app reads the pool yet — `prediction-artifacts` performs that
- * switch, per design.md — so these tests cover the plumbing this change is responsible
- * for: the mount resolves, and a PNG is not served as JSON.
+ * The shipped app now reads this pool for both browsing and scoring, so these tests
+ * cover the plumbing under that: the mount resolves both ways, and a PNG is not served
+ * as JSON.
  */
 
 import { describe, expect, it } from 'vitest'
-import { contentTypeFor, DATA_MOUNTS, DATA_URLS, sourcePathFor } from '../web/src/data/paths.js'
+import {
+  contentTypeFor,
+  DATA_MOUNTS,
+  dataUrlFor,
+  SHIPPED_TASKS,
+  sourcePathFor,
+} from '../web/src/data/paths.js'
 import { committedManifest } from './helpers/pool'
 
 describe('the pool data mount', () => {
@@ -30,8 +36,15 @@ describe('the pool data mount', () => {
   })
 
   it('leaves the existing mounts alone', () => {
-    expect(sourcePathFor(DATA_URLS.appleDeclaration)).toBe('declarations/apple-harvest.json')
-    expect(sourcePathFor(DATA_URLS.applePool)).toBe('test/fixtures/apple-pool.json')
+    expect(sourcePathFor(SHIPPED_TASKS[0] ?? '')).toBe('declarations/apple-harvest.json')
+  })
+
+  it('resolves a repo path back to the URL it is served at', () => {
+    expect(dataUrlFor('pools/apple-harvest')).toBe('data/pools/apple-harvest')
+    expect(dataUrlFor('artifacts/apple-harvest/predictions')).toBe(
+      'data/artifacts/apple-harvest/predictions',
+    )
+    expect(dataUrlFor('somewhere/else')).toBeUndefined()
   })
 })
 
@@ -47,9 +60,11 @@ describe('content types', () => {
 })
 
 describe('what a student sees', () => {
-  it('still reads the fixture pool, not the generated one', () => {
-    // Deliberate: the shipped prediction fixture names image ids the real manifest does
-    // not declare, so switching before predictions exist would refuse every image.
-    expect(DATA_URLS.applePool).toBe('data/fixtures/apple-pool.json')
+  it('reads the generated pool, which is also what a run is scored over', () => {
+    // One pool per task, browsed and scored. The fixtures stay in test/ as fixtures.
+    expect(Object.values(DATA_MOUNTS)).not.toContain('test/fixtures')
+    expect(dataUrlFor('pools/apple-harvest/manifest.json')).toBe(
+      'data/pools/apple-harvest/manifest.json',
+    )
   })
 })

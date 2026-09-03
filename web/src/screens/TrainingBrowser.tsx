@@ -35,8 +35,6 @@ export const CELL_DISPLAY_PX = 112
 export interface TrainingBrowserProps {
   /** Fetches the split. Injected so the screen owns its own loading state. */
   readonly load: () => Promise<Loaded<TrainingSplitView>>
-  /** True while runs are scored from hand-written stand-ins rather than this pool. */
-  readonly fixtureBacked: boolean
   readonly onBack: () => void
 }
 
@@ -45,7 +43,7 @@ type Loading =
   | { readonly state: 'loaded'; readonly split: TrainingSplitView }
   | { readonly state: 'refused'; readonly issues: readonly ValidationIssue[] }
 
-export function TrainingBrowser({ load, fixtureBacked, onBack }: TrainingBrowserProps) {
+export function TrainingBrowser({ load, onBack }: TrainingBrowserProps) {
   const [loading, setLoading] = useState<Loading>({ state: 'loading' })
 
   useEffect(() => {
@@ -101,14 +99,6 @@ export function TrainingBrowser({ load, fixtureBacked, onBack }: TrainingBrowser
               ))}
             </tbody>
           </table>
-
-          {fixtureBacked ? (
-            <p className="provenance" role="note">
-              These are the real training images behind this task. A run scored right now
-              still uses the hand-written stand-in predictions over a much smaller set, so
-              the counts in a report are not counts of the images below.
-            </p>
-          ) : null}
 
           <ul className="image-grid">
             {split.images.map((image) => {

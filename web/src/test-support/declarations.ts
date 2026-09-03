@@ -8,7 +8,9 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { PredictionArtifact } from '../../../src/task/artifact.js'
+import type { ConfigurationEntry, PredictionArtifact } from '../../../src/task/artifact.js'
+import { coverageIssue, type LoadedIndex } from '../../../src/task/artifactIndex.js'
+import type { Loaded } from '../data/load.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
 
@@ -227,4 +229,26 @@ export function convolutionalDeclaration(): TaskDeclaration {
     )
   }
   return validated.declaration
+}
+
+/**
+ * A `loadEntry` over an already-loaded artifact, for screen tests.
+ *
+ * The shipped app fetches one configuration at a time; a test does not need a server to
+ * exercise that, only a function with the same contract — including the refusal for a
+ * configuration nothing was trained for, which is the one a student is most likely to
+ * meet.
+ */
+export function entryLoader(artifact: PredictionArtifact) {
+  return (configurationId: string): Promise<Loaded<ConfigurationEntry>> => {
+    const entry = artifact.configurations[configurationId]
+    if (entry === undefined) {
+      const issue = coverageIssue(
+        { configurations: {}, coverage: [] } as unknown as LoadedIndex,
+        configurationId,
+      )
+      return Promise.resolve({ ok: false, issues: issue === undefined ? [] : [issue] })
+    }
+    return Promise.resolve({ ok: true, value: entry })
+  }
 }

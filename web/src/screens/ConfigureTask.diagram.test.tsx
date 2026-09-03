@@ -17,6 +17,7 @@ import type { CnnDiagram, FeedforwardDiagram, TaskDeclaration } from '../../../s
 import { validateDeclaration } from '../../../src/task/validate.js'
 import {
   appleArtifact,
+  entryLoader,
   appleDeclaration,
   appleTruth,
   convolutionalDeclaration,
@@ -42,9 +43,8 @@ function render_(declaration: TaskDeclaration) {
   return render(
     <ConfigureTask
       declaration={declaration}
-      artifact={appleArtifact()}
+      loadEntry={entryLoader(appleArtifact())}
       truth={appleTruth()}
-      fixtureBacked
       onBack={() => {}}
     />,
   )
@@ -55,9 +55,8 @@ function renderOther(declaration: TaskDeclaration) {
   return render(
     <ConfigureTask
       declaration={declaration}
-      artifact={unrelatedArtifact()}
+      loadEntry={entryLoader(unrelatedArtifact())}
       truth={unrelatedTruth()}
-      fixtureBacked
       onBack={() => {}}
     />,
   )

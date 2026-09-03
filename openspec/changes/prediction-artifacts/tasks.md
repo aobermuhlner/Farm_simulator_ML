@@ -60,52 +60,53 @@ is the switch that can be reverted on its own.
 - [x] 3.1 Move the `blocks` default from 3 to 2 in `declarations/apple-harvest.json` and
       verify `npm test` passes and the declared defaults resolve to
       `blocks2-channels16-regularization1-dropout0`
-- [ ] 3.2 Train `blocks2` at channels 8, 16 and 32 and commit the artifact, verifying the
+- [x] 3.2 Train `blocks2` at channels 8, 16 and 32 and commit the artifact, verifying the
       index covers exactly those three ids and each file carries 1200 distributions across
       the two splits and 40 contiguous epochs
-- [ ] 3.3 Add the ship-gate suite over the committed artifact and manifest, verifying pool
+- [x] 3.3 Add the ship-gate suite over the committed artifact and manifest, verifying pool
       id, schema version and seed match; coverage is non-empty and contains the default
       id; each covered configuration has exactly one distribution per manifest image in
       the right split with held-out images under `training`; epochs are contiguous; every
       vector decodes within the declared tolerance; and provenance is present with a
       clean-tree revision
-- [ ] 3.4 Extend the gate with the two refusals that keep the artifact honest, verifying
+- [x] 3.4 Extend the gate with the two refusals that keep the artifact honest, verifying
       an entry carrying a true category or a chosen action is refused naming that field,
       and a configuration whose numbers were altered without a recorded shaping step is
       refused as unshippable
-- [ ] 3.5 Add the architecture parity check, verifying `blockChannels`/`blockSizes`
+- [x] 3.5 Add the architecture parity check, verifying `blockChannels`/`blockSizes`
       recomputed from the declaration equal the `architecture` block each configuration
       recorded, and that the test names the configuration when they diverge
 
 ## 4. Switch the app to the trained artifact
 
-- [ ] 4.1 Add `'data/artifacts': 'artifacts'` to `DATA_MOUNTS` and verify the dev
+- [x] 4.1 Add `'data/artifacts': 'artifacts'` to `DATA_MOUNTS` and verify the dev
       middleware serves `index.json` and `closeBundle` copies the directory into `dist`
-- [ ] 4.2 Derive the predictions URL from the loaded declaration's `predictions` field and
+- [x] 4.2 Derive the predictions URL from the loaded declaration's `predictions` field and
       collapse `TaskDataPaths.pool`/`generatedPool` into one `pool: PoolPaths`, verifying
       `web/src/data/paths.test.tsx` covers the derivation and that no second predictions
       constant remains
-- [ ] 4.3 Load ground truth through `readPool()` over the generated manifest instead of
+- [x] 4.3 Load ground truth through `readPool()` over the generated manifest instead of
       the fixture, verifying a task whose manifest refuses does not load and that the
       images the browser shows are the images the run scores
-- [ ] 4.4 Read coverage from the index before fetching any configuration file, verifying a
+- [x] 4.4 Read coverage from the index before fetching any configuration file, verifying a
       valid but uncovered configuration refuses as `untrained-configuration` naming the id,
       distinct from an invalid configuration, with no substitution or fallback
-- [ ] 4.5 Remove the training browser's "not the images your run scored" notice and verify
+- [x] 4.5 Remove the training browser's "not the images your run scored" notice and verify
       the screen test that asserted it is updated to assert the browsed pool is the scored
       one
-- [ ] 4.6 Verify the whole build end to end: `npm test`, `npm run typecheck` and
+- [x] 4.6 Verify the whole build end to end: `npm test`, `npm run typecheck` and
       `npm run build` pass, and `dist/data/artifacts/apple-harvest/predictions/index.json`
       is present in the output
 
 ## 5. Review and record
 
-- [ ] 5.1 Review the three runs against the intended lesson — train-versus-validation gap
+- [x] 5.1 Review the three runs against the intended lesson — train-versus-validation gap
       per width, and the per-category distributions on the subtle-worm and out-of-band-red
       populations — and verify the finding is written down, including the case where width
       alone does not separate
-- [ ] 5.2 Re-measure `training/README.md`'s cost table across widths rather than depths and
+- [x] 5.2 Re-measure `training/README.md`'s cost table across widths rather than depths and
       verify it lists timings and parameter counts for `blocks2` at channels 8, 16 and 32
-- [ ] 5.3 Only if 5.1 finds the lesson does not land: apply shaping as the separate
-      recorded pass, verifying the shaping step and the configurations it touched appear in
-      provenance and that the gate accepts the result as shaped rather than measured
+- [x] 5.3 Not applicable, and recorded as such: 5.1 found the lesson lands in the harvest
+      breakdown as measured, so no shaping was applied and the artifact records none. The
+      reader still refuses an unattributed shaping step (`test/artifact-index.test.ts`),
+      so the path exists the day it is needed

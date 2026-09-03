@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runHarvest } from '../../../src/scoring/index.js'
@@ -6,6 +6,7 @@ import {
   appleArtifact,
   appleDeclaration,
   appleTruth,
+  entryLoader,
   unrelatedArtifact,
   unrelatedDeclaration,
   unrelatedTruth,
@@ -16,13 +17,12 @@ afterEach(cleanup)
 
 const apple = appleDeclaration()
 
-function renderApple(fixtureBacked = true) {
+function renderApple() {
   return render(
     <ConfigureTask
       declaration={apple}
-      artifact={appleArtifact()}
+      loadEntry={entryLoader(appleArtifact())}
       truth={appleTruth()}
-      fixtureBacked={fixtureBacked}
       onBack={() => {}}
     />,
   )
@@ -35,6 +35,9 @@ function knobSelect(label: string): HTMLSelectElement {
 
 async function run(): Promise<void> {
   await userEvent.click(screen.getByRole('button', { name: 'Run a month' }))
+  // The run fetches its configuration's predictions, so it finishes a tick later; the
+  // button carries its own pending label back to idle when it does.
+  await waitFor(() => screen.getByRole('button', { name: 'Run a month' }))
 }
 
 /** The report region, so queries do not also match the form above it. */
@@ -109,9 +112,8 @@ describe('the configuration screen renders from knob declarations', () => {
     render(
       <ConfigureTask
         declaration={other}
-        artifact={unrelatedArtifact()}
+        loadEntry={entryLoader(unrelatedArtifact())}
         truth={unrelatedTruth()}
-        fixtureBacked
         onBack={() => {}}
       />,
     )
@@ -218,15 +220,11 @@ describe('the report and the configuration it came from', () => {
     expect(within(report()).getByText(/blocks3-channels16-regularization1-dropout0/)).toBeDefined()
   })
 
-  it('discloses that the predictions were fixtures', async () => {
+  it('claims nothing about where the predictions came from', async () => {
+    // The disclosure it used to carry said the numbers were hand-written stand-ins.
+    // They are trained, over the pool the student can browse, so the note is gone
+    // rather than reworded into something else that is not checked.
     renderApple()
-    await run()
-
-    expect(screen.getByRole('note').textContent).toContain('fixture data')
-  })
-
-  it('omits the fixture disclosure when the data is not fixture-backed', async () => {
-    renderApple(false)
     await run()
 
     expect(screen.queryByRole('note')).toBeNull()
@@ -245,14 +243,25 @@ describe('refusals', () => {
   })
 
   it('shows the cause the engine named rather than a message of its own', async () => {
-    const declaration = apple
-    const stale = { ...appleArtifact(), schemaVersion: '9.9.9' }
+    // The screen no longer owns version checking — the artifact index is read when the
+    // task loads — so what is tested here is that it prints the cause it was handed.
     render(
       <ConfigureTask
-        declaration={declaration}
-        artifact={stale}
+        declaration={apple}
+        loadEntry={() =>
+          Promise.resolve({
+            ok: false,
+            issues: [
+              {
+                code: 'schema-version-mismatch',
+                field: 'schemaVersion',
+                message:
+                  'Declared schema version "1.0.0" does not match prediction artifact version "9.9.9".',
+              },
+            ],
+          })
+        }
         truth={appleTruth()}
-        fixtureBacked
         onBack={() => {}}
       />,
     )
@@ -271,9 +280,8 @@ describe('leaving the task', () => {
     render(
       <ConfigureTask
         declaration={apple}
-        artifact={appleArtifact()}
+        loadEntry={entryLoader(appleArtifact())}
         truth={appleTruth()}
-        fixtureBacked
         onBack={onBack}
       />,
     )

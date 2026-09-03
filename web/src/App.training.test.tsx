@@ -9,11 +9,10 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { App } from './App.js'
-import type { LoadedTask } from './data/load.js'
-import { DATA_URLS } from './data/paths.js'
-import { appleArtifact, appleDeclaration, appleTruth } from './test-support/declarations.js'
-import { appleManifest } from './test-support/pool.js'
+import { appleManifest, appleTask } from './test-support/pool.js'
 
 afterEach(() => {
   cleanup()
@@ -21,30 +20,49 @@ afterEach(() => {
 })
 
 const manifest = appleManifest()
+const task = appleTask()
 
-const appleTask: LoadedTask = {
-  declaration: appleDeclaration(),
-  artifact: appleArtifact(),
-  truth: appleTruth(),
-  generatedPool: {
-    manifest: DATA_URLS.applePoolManifest,
-    atlases: DATA_URLS.applePoolAtlases,
-  },
+/** Every covered configuration's committed predictions, by the file the index names. */
+function configurationFiles(): Map<string, unknown> {
+  const files = new Map<string, unknown>()
+  for (const record of Object.values(task.index.configurations)) {
+    files.set(
+      record.file,
+      JSON.parse(
+        readFileSync(join(process.cwd(), `${task.declaration.predictions}/${record.file}`), 'utf8'),
+      ) as unknown,
+    )
+  }
+  return files
 }
 
-/** Counts every manifest fetch, so laziness is observable. */
+/**
+ * Serves the manifest and the predictions a run needs, counting manifest fetches so
+ * laziness stays observable.
+ */
 function serveManifest(): { readonly calls: () => number } {
   let calls = 0
+  const predictions = configurationFiles()
   vi.stubGlobal('fetch', (input: string) => {
-    if (!String(input).endsWith(DATA_URLS.applePoolManifest)) {
-      return Promise.resolve({ ok: false, status: 404 } as Response)
+    const url = String(input)
+    if (url.endsWith('manifest.json')) {
+      calls += 1
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(manifest),
+      } as Response)
     }
-    calls += 1
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve(manifest),
-    } as Response)
+    for (const [file, body] of predictions) {
+      if (url.endsWith(file)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(body),
+        } as Response)
+      }
+    }
+    return Promise.resolve({ ok: false, status: 404 } as Response)
   })
   return { calls: () => calls }
 }
@@ -52,7 +70,7 @@ function serveManifest(): { readonly calls: () => number } {
 describe('the training browser through the shell', () => {
   it('opens the split straight from a task, with no run first', async () => {
     serveManifest()
-    render(<App load={() => Promise.resolve({ ok: true as const, value: [appleTask] })} />)
+    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
     await userEvent.click(screen.getByRole('button', { name: 'See the training data' }))
@@ -65,7 +83,7 @@ describe('the training browser through the shell', () => {
 
   it('fetches the pool only once the browser is opened', async () => {
     const served = serveManifest()
-    render(<App load={() => Promise.resolve({ ok: true as const, value: [appleTask] })} />)
+    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
     expect(served.calls()).toBe(0)
@@ -78,7 +96,7 @@ describe('the training browser through the shell', () => {
 
   it('goes back to the settings and on to a run', async () => {
     serveManifest()
-    render(<App load={() => Promise.resolve({ ok: true as const, value: [appleTask] })} />)
+    render(<App load={() => Promise.resolve({ ok: true as const, value: [task] })} />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
     await userEvent.click(screen.getByRole('button', { name: 'See the training data' }))
@@ -86,6 +104,6 @@ describe('the training browser through the shell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Back to the settings' }))
     await userEvent.click(screen.getByRole('button', { name: 'Run a month' }))
 
-    expect(screen.getByRole('region', { name: 'Run report' })).toBeDefined()
+    expect(await screen.findByRole('region', { name: 'Run report' })).toBeDefined()
   })
 })

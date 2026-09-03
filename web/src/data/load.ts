@@ -6,40 +6,49 @@
  * those issues directly, so a malformed declaration reaches the student as the
  * field it is missing rather than as a blank screen.
  *
- * No rule lives here. Validation is `validateDeclaration`; version comparison is
- * `checkArtifactVersion`. This module only fetches and hands off.
+ * No rule lives here. Validation is `validateDeclaration`, the pool is `readPool`, the
+ * artifact is `readArtifactIndex` / `readConfigurationFile`. This module only fetches and
+ * hands off.
+ *
+ * A task loads its declaration, its pool and its artifact *index*. It does not load any
+ * configuration's predictions: those arrive when a student runs one, so choosing a
+ * configuration transfers that configuration and not the others.
  */
 
-import type { PredictionArtifact } from '../../../src/task/artifact.js'
+import type { ConfigurationEntry } from '../../../src/task/artifact.js'
+import {
+  coverageIssue,
+  readArtifactIndex,
+  readConfigurationFile,
+  type LoadedIndex,
+} from '../../../src/task/artifactIndex.js'
+import type { LoadedPool } from '../../../src/pool/index.js'
+import { readPool } from '../../../src/pool/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
-import { checkArtifactVersion } from '../../../src/task/version.js'
-import { SHIPPED_TASKS, type PoolPaths, type TaskDataPaths } from './paths.js'
+import {
+  configurationUrl,
+  SHIPPED_TASKS,
+  taskDataPaths,
+  type PoolPaths,
+  type TaskDataPaths,
+} from './paths.js'
 
 export type Loaded<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly issues: readonly ValidationIssue[] }
 
-/** Ground truth per image id, plus the split each image belongs to. */
-export interface PoolManifest {
-  readonly poolId: string
-  readonly images: Readonly<Record<string, { readonly split: string; readonly category: CategoryId }>>
-}
-
 /** Everything one task needs before it can be configured and run. */
 export interface LoadedTask {
   readonly declaration: TaskDeclaration
-  readonly artifact: PredictionArtifact
+  /** Coverage, the pool binding and the provenance — no predictions. */
+  readonly index: LoadedIndex
+  /** True category per image id, from the pool manifest, which is its only source. */
   readonly truth: Readonly<Record<string, CategoryId>>
-  /**
-   * Where this task's generated pool is served from, when it ships one.
-   *
-   * Carried as paths rather than as loaded data because it is fetched lazily, only if a
-   * student opens the training browser — `design.md`. Absent for a task with no
-   * generated pool, which then simply offers nothing to browse.
-   */
-  readonly generatedPool?: PoolPaths
+  /** Image ids per split, as the manifest enumerates them. */
+  readonly imageIds: Readonly<Record<string, readonly string[]>>
+  readonly paths: TaskDataPaths
 }
 
 function issue(code: string, message: string, field?: string): ValidationIssue {
@@ -101,81 +110,100 @@ export async function loadDeclaration(path: string): Promise<Loaded<TaskDeclarat
   return { ok: true, value: validated.declaration }
 }
 
-function readArtifact(input: unknown, declaredVersion: string): Loaded<PredictionArtifact> {
-  if (typeof input !== 'object' || input === null) {
-    return { ok: false, issues: [issue('data-malformed', 'A prediction artifact must be an object.')] }
-  }
-  const candidate = input as Partial<PredictionArtifact>
-  if (typeof candidate.schemaVersion !== 'string') {
+/** Fetches a pool manifest and reads it against the task that references it. */
+export async function loadPool(
+  paths: PoolPaths,
+  declaration: TaskDeclaration,
+): Promise<Loaded<LoadedPool>> {
+  const raw = await fetchJson(paths.manifest)
+  if (!raw.ok) return raw
+
+  const read = readPool(raw.value, declaration)
+  if (!read.ok) return { ok: false, issues: read.issues }
+  return { ok: true, value: read.pool }
+}
+
+/**
+ * Loads a task's declaration, its pool and its artifact index.
+ *
+ * The pool is loaded eagerly now, because it is where ground truth lives and a run is
+ * scored against it. That is also what makes the browsed images and the scored images
+ * the same images — there is only one pool to be either.
+ */
+export async function loadTask(declarationUrl: string): Promise<Loaded<LoadedTask>> {
+  const declared = await loadDeclaration(declarationUrl)
+  if (!declared.ok) return declared
+  const declaration = declared.value
+
+  const paths = taskDataPaths(declarationUrl, declaration)
+  if (paths === undefined) {
     return {
       ok: false,
       issues: [
-        issue('data-malformed', 'Prediction artifact declares no schema version.', 'schemaVersion'),
+        issue(
+          'data-unserved',
+          `Task "${declaration.id}" names pool "${declaration.pool}" and predictions "${declaration.predictions}", and this build serves at least one of them from nowhere.`,
+          declaration.id,
+        ),
       ],
     }
   }
 
-  const version = checkArtifactVersion(declaredVersion, candidate.schemaVersion)
-  if (!version.ok) return { ok: false, issues: [version.issue] }
-
-  return { ok: true, value: candidate as PredictionArtifact }
-}
-
-function readTruth(input: unknown): Loaded<Readonly<Record<string, CategoryId>>> {
-  const manifest = input as Partial<PoolManifest>
-  if (typeof manifest?.images !== 'object' || manifest.images === null) {
-    return {
-      ok: false,
-      issues: [issue('data-malformed', 'Pool manifest declares no images.', 'images')],
-    }
-  }
-  const truth: Record<string, CategoryId> = {}
-  for (const [imageId, entry] of Object.entries(manifest.images)) {
-    if (typeof entry?.category !== 'string') {
-      return {
-        ok: false,
-        issues: [
-          issue('data-malformed', `Pool manifest gives image "${imageId}" no category.`, imageId),
-        ],
-      }
-    }
-    truth[imageId] = entry.category
-  }
-  return { ok: true, value: truth }
-}
-
-/**
- * Loads a task's declaration, its prediction artifact and its ground truth.
- *
- * A version mismatch refuses here rather than at run time, so the task never
- * reaches a configuration screen it could not have run from.
- */
-export async function loadTask(paths: TaskDataPaths): Promise<Loaded<LoadedTask>> {
-  const declared = await loadDeclaration(paths.declaration)
-  if (!declared.ok) return declared
-
-  const [rawArtifact, rawPool] = await Promise.all([
+  const [pool, rawIndex] = await Promise.all([
+    loadPool(paths.pool, declaration),
     fetchJson(paths.predictions),
-    fetchJson(paths.pool),
   ])
-  if (!rawArtifact.ok) return rawArtifact
-  if (!rawPool.ok) return rawPool
+  if (!pool.ok) return pool
+  if (!rawIndex.ok) return rawIndex
 
-  const artifact = readArtifact(rawArtifact.value, declared.value.schemaVersion)
-  if (!artifact.ok) return artifact
-
-  const truth = readTruth(rawPool.value)
-  if (!truth.ok) return truth
+  const index = readArtifactIndex(rawIndex.value, declaration, {
+    poolId: pool.value.poolId,
+    schemaVersion: pool.value.schemaVersion,
+    seed: pool.value.seed,
+  })
+  if (!index.ok) return { ok: false, issues: index.issues }
 
   return {
     ok: true,
     value: {
-      declaration: declared.value,
-      artifact: artifact.value,
-      truth: truth.value,
-      generatedPool: paths.generatedPool,
+      declaration,
+      index: index.index,
+      truth: pool.value.truth,
+      imageIds: { training: pool.value.order.training, pool: pool.value.order.pool },
+      paths,
     },
   }
+}
+
+/**
+ * Fetches one configuration's predictions and history.
+ *
+ * Coverage is checked before anything is fetched, so a configuration no model was
+ * trained for refuses as `untrained-configuration` — naming it, and distinct from an
+ * invalid configuration — instead of arriving as a 404 with nothing to say.
+ */
+export async function loadConfiguration(
+  task: LoadedTask,
+  configurationId: string,
+): Promise<Loaded<ConfigurationEntry>> {
+  const uncovered = coverageIssue(task.index, configurationId)
+  if (uncovered !== undefined) return { ok: false, issues: [uncovered] }
+
+  const record = task.index.configurations[configurationId]
+  if (record === undefined) return { ok: false, issues: [] }
+
+  const raw = await fetchJson(configurationUrl(task.paths.predictions, record.file))
+  if (!raw.ok) return raw
+
+  const read = readConfigurationFile(
+    raw.value,
+    task.declaration,
+    task.index,
+    configurationId,
+    task.imageIds,
+  )
+  if (!read.ok) return { ok: false, issues: read.issues }
+  return { ok: true, value: read.entry }
 }
 
 /**

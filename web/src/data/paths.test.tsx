@@ -1,29 +1,65 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DATA_URLS, sourcePathFor } from './paths.js'
+import { validateDeclaration } from '../../../src/task/validate.js'
+import { configurationUrl, dataUrlFor, SHIPPED_TASKS, sourcePathFor, taskDataPaths } from './paths.js'
 
 // `import.meta.url` is an http URL under the jsdom environment these screen
 // tests run in, so the repo root comes from the runner's working directory.
 const repoRoot = process.cwd()
 
+function declarationOf(url: string) {
+  const source = sourcePathFor(url)
+  if (source === undefined) throw new Error(`no mount serves ${url}`)
+  const validated = validateDeclaration(
+    JSON.parse(readFileSync(join(repoRoot, source), 'utf8')) as unknown,
+  )
+  if (!validated.ok) throw new Error(`${url} does not validate`)
+  return validated.declaration
+}
+
 describe('task data is served as assets, not bundled', () => {
-  it('maps every data URL the app uses to a file that exists', () => {
-    for (const url of Object.values(DATA_URLS)) {
-      const source = sourcePathFor(url)
-      expect(source, `no mount serves ${url}`).toBeDefined()
-      expect(existsSync(join(repoRoot, source ?? '')), `${source} is missing`).toBe(true)
+  it('maps every shipped task to files that exist', () => {
+    for (const url of SHIPPED_TASKS) {
+      const declaration = declarationOf(url)
+      const paths = taskDataPaths(url, declaration)
+      expect(paths, `no mount serves the data ${declaration.id} names`).toBeDefined()
+      if (paths === undefined) continue
+
+      for (const served of [paths.declaration, paths.pool.manifest, paths.predictions]) {
+        const source = sourcePathFor(served)
+        expect(source, `no mount serves ${served}`).toBeDefined()
+        expect(existsSync(join(repoRoot, source ?? '')), `${source} is missing`).toBe(true)
+      }
     }
   })
 
-  it('serves the generated pool manifest from the pool mount', () => {
-    expect(sourcePathFor(DATA_URLS.applePoolManifest)).toBe('pools/apple-harvest/manifest.json')
+  it('derives a task’s data from the declaration rather than a second list', () => {
+    const url = SHIPPED_TASKS[0] ?? ''
+    const declaration = declarationOf(url)
+    const paths = taskDataPaths(url, declaration)
+
+    expect(paths?.pool.manifest).toBe(`${dataUrlFor(declaration.pool)}/manifest.json`)
+    expect(paths?.predictions).toBe(`${dataUrlFor(declaration.predictions)}/index.json`)
   })
 
-  it('leaves what a run is scored from on the fixture pool', () => {
-    // The training browser reads the generated pool; the harvest still does not, because
-    // the shipped predictions are keyed to the fixture's image ids.
-    expect(DATA_URLS.applePool).toBe('data/fixtures/apple-pool.json')
+  it('browses and scores one pool, because there is only one to name', () => {
+    const url = SHIPPED_TASKS[0] ?? ''
+    const paths = taskDataPaths(url, declarationOf(url))
+
+    expect(paths?.pool.atlases).toBe(dataUrlFor('pools/apple-harvest'))
+    expect(paths?.pool.manifest.startsWith(paths.pool.atlases)).toBe(true)
+  })
+
+  it('places a configuration file beside its index', () => {
+    expect(
+      configurationUrl('data/artifacts/apple/predictions/index.json', 'blocks2-channels8.json'),
+    ).toBe('data/artifacts/apple/predictions/blocks2-channels8.json')
+  })
+
+  it('refuses a declaration naming data this build serves from nowhere', () => {
+    const declaration = { pool: 'elsewhere/pool', predictions: 'elsewhere/predictions' }
+    expect(taskDataPaths('data/declarations/x.json', declaration)).toBeUndefined()
   })
 
   it('refuses a URL no mount covers', () => {

@@ -8,8 +8,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Issues } from './components/Issues.js'
+import type { ConfigurationEntry } from '../../src/task/artifact.js'
 import type { LoadedTask } from './data/load.js'
-import { loadShippedTasks } from './data/load.js'
+import { loadConfiguration, loadShippedTasks } from './data/load.js'
 import { loadTrainingSplit } from './data/pool.js'
 import type { ValidationIssue } from '../../src/task/validate.js'
 import type { TaskDeclaration } from '../../src/task/types.js'
@@ -22,8 +23,19 @@ export interface AppProps {
     | { ok: true; value: readonly LoadedTask[] }
     | { ok: false; issues: readonly ValidationIssue[] }
   >
-  /** Whether the loaded predictions are hand-written stand-ins. */
-  readonly fixtureBacked?: boolean
+  /**
+   * Fetches one configuration's predictions for a loaded task.
+   *
+   * Injected by tests for the same reason `load` is: the shell's job is to route a
+   * refusal to the screen, and that is worth testing without a server in the way.
+   */
+  readonly loadEntry?: (
+    task: LoadedTask,
+    configurationId: string,
+  ) => Promise<
+    | { ok: true; value: ConfigurationEntry }
+    | { ok: false; issues: readonly ValidationIssue[] }
+  >
 }
 
 type Loading =
@@ -31,7 +43,7 @@ type Loading =
   | { readonly state: 'loaded'; readonly tasks: readonly LoadedTask[] }
   | { readonly state: 'refused'; readonly issues: readonly ValidationIssue[] }
 
-export function App({ load = loadShippedTasks, fixtureBacked = true }: AppProps) {
+export function App({ load = loadShippedTasks, loadEntry = loadConfiguration }: AppProps) {
   const [loading, setLoading] = useState<Loading>({ state: 'loading' })
   const [selected, setSelected] = useState<string | undefined>(undefined)
 
@@ -58,10 +70,9 @@ export function App({ load = loadShippedTasks, fixtureBacked = true }: AppProps)
   // Memoised per open task because the browser fetches when this identity changes; a
   // fresh closure on every render would refetch the manifest on every keystroke.
   const loadSplit = useMemo(() => {
-    const paths = open?.generatedPool
     const declaration = open?.declaration
-    if (paths === undefined || declaration === undefined) return undefined
-    return () => loadTrainingSplit(paths, declaration)
+    if (open === undefined || declaration === undefined) return undefined
+    return () => loadTrainingSplit(open.paths.pool, declaration)
   }, [open])
 
   return (
@@ -82,9 +93,8 @@ export function App({ load = loadShippedTasks, fixtureBacked = true }: AppProps)
       {open === undefined ? null : (
         <ConfigureTask
           declaration={open.declaration}
-          artifact={open.artifact}
+          loadEntry={(configurationId) => loadEntry(open, configurationId)}
           truth={open.truth}
-          fixtureBacked={fixtureBacked}
           loadSplit={loadSplit}
           onBack={() => setSelected(undefined)}
         />

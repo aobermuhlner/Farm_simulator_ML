@@ -1,33 +1,33 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { LoadedTask } from './data/load.js'
 import {
   appleArtifact,
-  appleDeclaration,
-  appleTruth,
   unrelatedArtifact,
   unrelatedDeclaration,
   unrelatedTruth,
 } from './test-support/declarations.js'
+import { appleTask as committedAppleTask, loadEntryFor, taskFrom } from './test-support/pool.js'
 import { App } from './App.js'
 
 afterEach(cleanup)
 
-const appleTask: LoadedTask = {
-  declaration: appleDeclaration(),
-  artifact: appleArtifact(),
-  truth: appleTruth(),
-}
+const appleTask: LoadedTask = committedAppleTask()
 
-const screeningTask: LoadedTask = {
-  declaration: unrelatedDeclaration(),
-  artifact: unrelatedArtifact(),
-  truth: unrelatedTruth(),
-}
+const screeningTask: LoadedTask = taskFrom(
+  unrelatedDeclaration(),
+  unrelatedArtifact(),
+  unrelatedTruth(),
+)
 
 function loads(...tasks: readonly LoadedTask[]) {
   return () => Promise.resolve({ ok: true as const, value: tasks })
+}
+
+/** Every render below goes through the shell with its entry loader injected. */
+function renderApp(...tasks: readonly LoadedTask[]) {
+  return render(<App load={loads(...tasks)} loadEntry={loadEntryFor} />)
 }
 
 async function openTask(title: string): Promise<void> {
@@ -36,11 +36,12 @@ async function openTask(title: string): Promise<void> {
 
 async function runMonth(): Promise<void> {
   await userEvent.click(screen.getByRole('button', { name: 'Run a month' }))
+  await waitFor(() => screen.getByRole('button', { name: 'Run a month' }))
 }
 
 describe('the four stages of the simulator', () => {
   it('goes from the farm to a report and back', async () => {
-    render(<App load={loads(appleTask)} />)
+    renderApp(appleTask)
 
     await openTask('Apple Harvest')
     expect(screen.getByRole('heading', { name: 'Apple Harvest' })).toBeDefined()
@@ -53,7 +54,7 @@ describe('the four stages of the simulator', () => {
   })
 
   it('keeps the task selected while the configuration is revised and re-run', async () => {
-    render(<App load={loads(appleTask)} />)
+    renderApp(appleTask)
     await openTask('Apple Harvest')
     await runMonth()
 
@@ -87,7 +88,7 @@ describe('the four stages of the simulator', () => {
 
 describe('a task the screens have never seen', () => {
   it('plays through the same screens with no code of its own', async () => {
-    render(<App load={loads(screeningTask)} />)
+    renderApp(screeningTask)
 
     await openTask('Skin Screening')
     expect(screen.getByLabelText('Sensitivity')).toBeDefined()
@@ -102,7 +103,7 @@ describe('a task the screens have never seen', () => {
   })
 
   it('brings no apple vocabulary with it', async () => {
-    render(<App load={loads(screeningTask)} />)
+    renderApp(screeningTask)
     await openTask('Skin Screening')
     await runMonth()
 

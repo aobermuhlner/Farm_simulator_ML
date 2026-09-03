@@ -17,8 +17,6 @@ export interface ReportProps {
   readonly declaration: TaskDeclaration
   readonly configurationId: string
   readonly outcome: RunOutcome
-  /** True while predictions come from hand-written stand-ins, not real artifacts. */
-  readonly fixtureBacked: boolean
   /** Set when knob values moved on after this run; the report is then history. */
   readonly stale: boolean
 }
@@ -27,7 +25,6 @@ export function Report({
   declaration,
   configurationId,
   outcome,
-  fixtureBacked,
   stale,
 }: ReportProps) {
   return (
@@ -75,13 +72,6 @@ export function Report({
         </tbody>
       </table>
 
-      {fixtureBacked ? (
-        <p className="provenance" role="note">
-          These results come from fixture data — a handful of hand-written stand-in
-          predictions, not a trained model or real images. Read them as a demonstration of
-          the simulator, not as a model&apos;s performance.
-        </p>
-      ) : null}
     </section>
   )
 }

@@ -164,3 +164,30 @@ def test_the_output_directory_does_not_make_a_clean_tree_dirty(declaration):
     assert counted.revision == ignored.revision
     # The artifact being written is never evidence that the code producing it is unsaved.
     assert not (ignored.dirty and not counted.dirty)
+
+
+def test_the_writer_alters_no_value_it_was_given(tmp_path, declaration, pool):
+    """No hidden shaping: what is stored is the run's own numbers, quantized and nothing else."""
+    result = fake_result(pool, declaration)
+    produced = {
+        "t-001": [0.7123, 0.2011, 0.0866],
+        "t-002": [0.0004, 0.9993, 0.0003],
+        "p-0001": [0.3336, 0.3332, 0.3332],
+    }
+    for image_id, values in produced.items():
+        split = "training" if image_id.startswith("t-") else "pool"
+        result.predictions[split][image_id] = list(values)
+
+    write_artifact(declaration, pool, [result], tmp_path, PIPELINE)
+    document = json.loads(
+        (tmp_path / "blocks2-channels8-regularization1-dropout0.json").read_text(encoding="utf8")
+    )
+
+    for image_id, values in produced.items():
+        split = "training" if image_id.startswith("t-") else "pool"
+        assert document["predictions"][split][image_id] == quantize(
+            list(values),
+            categories=len(declaration.categories),
+            configuration=result.configuration_id,
+            image_id=image_id,
+        )

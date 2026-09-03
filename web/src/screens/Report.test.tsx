@@ -28,7 +28,7 @@ const OVER_SELECTIVE = { blocks: 4, channels: 16, regularization: 1, dropout: 0 
 
 function renderReport(
   knobs: Record<string, string | number>,
-  overrides: Partial<{ declaration: TaskDeclaration; stale: boolean; fixtureBacked: boolean }> = {},
+  overrides: Partial<{ declaration: TaskDeclaration; stale: boolean }> = {},
 ) {
   const { id, outcome } = outcomeFor(knobs)
   render(
@@ -36,7 +36,6 @@ function renderReport(
       declaration={overrides.declaration ?? apple}
       configurationId={id}
       outcome={outcome}
-      fixtureBacked={overrides.fixtureBacked ?? true}
       stale={overrides.stale ?? false}
     />,
   )

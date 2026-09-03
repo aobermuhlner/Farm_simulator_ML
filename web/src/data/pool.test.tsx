@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadTrainingSplit } from './pool.js'
-import { DATA_URLS } from './paths.js'
+import { dataUrlFor } from './paths.js'
 import { appleDeclaration } from '../test-support/declarations.js'
 import { appleManifest } from '../test-support/pool.js'
 
 const apple = appleDeclaration()
 
 const POOL_PATHS = {
-  manifest: DATA_URLS.applePoolManifest,
-  atlases: DATA_URLS.applePoolAtlases,
+  manifest: 'data/pools/apple-harvest/manifest.json',
+  atlases: dataUrlFor('pools/apple-harvest') ?? '',
 }
 
 /** Serves one manifest body, the way the data plugin would. */
@@ -45,7 +45,7 @@ describe('fetching a task pool', () => {
 
     if (!loaded.ok) throw new Error('the committed manifest should load')
     for (const image of loaded.value.images) {
-      expect(image.atlasUrl).toContain(`${DATA_URLS.applePoolAtlases}/`)
+      expect(image.atlasUrl).toContain(`${POOL_PATHS.atlases}/`)
       expect(image.atlasUrl.endsWith('.png'), image.atlasUrl).toBe(true)
     }
   })

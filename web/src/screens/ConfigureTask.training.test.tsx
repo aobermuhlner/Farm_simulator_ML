@@ -10,7 +10,12 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Loaded } from '../data/load.js'
 import type { TrainingSplitView } from '../data/pool.js'
-import { appleArtifact, appleDeclaration, appleTruth } from '../test-support/declarations.js'
+import {
+  appleArtifact,
+  appleDeclaration,
+  appleTruth,
+  entryLoader,
+} from '../test-support/declarations.js'
 import { appleTrainingSplit } from '../test-support/pool.js'
 import { ConfigureTask } from './ConfigureTask.js'
 
@@ -24,9 +29,8 @@ function renderApple(load: () => Promise<Loaded<TrainingSplitView>> = () =>
   return render(
     <ConfigureTask
       declaration={apple}
-      artifact={appleArtifact()}
+      loadEntry={entryLoader(appleArtifact())}
       truth={appleTruth()}
-      fixtureBacked
       loadSplit={load}
       onBack={() => {}}
     />,
@@ -75,9 +79,8 @@ describe('reaching the training data', () => {
     render(
       <ConfigureTask
         declaration={apple}
-        artifact={appleArtifact()}
+        loadEntry={entryLoader(appleArtifact())}
         truth={appleTruth()}
-        fixtureBacked
         onBack={() => {}}
       />,
     )

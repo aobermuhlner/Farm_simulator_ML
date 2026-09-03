@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react'
-import type { PredictionArtifact } from '../../../src/task/artifact.js'
+import type { ConfigurationEntry } from '../../../src/task/artifact.js'
 import { resolveArchitecture } from '../../../src/task/diagram.js'
 import type { RunOutcome } from '../../../src/scoring/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
@@ -24,9 +24,15 @@ import { TrainingBrowser } from './TrainingBrowser.js'
 
 export interface ConfigureTaskProps {
   readonly declaration: TaskDeclaration
-  readonly artifact: PredictionArtifact
+  /**
+   * Fetches one configuration's predictions and history.
+   *
+   * A function rather than loaded data: the artifact ships one file per configuration,
+   * so opening a task transfers coverage and provenance, and running one transfers that
+   * configuration alone.
+   */
+  readonly loadEntry: (configurationId: string) => Promise<Loaded<ConfigurationEntry>>
   readonly truth: Readonly<Record<string, CategoryId>>
-  readonly fixtureBacked: boolean
   readonly onBack: () => void
   /**
    * Fetches this task's training split, when the task ships one to browse.
@@ -46,9 +52,8 @@ interface Finished {
 
 export function ConfigureTask({
   declaration,
-  artifact,
+  loadEntry,
   truth,
-  fixtureBacked,
   onBack,
   loadSplit,
 }: ConfigureTaskProps) {
@@ -56,6 +61,7 @@ export function ConfigureTask({
   const [finished, setFinished] = useState<Finished | undefined>(undefined)
   const [refusal, setRefusal] = useState<readonly ValidationIssue[] | undefined>(undefined)
   const [browsing, setBrowsing] = useState(false)
+  const [running, setRunning] = useState(false)
 
   const identified = identifyConfiguration(declaration, values)
   const currentId = identified.ok ? identified.id : undefined
@@ -71,8 +77,26 @@ export function ConfigureTask({
     setRefusal(undefined)
   }
 
-  function run(): void {
-    const result = runPool(declaration, values, artifact, truth)
+  async function run(): Promise<void> {
+    const identified = identifyConfiguration(declaration, values)
+    if (!identified.ok) {
+      setRefusal(identified.issues)
+      setFinished(undefined)
+      return
+    }
+
+    setRunning(true)
+    // Fetched per run rather than held: a student who never chooses a configuration
+    // never transfers it, and one they return to is served from the browser's cache.
+    const loaded = await loadEntry(identified.id)
+    setRunning(false)
+    if (!loaded.ok) {
+      setRefusal(loaded.issues)
+      setFinished(undefined)
+      return
+    }
+
+    const result = runPool(declaration, values, loaded.value, truth)
     if (!result.ok) {
       setRefusal(result.issues)
       setFinished(undefined)
@@ -90,7 +114,6 @@ export function ConfigureTask({
         <h1 id="task-heading">{declaration.title}</h1>
         <TrainingBrowser
           load={loadSplit}
-          fixtureBacked={fixtureBacked}
           onBack={() => setBrowsing(false)}
         />
       </section>
@@ -120,7 +143,7 @@ export function ConfigureTask({
       <form
         onSubmit={(event) => {
           event.preventDefault()
-          run()
+          void run()
         }}
       >
         <div className="configure-columns">
@@ -145,7 +168,9 @@ export function ConfigureTask({
           </p>
         )}
 
-        <button type="submit">Run a month</button>
+        <button type="submit" disabled={running}>
+          {running ? 'Running a month…' : 'Run a month'}
+        </button>
       </form>
 
       {identified.ok ? null : (
@@ -161,7 +186,6 @@ export function ConfigureTask({
           declaration={declaration}
           configurationId={finished.configurationId}
           outcome={finished.outcome}
-          fixtureBacked={fixtureBacked}
           stale={finished.configurationId !== currentId}
         />
       )}
