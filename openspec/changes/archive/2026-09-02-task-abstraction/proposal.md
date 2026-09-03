@@ -15,9 +15,10 @@ one pairwise.
 ## What Changes
 
 - Introduce a declarative **task contract**: a task is data, not code. It declares its
-  ground-truth categories, the actions available, the image pool it draws from, the
+  ground-truth categories, the actions available, which action each category calls for,
+  the decision policy applied to its predictions, the image pool it draws from, the
   hyperparameter knobs exposed to the student, where its precomputed predictions live,
-  its payoff table, and its teaching copy.
+  its payoff table, whether it is playable yet, and its teaching copy.
 - Separate **model output** from **decision policy**. Precomputed artifacts store
   per-image *probability vectors* per category, never final labels. Turning a
   probability vector into an action is computed live from the task's policy.

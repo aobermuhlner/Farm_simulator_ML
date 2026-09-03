@@ -81,6 +81,13 @@ from one declaration removes the class of bug where the report explains a number
 scoring did not actually compute. It also means the report is structurally a confusion
 matrix with money attached, which is the intended stealth lesson.
 
+**The apple task exposes highest-probability only.**
+Thresholds are the new idea the screening lesson introduces, so putting a threshold knob
+in front of the first lesson spends the surprise early and adds a control the apple
+payoffs do not reward thinking about. `declarations/apple-harvest.json` therefore
+declares the highest-probability policy; the threshold and cost-optimal policies are
+specified and implemented, waiting for the lesson that needs them.
+
 **Version mismatch refuses to run.**
 Best-effort partial loading — using whatever rows match and skipping the rest — is the
 worst available behaviour here, because the result is a plausible-looking harvest that
@@ -128,14 +135,10 @@ existing behaviour to preserve and nothing to roll back beyond deleting the arti
 
 ## Open Questions
 
-Both are deferrable: the contract holds either way, and neither changes the specs, the
-approach, or the task breakdown.
+Deferrable: the contract holds either way, and it changes neither the specs, the
+approach, nor the task breakdown.
 
 - **Is regularization one composite knob or two (loss-regularization strength and dropout
   separately)?** Two is more honest and more teachable; one composite roughly halves the
-  cross-product and the authoring work. Resolve in `prediction-artifacts`, when the knob
-  set is frozen.
-- **Does the apple task expose a decision threshold at all, or is it highest-probability
-  only until the screening lesson introduces thresholds as the new idea?**
-  `specs/decision-policy/spec.md` supports either, so this is a curriculum sequencing
-  choice rather than a design one.
+  cross-product and the authoring work. The declaration written here uses two, but the
+  binding answer comes in `prediction-artifacts`, when the knob set is frozen.
