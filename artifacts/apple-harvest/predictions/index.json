@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "1.0.0",
+  "taskId": "apple-harvest",
+  "categories": [
+    "red",
+    "green",
+    "wormy"
+  ],
+  "pool": {
+    "poolId": "pools/apple-harvest",
+    "schemaVersion": "1.0.0",
+    "seed": 20260902
+  },
+  "encoding": {
+    "decimals": 3,
+    "sumTolerance": 0.0015
+  },
+  "configurations": {
+    "blocks2-channels8-regularization1-dropout0": {
+      "file": "blocks2-channels8-regularization1-dropout0.json",
+      "knobs": {
+        "blocks": 2,
+        "channels": 8,
+        "regularization": 1,
+        "dropout": 0
+      },
+      "epochs": 40,
+      "seed": 20260903,
+      "pipeline": {
+        "revision": "c04f50849f458daa86d09263f74b4307bf06fe21",
+        "dirty": false
+      },
+      "hyperparameters": {
+        "optimizer": "adam",
+        "learningRate": 0.001,
+        "batchSize": 32,
+        "loss": "cross-entropy",
+        "weightDecay": 0.0001,
+        "dropout": 0.0,
+        "augmentation": "none",
+        "pixelScale": 255.0,
+        "torch": "2.14.0+cpu",
+        "threads": 8
+      },
+      "architecture": {
+        "blocks": 2,
+        "channels": [
+          8,
+          16
+        ],
+        "spatial": [
+          64,
+          32
+        ],
+        "parameters": 4347
+      },
+      "shaping": []
+    },
+    "blocks2-channels16-regularization1-dropout0": {
+      "file": "blocks2-channels16-regularization1-dropout0.json",
+      "knobs": {
+        "blocks": 2,
+        "channels": 16,
+        "regularization": 1,
+        "dropout": 0
+      },
+      "epochs": 40,
+      "seed": 20260903,
+      "pipeline": {
+        "revision": "c04f50849f458daa86d09263f74b4307bf06fe21",
+        "dirty": false
+      },
+      "hyperparameters": {
+        "optimizer": "adam",
+        "learningRate": 0.001,
+        "batchSize": 32,
+        "loss": "cross-entropy",
+        "weightDecay": 0.0001,
+        "dropout": 0.0,
+        "augmentation": "none",
+        "pixelScale": 255.0,
+        "torch": "2.14.0+cpu",
+        "threads": 8
+      },
+      "architecture": {
+        "blocks": 2,
+        "channels": [
+          16,
+          32
+        ],
+        "spatial": [
+          64,
+          32
+        ],
+        "parameters": 16755
+      },
+      "shaping": []
+    },
+    "blocks2-channels32-regularization1-dropout0": {
+      "file": "blocks2-channels32-regularization1-dropout0.json",
+      "knobs": {
+        "blocks": 2,
+        "channels": 32,
+        "regularization": 1,
+        "dropout": 0
+      },
+      "epochs": 40,
+      "seed": 20260903,
+      "pipeline": {
+        "revision": "c04f50849f458daa86d09263f74b4307bf06fe21",
+        "dirty": false
+      },
+      "hyperparameters": {
+        "optimizer": "adam",
+        "learningRate": 0.001,
+        "batchSize": 32,
+        "loss": "cross-entropy",
+        "weightDecay": 0.0001,
+        "dropout": 0.0,
+        "augmentation": "none",
+        "pixelScale": 255.0,
+        "torch": "2.14.0+cpu",
+        "threads": 8
+      },
+      "architecture": {
+        "blocks": 2,
+        "channels": [
+          32,
+          64
+        ],
+        "spatial": [
+          64,
+          32
+        ],
+        "parameters": 65763
+      },
+      "shaping": []
+    }
+  }
+}
