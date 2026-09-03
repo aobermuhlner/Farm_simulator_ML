@@ -4,7 +4,7 @@ Defines how a per-image probability distribution becomes a chosen action and how
 actions become earnings, so that lessons about decision thresholds and asymmetric error
 costs are expressed as task configuration rather than as new code.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: The decision policy is declared task data evaluated live
 
@@ -25,7 +25,9 @@ SHALL NOT be baked into the precomputed artifacts.
 
 WHEN a task declares the highest-probability policy, the chosen action SHALL be the
 action mapped from the category with the greatest probability, using the task's declared
-category-to-action mapping.
+category-to-action mapping. WHEN more than one category shares the greatest probability,
+the one appearing earliest in the task's declared category order SHALL determine the
+action.
 
 #### Scenario: Most likely category determines the action
 - **WHEN** an image's distribution gives its greatest probability to a category mapped to a given action
@@ -35,8 +37,9 @@ category-to-action mapping.
 
 WHEN a task declares a threshold policy, it SHALL declare a threshold per category and a
 fallback action. A category's action SHALL be chosen when that category's probability
-meets or exceeds its threshold. WHEN no category meets its threshold, the declared
-fallback action SHALL be chosen.
+meets or exceeds its threshold. WHEN more than one category meets its threshold, the one
+appearing earliest in the task's declared category order SHALL determine the action.
+WHEN no category meets its threshold, the declared fallback action SHALL be chosen.
 
 #### Scenario: Nothing clears its threshold
 - **WHEN** every category's probability for an image is below that category's threshold
@@ -50,7 +53,8 @@ fallback action SHALL be chosen.
 
 WHEN a task declares the cost-optimal policy, the chosen action SHALL be the action with
 the greatest expected payoff, computed from the image's probability distribution and the
-task's payoff table.
+task's payoff table. WHEN more than one action shares the greatest expected payoff, the
+one appearing earliest in the task's declared action order SHALL be chosen.
 
 #### Scenario: An asymmetric penalty overrides the most likely category
 - **WHEN** the most likely category maps to an action whose payoff table entry carries a large penalty for the other plausible category
@@ -89,5 +93,5 @@ reported outcome.
 
 #### Scenario: An over-selective configuration is diagnosable
 - **WHEN** a configuration rarely chooses the high-value action, including on the categories where that action is correct
-- **THEN** the report shows the low count for the correct category as well as the low count for the categories where declining was correct
+- **THEN** the report shows the low count for the correct category as well as the low count for the categories where the low-value action was correct
 - **AND** the two are distinguishable rather than combined into one score

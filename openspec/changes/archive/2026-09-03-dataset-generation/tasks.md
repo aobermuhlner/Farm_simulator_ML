@@ -20,7 +20,7 @@
 
 - [x] 4.1 Emit `pools/apple-harvest/manifest.json` carrying the pool id, schema version, per-split declared counts, one descriptor per atlas with its cell size and grid, and per image its split, true category, attributes, atlas and cell index; verify a test asserts every field `specs/image-pool/spec.md` requires is present for all 1200 images
 - [x] 4.2 Check the emitted manifest against `declarations/apple-harvest.json` — pool id equal to its `pool` reference, schema version equal to its `schemaVersion`; verify tests assert both hold for the committed manifest and that a deliberately altered copy of each is refused naming both values
-- [ ] 4.3 Commit the generated atlases and manifest; verify a re-run of `pool:generate` leaves the working tree clean, which is the only evidence that generation is reproducible in practice rather than in principle
+- [x] 4.3 Commit the generated atlases and manifest; verify a re-run of `pool:generate` leaves the working tree clean, which is the only evidence that generation is reproducible in practice rather than in principle
 
 ## 5. Pool reader and refusals
 
