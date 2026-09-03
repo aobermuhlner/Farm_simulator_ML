@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Python training workspace (uv)
+.venv/
+__pycache__/
+*.pyc
+# Checkpoints and review plots: authoring by-products, never shipped. The artifact
+# the app reads is JSON under artifacts/, which is committed.
+training/runs/
+
+# Local Claude Code settings, per machine.
+.claude/settings.local.json

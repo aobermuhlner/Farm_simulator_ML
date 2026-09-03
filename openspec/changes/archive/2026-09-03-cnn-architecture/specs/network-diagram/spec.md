@@ -1,27 +1,4 @@
-## Purpose
-
-Defines what a student sees of the network their knob values describe — which parts of the
-drawing are faithful to the configuration, which are deliberate abstractions, how that
-difference is disclosed, and how the drawing follows the knobs — so that tuning capacity
-is an act on a visible object rather than on two numbers in a form.
-
-## Requirements
-
-### Requirement: The architecture is shown on the configuration screen
-
-The configuration screen SHALL present a diagram of the network the current knob values
-describe, for a task that declares one. Seeing it SHALL NOT require running the task, and
-it SHALL be visible alongside the knobs rather than behind a control the student must find.
-
-#### Scenario: A student sees the network they are configuring
-- **WHEN** a student opens the configuration screen of a task that declares a diagram
-- **THEN** a diagram of that task's network is shown
-- **AND** no run is needed for it to appear
-
-#### Scenario: The knobs remain usable
-- **WHEN** the diagram is shown
-- **THEN** every declared knob is still offered with its declared label and current value
-- **AND** the task can still be run
+## MODIFIED Requirements
 
 ### Requirement: The drawing follows the current knob values
 
@@ -127,23 +104,6 @@ misstate the architecture.
 - **WHEN** a fully-connected diagram is drawn
 - **THEN** no connection joins two units in the same layer or in layers that are not adjacent
 
-### Requirement: The drawing is declared, never assumed
-
-The diagram SHALL be produced from the task's own declaration. A task that declares no
-diagram SHALL be shown none, and the system SHALL NOT substitute a default or guessed
-architecture for it. No knob id SHALL appear in screen code, so a task declaring different
-knobs and a different mapping SHALL draw its own architecture with no screen change.
-
-#### Scenario: A task with no declared diagram is shown none
-- **WHEN** a student opens the configuration screen of a task that declares no diagram
-- **THEN** no diagram is shown
-- **AND** the configuration screen is otherwise unchanged, and the task still runs
-
-#### Scenario: An unrelated task draws its own architecture
-- **WHEN** a second task declaring different knobs and a different width mapping is added as a declaration
-- **THEN** its diagram is drawn from its own declaration
-- **AND** no screen code is added or changed for it
-
 ### Requirement: The diagram is not an unlabelled graphic
 
 The diagram SHALL carry a text alternative that names the architecture it depicts, so that
@@ -159,6 +119,8 @@ the spatial size the stack reduces the input to.
 #### Scenario: The description follows the knobs
 - **WHEN** a knob the diagram depends on changes
 - **THEN** the text alternative names the new configuration
+
+## ADDED Requirements
 
 ### Requirement: A convolutional architecture is drawn as feature-map volumes
 

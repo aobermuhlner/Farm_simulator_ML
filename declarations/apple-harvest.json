@@ -1,0 +1,117 @@
+{
+  "id": "apple-harvest",
+  "title": "Apple Harvest",
+  "schemaVersion": "1.0.0",
+  "pool": "pools/apple-harvest",
+  "predictions": "artifacts/apple-harvest/predictions",
+  "categories": [
+    {
+      "id": "red",
+      "label": "Ripe red apple"
+    },
+    {
+      "id": "green",
+      "label": "Unripe green apple"
+    },
+    {
+      "id": "wormy",
+      "label": "Wormy apple"
+    }
+  ],
+  "actions": [
+    {
+      "id": "pick",
+      "label": "Pick it"
+    },
+    {
+      "id": "decline",
+      "label": "Leave it on the tree"
+    }
+  ],
+  "categoryActions": {
+    "red": "pick",
+    "green": "decline",
+    "wormy": "decline"
+  },
+  "knobs": [
+    {
+      "kind": "choice",
+      "id": "blocks",
+      "label": "Convolutional blocks",
+      "values": [
+        2,
+        3,
+        4
+      ],
+      "default": 2,
+      "help": "How many blocks the robot's eye stacks. Each block hunts for patterns in small patches of the picture and then halves it, so a deeper stack recognises larger shapes — and has more room to memorise the training apples instead of learning what makes an apple ripe."
+    },
+    {
+      "kind": "choice",
+      "id": "channels",
+      "label": "Patterns per block",
+      "values": [
+        8,
+        16,
+        32
+      ],
+      "default": 16,
+      "help": "How many different patterns the first block looks for, doubling in every block after it. Hunting for many patterns keeps far more detail about each training image than telling red from wormy needs."
+    },
+    {
+      "kind": "slider",
+      "id": "regularization",
+      "label": "Loss regularization strength",
+      "min": 0,
+      "max": 3,
+      "step": 1,
+      "default": 1,
+      "help": "How hard training pushes the network towards simpler answers. At zero it is free to obsess over one perfect red apple; pushed too far it stops noticing the worm at all."
+    },
+    {
+      "kind": "choice",
+      "id": "dropout",
+      "label": "Dropout",
+      "values": [
+        0,
+        0.2,
+        0.5
+      ],
+      "default": 0,
+      "help": "The fraction of the pattern detectors switched off at random during each training step, so the decision cannot lean on any single one. Another way of asking the robot to generalise rather than memorise."
+    }
+  ],
+  "payoffs": {
+    "red": {
+      "pick": 1.0,
+      "decline": 0.0
+    },
+    "green": {
+      "pick": -0.2,
+      "decline": 0.0
+    },
+    "wormy": {
+      "pick": -2.0,
+      "decline": 0.0
+    }
+  },
+  "policy": {
+    "kind": "highest-probability"
+  },
+  "teaching": {
+    "summary": "Your picking robot decides, apple by apple, whether to take it or leave it. Take the ripe reds and you get paid. Take a wormy one and an angry customer costs you far more than the apple was worth.",
+    "theory": "The knobs below do not change the apples, only how much freedom the robot's eye had while learning. It looks at small patches of the picture at a time, block by block, so what it learns are patterns — a colour, a curve, the broken skin around a worm hole — rather than whole apples in fixed positions. Too little restraint and it learns patterns so particular that they match one training apple and nothing else. Too much and every apple flattens into \"reddish or not\", worms included. The harvest report shows you which mistake you made."
+  },
+  "diagram": {
+    "kind": "cnn",
+    "blocksKnob": "blocks",
+    "channelsKnob": "channels",
+    "inputSize": 128,
+    "channelsShown": {
+      "8": 2,
+      "16": 3,
+      "32": 4
+    }
+  },
+  "available": true
+}

@@ -1,0 +1,16 @@
+{
+  "_comment": "Ground truth for the fixture images. Stand-in for the pool manifest that dataset-generation will define. Truth lives here rather than in the prediction artifact, which is why the artifact can be checked for storing no labels.",
+  "poolId": "pools/apple-harvest",
+  "images": {
+    "t-001": { "split": "training", "category": "red" },
+    "t-002": { "split": "training", "category": "green" },
+    "t-003": { "split": "training", "category": "wormy" },
+    "t-004": { "split": "training", "category": "red" },
+    "p-001": { "split": "pool", "category": "red" },
+    "p-002": { "split": "pool", "category": "red" },
+    "p-003": { "split": "pool", "category": "green" },
+    "p-004": { "split": "pool", "category": "wormy" },
+    "p-005": { "split": "pool", "category": "wormy" },
+    "p-006": { "split": "pool", "category": "red" }
+  }
+}

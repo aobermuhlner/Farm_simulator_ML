@@ -1,0 +1,165 @@
+import { describe, expect, it } from 'vitest'
+import { chooseAction } from '../src/policy/index.js'
+import { lookupConfiguration } from '../src/task/artifact.js'
+import { resolveConfiguration } from '../src/task/configuration.js'
+import type { TaskDeclaration } from '../src/task/types.js'
+import {
+  applePool,
+  applePredictions,
+  appleDeclaration,
+  OVER_REGULARIZED,
+  OVER_SELECTIVE,
+} from './helpers/apple'
+
+const apple = appleDeclaration()
+const artifact = applePredictions()
+
+const categoryIds = apple.categories.map((category) => category.id)
+const actionIds = apple.actions.map((action) => action.id)
+
+/** Every string leaf under a value, ignoring `_`-prefixed fixture annotations. */
+function stringLeaves(value: unknown, path = ''): { path: string; value: string }[] {
+  if (typeof value === 'string') return [{ path, value }]
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => stringLeaves(item, `${path}[${index}]`))
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.entries(value)
+      .filter(([key]) => !key.startsWith('_'))
+      .flatMap(([key, item]) => stringLeaves(item, path === '' ? key : `${path}.${key}`))
+  }
+  return []
+}
+
+describe('the artifact stores distributions, not decisions', () => {
+  it('holds no string values at all inside a configuration entry', () => {
+    // A chosen action or a final label could only be stored as a string, so an
+    // entry containing none cannot be carrying either.
+    for (const [id, entry] of Object.entries(artifact.configurations)) {
+      expect(stringLeaves(entry), `configuration ${id} stores non-numeric data`).toEqual([])
+    }
+  })
+
+  it('names no declared action anywhere in the artifact', () => {
+    const serialised = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(artifact.configurations).map(([id, entry]) => [
+          id,
+          { history: entry.history, predictions: entry.predictions },
+        ]),
+      ),
+    )
+    for (const action of actionIds) {
+      expect(serialised).not.toContain(`"${action}"`)
+    }
+  })
+
+  it('carries no ground truth, which lives in the pool manifest instead', () => {
+    const poolImages = applePool().images
+    for (const entry of Object.values(artifact.configurations)) {
+      for (const split of ['training', 'pool'] as const) {
+        for (const [imageId, distribution] of Object.entries(entry.predictions[split])) {
+          expect(Array.isArray(distribution)).toBe(true)
+          // The truth for this image is only obtainable from the manifest.
+          expect(poolImages[imageId]?.category).toBeTypeOf('string')
+        }
+      }
+    }
+  })
+
+  it('gives one probability per declared category for every stored image', () => {
+    for (const [id, entry] of Object.entries(artifact.configurations)) {
+      for (const split of ['training', 'pool'] as const) {
+        for (const [imageId, distribution] of Object.entries(entry.predictions[split])) {
+          expect(distribution, `${id}/${split}/${imageId}`).toHaveLength(categoryIds.length)
+          const total = distribution.reduce((sum, value) => sum + value, 0)
+          expect(total, `${id}/${split}/${imageId} must sum to 1`).toBeCloseTo(1, 6)
+        }
+      }
+    }
+  })
+
+  it('indexes probabilities by the category order the task declares', () => {
+    expect(artifact.categories).toEqual(categoryIds)
+  })
+})
+
+describe('the artifact covers both splits', () => {
+  it('resolves both the training split and the evaluation pool for a configuration', () => {
+    for (const knobs of [OVER_REGULARIZED, OVER_SELECTIVE]) {
+      const resolved = resolveConfiguration(apple, knobs)
+      if (!resolved.ok) throw new Error('expected the configuration to resolve')
+      const found = lookupConfiguration(apple, resolved.configuration, artifact)
+      expect(found.ok).toBe(true)
+      if (!found.ok) continue
+
+      for (const split of ['training', 'pool'] as const) {
+        expect(Object.keys(found.entry.predictions[split]).length).toBeGreaterThan(0)
+      }
+      expect(found.entry.history.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('stores an entry for every image the pool manifest declares in each split', () => {
+    const images = applePool().images
+    for (const [id, entry] of Object.entries(artifact.configurations)) {
+      for (const split of ['training', 'pool'] as const) {
+        const expected = Object.keys(images).filter((imageId) => images[imageId]?.split === split)
+        expect(Object.keys(entry.predictions[split]).sort(), `${id}/${split}`).toEqual(
+          expected.sort(),
+        )
+      }
+    }
+  })
+
+  it('keeps the evaluation pool larger than the browsable training split', () => {
+    for (const entry of Object.values(artifact.configurations)) {
+      expect(Object.keys(entry.predictions.pool).length).toBeGreaterThan(
+        Object.keys(entry.predictions.training).length,
+      )
+    }
+  })
+})
+
+describe('changing the decision rule regenerates nothing', () => {
+  it('leaves the artifact byte-identical while the chosen actions change', () => {
+    const before = JSON.stringify(artifact)
+
+    const withPolicy = (policy: TaskDeclaration['policy']): string[] => {
+      const task: TaskDeclaration = { ...apple, policy }
+      const entry = artifact.configurations['blocks2-channels8-regularization3-dropout0.5']
+      if (entry === undefined) throw new Error('fixture configuration missing')
+      return Object.values(entry.predictions.pool).map((distribution) =>
+        chooseAction(task, distribution),
+      )
+    }
+
+    const byHighest = withPolicy({ kind: 'highest-probability' })
+    const byCost = withPolicy({ kind: 'cost-optimal' })
+    const byThreshold = withPolicy({
+      kind: 'threshold',
+      thresholds: { red: 0.95, green: 0.95, wormy: 0.95 },
+      fallbackAction: 'decline',
+    })
+
+    expect(JSON.stringify(artifact)).toBe(before)
+    expect(byHighest).not.toEqual(byCost)
+    expect(byThreshold.every((action) => action === 'decline')).toBe(true)
+  })
+
+  it('keeps the configuration identifier unchanged when the policy changes', () => {
+    const resolved = resolveConfiguration(apple, OVER_REGULARIZED)
+    if (!resolved.ok) throw new Error('expected the configuration to resolve')
+
+    const underCostOptimal = lookupConfiguration(
+      { ...apple, policy: { kind: 'cost-optimal' } },
+      resolved.configuration,
+      artifact,
+    )
+    const underHighest = lookupConfiguration(apple, resolved.configuration, artifact)
+
+    expect(underCostOptimal.ok && underHighest.ok).toBe(true)
+    if (!underCostOptimal.ok || !underHighest.ok) return
+    expect(underCostOptimal.configurationId).toBe(underHighest.configurationId)
+  })
+})

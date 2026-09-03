@@ -1,0 +1,202 @@
+:root {
+  color-scheme: light dark;
+  --ink: #1c1b17;
+  --paper: #fbf9f4;
+  --line: #d8d2c4;
+  --accent: #6a7b3c;
+  --warn: #8a3b2a;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f0ece2;
+    --paper: #1a1917;
+    --line: #3b382f;
+    --accent: #a6bb63;
+    --warn: #e0876f;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+h2 { font-size: 1.2rem; }
+
+button {
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+button[type='submit'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.task-list { list-style: none; padding: 0; display: grid; gap: 1rem; }
+
+.task-card {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 1rem 1.25rem;
+}
+
+.announced { color: var(--line); font-style: italic; }
+
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 1rem 1.25rem;
+}
+
+.knob { display: grid; gap: 0.25rem; margin-bottom: 1.1rem; }
+.knob > label { font-weight: 600; }
+.slider { display: flex; gap: 0.75rem; align-items: center; }
+
+select, input[type='range'] { font: inherit; max-width: 22rem; }
+
+.help > summary { cursor: pointer; color: var(--accent); font-size: 0.9rem; }
+.help > p { font-size: 0.9rem; margin: 0.4rem 0 0; }
+
+code { background: color-mix(in srgb, var(--line) 40%, transparent); padding: 0 0.25rem; }
+
+table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+th, td { border: 1px solid var(--line); padding: 0.45rem 0.7rem; text-align: left; }
+td { text-align: right; font-variant-numeric: tabular-nums; }
+caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
+
+.earnings { font-size: 1.15rem; }
+
+.issues {
+  border: 1px solid var(--warn);
+  border-left-width: 4px;
+  border-radius: 0.4rem;
+  padding: 0.75rem 1rem;
+}
+.issues h3 { margin-top: 0; color: var(--warn); }
+.issues ul { padding-left: 1.1rem; }
+.explanation { font-size: 0.92rem; }
+
+.report.stale { opacity: 0.65; }
+.provenance, .staleness { font-size: 0.9rem; border-top: 1px dashed var(--line); padding-top: 0.6rem; }
+
+.training > h2 { margin-bottom: 0.25rem; }
+.composition { max-width: 22rem; }
+.composition td { width: 5rem; }
+
+.image-grid {
+  list-style: none;
+  padding: 0;
+  margin: 1.25rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 0.75rem 0.6rem;
+}
+
+.image-grid > li { display: grid; gap: 0.2rem; justify-items: center; }
+
+.cell {
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background-repeat: no-repeat;
+}
+
+.cell-label {
+  font-size: 0.7rem;
+  line-height: 1.25;
+  text-align: center;
+  color: color-mix(in srgb, var(--ink) 65%, transparent);
+}
+
+.network { min-width: 0; }
+
+.network-drawing {
+  inline-size: 100%;
+  block-size: auto;
+  max-block-size: 15rem;
+  overflow: visible;
+}
+
+.network-drawing .connections line {
+  stroke: color-mix(in srgb, var(--accent) 32%, transparent);
+  stroke-width: 0.5;
+}
+
+.network-drawing circle { fill: var(--paper); stroke: var(--accent); stroke-width: 1.2; }
+.network-drawing .input circle { fill: color-mix(in srgb, var(--line) 60%, transparent); }
+.network-drawing .output circle { fill: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* The convolutional drawing: volumes rather than units, so it styles boxes and text. */
+.cnn-drawing { max-block-size: 11rem; }
+
+.cnn-drawing .face {
+  fill: color-mix(in srgb, var(--accent) 12%, var(--paper));
+  stroke: var(--accent);
+  stroke-width: 0.8;
+}
+
+.cnn-drawing .face.front { fill: color-mix(in srgb, var(--accent) 26%, var(--paper)); }
+.cnn-drawing .input .face { fill: color-mix(in srgb, var(--line) 45%, var(--paper)); }
+
+.cnn-drawing .receptive-fields line {
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+  stroke-width: 0.5;
+}
+
+.cnn-drawing .patch {
+  fill: color-mix(in srgb, var(--accent) 55%, transparent);
+  stroke: var(--accent);
+  stroke-width: 0.6;
+}
+
+.cnn-drawing .position { fill: var(--accent); stroke: none; }
+
+.cnn-drawing .stage rect {
+  fill: color-mix(in srgb, var(--accent) 16%, var(--paper));
+  stroke: var(--accent);
+  stroke-width: 0.8;
+}
+
+.cnn-drawing .regularizer rect { stroke-dasharray: 3 2; }
+.cnn-drawing .dropped line { stroke: var(--accent); stroke-width: 0.9; }
+.cnn-drawing .classifier circle { fill: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+.cnn-drawing text {
+  font-size: 6px;
+  text-anchor: middle;
+  fill: var(--ink);
+}
+
+.cnn-drawing text.caption {
+  font-size: 5px;
+  fill: color-mix(in srgb, var(--ink) 65%, transparent);
+}
+
+.network > p { font-size: 0.8rem; margin: 0.35rem 0 0; }
+.network > .abstracted { color: color-mix(in srgb, var(--ink) 70%, transparent); }
+
+.configure-columns { display: grid; gap: 1.25rem; align-items: start; }
+
+@media (min-width: 52rem) {
+  .configure-columns {
+    grid-template-columns: minmax(20rem, 1fr) minmax(15rem, 20rem);
+  }
+}

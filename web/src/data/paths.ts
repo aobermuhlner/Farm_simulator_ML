@@ -28,18 +28,44 @@ export function contentTypeFor(path: string): string {
   return 'application/octet-stream'
 }
 
-/** The task data this build ships. Paths are relative, for a Pages subpath. */
+/**
+ * The task data this build ships. Paths are relative, for a Pages subpath.
+ *
+ * `applePool` stays on the fixture deliberately: the shipped prediction fixture is keyed
+ * to the fixture's ten image ids, so a run scored over the generated pool would refuse
+ * every image. The generated pool is what the training browser reads, which needs no
+ * predictions to be worth looking at. `prediction-artifacts` is what closes that gap.
+ *
+ * The atlas entry is a directory rather than a file because a manifest names its own
+ * atlas files; the URL is that prefix joined to the name the manifest gives.
+ */
 export const DATA_URLS = {
   appleDeclaration: 'data/declarations/apple-harvest.json',
   applePredictions: 'data/fixtures/apple-predictions.json',
   applePool: 'data/fixtures/apple-pool.json',
+  applePoolManifest: 'data/pools/apple-harvest/manifest.json',
+  applePoolAtlases: 'data/pools/apple-harvest',
 } as const
 
-/** The three files one task is made of. */
+/** Where a generated pool's manifest and its atlas images are served from. */
+export interface PoolPaths {
+  readonly manifest: string
+  readonly atlases: string
+}
+
+/** The files one task is made of. */
 export interface TaskDataPaths {
   readonly declaration: string
   readonly predictions: string
   readonly pool: string
+  /**
+   * The generated pool the training browser reads, when the task ships one.
+   *
+   * Optional because it is fetched lazily and separately from the three files a task
+   * needs before it can be run at all: a task with no generated pool still loads,
+   * configures and scores, and simply offers nothing to browse.
+   */
+  readonly generatedPool?: PoolPaths
 }
 
 /**
@@ -54,6 +80,10 @@ export const SHIPPED_TASKS: readonly TaskDataPaths[] = [
     declaration: DATA_URLS.appleDeclaration,
     predictions: DATA_URLS.applePredictions,
     pool: DATA_URLS.applePool,
+    generatedPool: {
+      manifest: DATA_URLS.applePoolManifest,
+      atlases: DATA_URLS.applePoolAtlases,
+    },
   },
 ]
 

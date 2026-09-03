@@ -1,0 +1,786 @@
+{
+  "_comment": "Hand-written stand-in for the real artifact that prediction-artifacts will generate. Two configurations, chosen to carry the two teaching points. Probability vectors are indexed by the categories array; no action or label is stored anywhere.",
+  "schemaVersion": "1.0.0",
+  "taskId": "apple-harvest",
+  "categories": [
+    "red",
+    "green",
+    "wormy"
+  ],
+  "configurations": {
+    "blocks2-channels8-regularization3-dropout0.5": {
+      "_comment": "Over-regularized: learned little more than 'is it reddish', so it sells wormy apples.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 1.02,
+          "valLoss": 1.05
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.91,
+          "valLoss": 0.94
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.86,
+          "valLoss": 0.89
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.84,
+          "valLoss": 0.88
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.83,
+          "valLoss": 0.87
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.85,
+            0.1,
+            0.05
+          ],
+          "t-002": [
+            0.15,
+            0.75,
+            0.1
+          ],
+          "t-003": [
+            0.5,
+            0.15,
+            0.35
+          ],
+          "t-004": [
+            0.88,
+            0.07,
+            0.05
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.8,
+            0.1,
+            0.1
+          ],
+          "p-002": [
+            0.75,
+            0.15,
+            0.1
+          ],
+          "p-003": [
+            0.2,
+            0.7,
+            0.1
+          ],
+          "p-004": [
+            0.6,
+            0.1,
+            0.3
+          ],
+          "p-005": [
+            0.55,
+            0.15,
+            0.3
+          ],
+          "p-006": [
+            0.85,
+            0.05,
+            0.1
+          ]
+        }
+      }
+    },
+    "blocks4-channels32-regularization0-dropout0": {
+      "_comment": "Under-regularized: memorised the training reds, so it declines reds that do not match them.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 0.98,
+          "valLoss": 1.0
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.61,
+          "valLoss": 0.82
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.33,
+          "valLoss": 0.79
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.14,
+          "valLoss": 0.95
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.05,
+          "valLoss": 1.21
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.95,
+            0.03,
+            0.02
+          ],
+          "t-002": [
+            0.02,
+            0.96,
+            0.02
+          ],
+          "t-003": [
+            0.02,
+            0.03,
+            0.95
+          ],
+          "t-004": [
+            0.94,
+            0.04,
+            0.02
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.3,
+            0.45,
+            0.25
+          ],
+          "p-002": [
+            0.25,
+            0.4,
+            0.35
+          ],
+          "p-003": [
+            0.1,
+            0.8,
+            0.1
+          ],
+          "p-004": [
+            0.1,
+            0.2,
+            0.7
+          ],
+          "p-005": [
+            0.15,
+            0.15,
+            0.7
+          ],
+          "p-006": [
+            0.9,
+            0.05,
+            0.05
+          ]
+        }
+      }
+    },
+    "blocks3-channels16-regularization1-dropout0": {
+      "_comment": "The declared default, and the balanced one: picks every ripe red and leaves both worms.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 1.0,
+          "valLoss": 1.012
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.805,
+          "valLoss": 0.829
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.61,
+          "valLoss": 0.646
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.415,
+          "valLoss": 0.463
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.22,
+          "valLoss": 0.28
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.92,
+            0.04,
+            0.04
+          ],
+          "t-002": [
+            0.06,
+            0.9,
+            0.04
+          ],
+          "t-003": [
+            0.1,
+            0.05,
+            0.85
+          ],
+          "t-004": [
+            0.94,
+            0.03,
+            0.03
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.88,
+            0.06,
+            0.06
+          ],
+          "p-002": [
+            0.8,
+            0.08,
+            0.12
+          ],
+          "p-003": [
+            0.1,
+            0.85,
+            0.05
+          ],
+          "p-004": [
+            0.25,
+            0.05,
+            0.7
+          ],
+          "p-005": [
+            0.3,
+            0.08,
+            0.62
+          ],
+          "p-006": [
+            0.86,
+            0.05,
+            0.09
+          ]
+        }
+      }
+    },
+    "blocks2-channels16-regularization1-dropout0": {
+      "_comment": "One knob shallower: still fine on obvious fruit, but a subtle worm reads as ripe.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 1.05,
+          "valLoss": 1.06
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.893,
+          "valLoss": 0.913
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.735,
+          "valLoss": 0.765
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.577,
+          "valLoss": 0.617
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.42,
+          "valLoss": 0.47
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.86,
+            0.07,
+            0.07
+          ],
+          "t-002": [
+            0.1,
+            0.82,
+            0.08
+          ],
+          "t-003": [
+            0.2,
+            0.08,
+            0.72
+          ],
+          "t-004": [
+            0.88,
+            0.06,
+            0.06
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.82,
+            0.09,
+            0.09
+          ],
+          "p-002": [
+            0.7,
+            0.12,
+            0.18
+          ],
+          "p-003": [
+            0.14,
+            0.78,
+            0.08
+          ],
+          "p-004": [
+            0.45,
+            0.08,
+            0.47
+          ],
+          "p-005": [
+            0.52,
+            0.1,
+            0.38
+          ],
+          "p-006": [
+            0.8,
+            0.07,
+            0.13
+          ]
+        }
+      }
+    },
+    "blocks4-channels16-regularization1-dropout0": {
+      "_comment": "One knob deeper: sells no worms at all, but only because it refuses most reds too.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 0.98,
+          "valLoss": 1.04
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.765,
+          "valLoss": 0.885
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.55,
+          "valLoss": 0.73
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.335,
+          "valLoss": 0.575
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.12,
+          "valLoss": 0.42
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.96,
+            0.02,
+            0.02
+          ],
+          "t-002": [
+            0.03,
+            0.95,
+            0.02
+          ],
+          "t-003": [
+            0.04,
+            0.02,
+            0.94
+          ],
+          "t-004": [
+            0.97,
+            0.02,
+            0.01
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.9,
+            0.05,
+            0.05
+          ],
+          "p-002": [
+            0.4,
+            0.15,
+            0.45
+          ],
+          "p-003": [
+            0.08,
+            0.88,
+            0.04
+          ],
+          "p-004": [
+            0.15,
+            0.05,
+            0.8
+          ],
+          "p-005": [
+            0.2,
+            0.06,
+            0.74
+          ],
+          "p-006": [
+            0.44,
+            0.1,
+            0.46
+          ]
+        }
+      }
+    },
+    "blocks3-channels8-regularization1-dropout0": {
+      "_comment": "One knob narrower: not enough room to hold the worm distinction on every apple.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 1.04,
+          "valLoss": 1.054
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.875,
+          "valLoss": 0.903
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.71,
+          "valLoss": 0.752
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.545,
+          "valLoss": 0.601
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.38,
+          "valLoss": 0.45
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.88,
+            0.06,
+            0.06
+          ],
+          "t-002": [
+            0.09,
+            0.83,
+            0.08
+          ],
+          "t-003": [
+            0.18,
+            0.07,
+            0.75
+          ],
+          "t-004": [
+            0.9,
+            0.05,
+            0.05
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.84,
+            0.08,
+            0.08
+          ],
+          "p-002": [
+            0.76,
+            0.1,
+            0.14
+          ],
+          "p-003": [
+            0.18,
+            0.74,
+            0.08
+          ],
+          "p-004": [
+            0.5,
+            0.09,
+            0.41
+          ],
+          "p-005": [
+            0.34,
+            0.1,
+            0.56
+          ],
+          "p-006": [
+            0.82,
+            0.08,
+            0.1
+          ]
+        }
+      }
+    },
+    "blocks3-channels16-regularization0-dropout0": {
+      "_comment": "Regularization off: memorised the perfect training red, so varied reds now look wrong.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 0.95,
+          "valLoss": 1.04
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.725,
+          "valLoss": 0.905
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.5,
+          "valLoss": 0.77
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.275,
+          "valLoss": 0.635
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.05,
+          "valLoss": 0.5
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.98,
+            0.01,
+            0.01
+          ],
+          "t-002": [
+            0.01,
+            0.98,
+            0.01
+          ],
+          "t-003": [
+            0.02,
+            0.01,
+            0.97
+          ],
+          "t-004": [
+            0.99,
+            0.005,
+            0.005
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.95,
+            0.03,
+            0.02
+          ],
+          "p-002": [
+            0.35,
+            0.25,
+            0.4
+          ],
+          "p-003": [
+            0.12,
+            0.8,
+            0.08
+          ],
+          "p-004": [
+            0.3,
+            0.1,
+            0.6
+          ],
+          "p-005": [
+            0.55,
+            0.15,
+            0.3
+          ],
+          "p-006": [
+            0.38,
+            0.2,
+            0.42
+          ]
+        }
+      }
+    },
+    "blocks3-channels16-regularization3-dropout0": {
+      "_comment": "Regularization at maximum: flattened to \"reddish or not\", worms included.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 1.08,
+          "valLoss": 1.088
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.96,
+          "valLoss": 0.976
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.84,
+          "valLoss": 0.864
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.72,
+          "valLoss": 0.752
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.6,
+          "valLoss": 0.64
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.8,
+            0.12,
+            0.08
+          ],
+          "t-002": [
+            0.18,
+            0.72,
+            0.1
+          ],
+          "t-003": [
+            0.55,
+            0.13,
+            0.32
+          ],
+          "t-004": [
+            0.82,
+            0.1,
+            0.08
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.78,
+            0.12,
+            0.1
+          ],
+          "p-002": [
+            0.72,
+            0.14,
+            0.14
+          ],
+          "p-003": [
+            0.25,
+            0.65,
+            0.1
+          ],
+          "p-004": [
+            0.62,
+            0.1,
+            0.28
+          ],
+          "p-005": [
+            0.58,
+            0.12,
+            0.3
+          ],
+          "p-006": [
+            0.8,
+            0.1,
+            0.1
+          ]
+        }
+      }
+    },
+    "blocks3-channels16-regularization1-dropout0.5": {
+      "_comment": "Heavy dropout on top of the balanced setting: too little of the net left to be sure.",
+      "history": [
+        {
+          "epoch": 1,
+          "trainLoss": 1.06,
+          "valLoss": 1.07
+        },
+        {
+          "epoch": 2,
+          "trainLoss": 0.96,
+          "valLoss": 0.98
+        },
+        {
+          "epoch": 3,
+          "trainLoss": 0.86,
+          "valLoss": 0.89
+        },
+        {
+          "epoch": 4,
+          "trainLoss": 0.76,
+          "valLoss": 0.8
+        },
+        {
+          "epoch": 5,
+          "trainLoss": 0.66,
+          "valLoss": 0.71
+        }
+      ],
+      "predictions": {
+        "training": {
+          "t-001": [
+            0.66,
+            0.18,
+            0.16
+          ],
+          "t-002": [
+            0.22,
+            0.6,
+            0.18
+          ],
+          "t-003": [
+            0.34,
+            0.18,
+            0.48
+          ],
+          "t-004": [
+            0.68,
+            0.17,
+            0.15
+          ]
+        },
+        "pool": {
+          "p-001": [
+            0.6,
+            0.2,
+            0.2
+          ],
+          "p-002": [
+            0.55,
+            0.22,
+            0.23
+          ],
+          "p-003": [
+            0.3,
+            0.5,
+            0.2
+          ],
+          "p-004": [
+            0.45,
+            0.2,
+            0.35
+          ],
+          "p-005": [
+            0.4,
+            0.22,
+            0.38
+          ],
+          "p-006": [
+            0.58,
+            0.2,
+            0.22
+          ]
+        }
+      }
+    }
+  }
+}
