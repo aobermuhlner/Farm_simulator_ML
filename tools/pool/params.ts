@@ -45,6 +45,38 @@ export const BAND_ATTRIBUTES = ['hue', 'roundness', 'gloss', 'lighting'] as cons
  */
 export const SEED = 20260902
 
+/**
+ * The seed the training-split role assignment draws from.
+ *
+ * Deliberately its own stream rather than a continuation of `SEED`'s. Drawing the roles
+ * from the generator's stream would shift every attribute drawn after them: the ids
+ * would not move, but the apples behind them would, and every prediction artifact keyed
+ * to those ids would be silently wrong. With its own seed the roles are additive —
+ * regenerating reproduces the existing images byte for byte and adds a field.
+ *
+ * `0x726f6c65` is "role" in ASCII, so the derivation is readable rather than a magic
+ * offset someone would later "tidy up".
+ */
+export const ROLE_SEED = SEED ^ 0x726f6c65
+
+/** The role a training image plays: fitted on, or held out to measure validation loss. */
+export const TRAINING_ROLES = ['fitted', 'heldOut'] as const
+export type TrainingRole = (typeof TRAINING_ROLES)[number]
+
+/**
+ * How many training images of each category are held out.
+ *
+ * 40 of 200, stratified: enough held out for a validation loss that moves legibly per
+ * epoch, and enough of every category in both roles that the loss is measured over the
+ * same categories the fitted images cover — which the spec requires structurally rather
+ * than by luck of the draw.
+ */
+export const HELD_OUT_COUNTS: Readonly<Record<PoolCategory, number>> = {
+  red: 20,
+  green: 10,
+  wormy: 10,
+}
+
 /** Rasterization geometry. One atlas holds `CELLS_PER_ATLAS` images. */
 export const CELL_PX = 128
 export const ATLAS_PX = 2048

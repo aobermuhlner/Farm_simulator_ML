@@ -1,0 +1,187 @@
+"""Training one configuration, and measuring it on the roles the pool declares.
+
+The training loss is measured over the fitted images and the validation loss over the
+held-out ones, both in evaluation mode after the epoch's updates — so the two curves a
+student reads differ because of what the model saw, not because dropout was on for one
+of them and off for the other.
+
+No held-out image reaches the optimizer. That is the whole reason the role exists, and
+it is the one thing in here worth checking twice.
+"""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass
+
+import numpy as np
+import torch
+from torch import nn
+
+from .declaration import Declaration
+from .images import DecodedSplit, as_batch
+from .knobs import (
+    AUGMENTATION,
+    BATCH_SIZE,
+    DROPOUT_KNOB,
+    EPOCHS,
+    LEARNING_RATE,
+    LOSS,
+    OPTIMIZER,
+    REGULARIZATION_KNOB,
+    weight_decay_for,
+)
+from .model import Architecture, build_model
+from .pool import Pool
+
+
+def format_value(value: float | int | str) -> str:
+    """A knob value as `configId.ts` writes it: `String(value)` for numbers."""
+    if isinstance(value, bool):  # pragma: no cover - no boolean knobs are declared
+        raise TypeError("boolean knob values have no declared identifier form")
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def configuration_id(declaration: Declaration, knobs: dict[str, float | int | str]) -> str:
+    """The identifier a configuration resolves to, in the declared knob order."""
+    return "-".join(f"{knob.id}{format_value(knobs[knob.id])}" for knob in declaration.knobs)
+
+
+@dataclass(frozen=True)
+class Epoch:
+    epoch: int
+    train_loss: float
+    val_loss: float
+
+
+@dataclass(frozen=True)
+class RunResult:
+    configuration_id: str
+    knobs: dict[str, float | int | str]
+    epochs: int
+    seed: int
+    architecture: Architecture
+    hyperparameters: dict[str, object]
+    history: tuple[Epoch, ...]
+    #: split -> image id -> probability per declared category, in declared order.
+    predictions: dict[str, dict[str, list[float]]]
+
+
+def _seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.use_deterministic_algorithms(True)
+
+
+def _targets(pool: Pool, declaration: Declaration, ids: tuple[str, ...]) -> torch.Tensor:
+    index = {category: position for position, category in enumerate(declaration.categories)}
+    return torch.tensor([index[pool.truth(image_id)] for image_id in ids], dtype=torch.long)
+
+
+def _tensor(pixels: np.ndarray) -> torch.Tensor:
+    return torch.from_numpy(as_batch(pixels))
+
+
+@torch.no_grad()
+def _mean_loss(model: nn.Module, criterion: nn.Module, pixels: torch.Tensor, targets: torch.Tensor) -> float:
+    model.eval()
+    total = 0.0
+    for start in range(0, len(targets), BATCH_SIZE):
+        batch = pixels[start : start + BATCH_SIZE]
+        labels = targets[start : start + BATCH_SIZE]
+        total += criterion(model(batch), labels).item() * len(labels)
+    return total / len(targets)
+
+
+@torch.no_grad()
+def _distributions(model: nn.Module, pixels: torch.Tensor) -> np.ndarray:
+    model.eval()
+    outputs = []
+    for start in range(0, len(pixels), BATCH_SIZE):
+        outputs.append(torch.softmax(model(pixels[start : start + BATCH_SIZE]), dim=1))
+    return torch.cat(outputs).numpy()
+
+
+def train_configuration(
+    declaration: Declaration,
+    pool: Pool,
+    decoded: dict[str, DecodedSplit],
+    knobs: dict[str, float | int | str],
+    seed: int,
+    epochs: int = EPOCHS,
+) -> RunResult:
+    """Trains one configuration and evaluates it over the whole pool."""
+    _seed_everything(seed)
+
+    blocks = int(knobs[declaration.blocks_knob])
+    channels = int(knobs[declaration.channels_knob])
+    dropout = float(knobs[DROPOUT_KNOB])
+    decay = weight_decay_for(knobs[REGULARIZATION_KNOB])
+
+    model, architecture = build_model(declaration, blocks=blocks, base_channels=channels, dropout=dropout)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=decay)
+
+    training = decoded["training"]
+    position = {image_id: index for index, image_id in enumerate(training.ids)}
+    fitted = np.array([position[image_id] for image_id in pool.roles["fitted"]])
+    held_out = np.array([position[image_id] for image_id in pool.roles["heldOut"]])
+
+    fitted_pixels = _tensor(training.pixels[fitted])
+    fitted_targets = _targets(pool, declaration, tuple(pool.roles["fitted"]))
+    held_out_pixels = _tensor(training.pixels[held_out])
+    held_out_targets = _targets(pool, declaration, tuple(pool.roles["heldOut"]))
+
+    generator = np.random.default_rng(seed)
+    history: list[Epoch] = []
+
+    for epoch in range(1, epochs + 1):
+        model.train()
+        order = generator.permutation(len(fitted_targets))
+        for start in range(0, len(order), BATCH_SIZE):
+            batch = order[start : start + BATCH_SIZE]
+            optimizer.zero_grad()
+            loss = criterion(model(fitted_pixels[batch]), fitted_targets[batch])
+            loss.backward()
+            optimizer.step()
+
+        history.append(
+            Epoch(
+                epoch=epoch,
+                train_loss=_mean_loss(model, criterion, fitted_pixels, fitted_targets),
+                val_loss=_mean_loss(model, criterion, held_out_pixels, held_out_targets),
+            )
+        )
+
+    predictions: dict[str, dict[str, list[float]]] = {}
+    for split, images in decoded.items():
+        probabilities = _distributions(model, _tensor(images.pixels))
+        predictions[split] = {
+            image_id: [float(value) for value in row]
+            for image_id, row in zip(images.ids, probabilities)
+        }
+
+    return RunResult(
+        configuration_id=configuration_id(declaration, knobs),
+        knobs=dict(knobs),
+        epochs=epochs,
+        seed=seed,
+        architecture=architecture,
+        hyperparameters={
+            "optimizer": OPTIMIZER,
+            "learningRate": LEARNING_RATE,
+            "batchSize": BATCH_SIZE,
+            "loss": LOSS,
+            "weightDecay": decay,
+            "dropout": dropout,
+            "augmentation": AUGMENTATION,
+            "pixelScale": 255.0,
+            "torch": torch.__version__,
+            "threads": torch.get_num_threads(),
+        },
+        history=tuple(history),
+        predictions=predictions,
+    )

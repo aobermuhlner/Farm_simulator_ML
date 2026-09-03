@@ -4,7 +4,15 @@
   "seed": 20260902,
   "splits": {
     "training": {
-      "count": 200
+      "count": 200,
+      "roles": {
+        "fitted": {
+          "count": 160
+        },
+        "heldOut": {
+          "count": 40
+        }
+      }
     },
     "pool": {
       "count": 1000
@@ -69,7 +77,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 0
+      "cell": 0,
+      "role": "fitted"
     },
     "t-002": {
       "split": "training",
@@ -82,7 +91,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 1
+      "cell": 1,
+      "role": "heldOut"
     },
     "t-003": {
       "split": "training",
@@ -95,7 +105,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 2
+      "cell": 2,
+      "role": "fitted"
     },
     "t-004": {
       "split": "training",
@@ -108,7 +119,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 3
+      "cell": 3,
+      "role": "fitted"
     },
     "t-005": {
       "split": "training",
@@ -121,7 +133,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 4
+      "cell": 4,
+      "role": "fitted"
     },
     "t-006": {
       "split": "training",
@@ -134,7 +147,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 5
+      "cell": 5,
+      "role": "heldOut"
     },
     "t-007": {
       "split": "training",
@@ -147,7 +161,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 6
+      "cell": 6,
+      "role": "fitted"
     },
     "t-008": {
       "split": "training",
@@ -160,7 +175,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 7
+      "cell": 7,
+      "role": "fitted"
     },
     "t-009": {
       "split": "training",
@@ -173,7 +189,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 8
+      "cell": 8,
+      "role": "fitted"
     },
     "t-010": {
       "split": "training",
@@ -186,7 +203,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 9
+      "cell": 9,
+      "role": "fitted"
     },
     "t-011": {
       "split": "training",
@@ -199,7 +217,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 10
+      "cell": 10,
+      "role": "heldOut"
     },
     "t-012": {
       "split": "training",
@@ -212,7 +231,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 11
+      "cell": 11,
+      "role": "fitted"
     },
     "t-013": {
       "split": "training",
@@ -225,7 +245,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 12
+      "cell": 12,
+      "role": "fitted"
     },
     "t-014": {
       "split": "training",
@@ -238,7 +259,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 13
+      "cell": 13,
+      "role": "fitted"
     },
     "t-015": {
       "split": "training",
@@ -251,7 +273,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 14
+      "cell": 14,
+      "role": "fitted"
     },
     "t-016": {
       "split": "training",
@@ -264,7 +287,8 @@
         "wormVisibility": 0.83
       },
       "atlas": "atlas-training-0",
-      "cell": 15
+      "cell": 15,
+      "role": "fitted"
     },
     "t-017": {
       "split": "training",
@@ -277,7 +301,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 16
+      "cell": 16,
+      "role": "fitted"
     },
     "t-018": {
       "split": "training",
@@ -290,7 +315,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 17
+      "cell": 17,
+      "role": "fitted"
     },
     "t-019": {
       "split": "training",
@@ -303,7 +329,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 18
+      "cell": 18,
+      "role": "fitted"
     },
     "t-020": {
       "split": "training",
@@ -316,7 +343,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 19
+      "cell": 19,
+      "role": "fitted"
     },
     "t-021": {
       "split": "training",
@@ -329,7 +357,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 20
+      "cell": 20,
+      "role": "fitted"
     },
     "t-022": {
       "split": "training",
@@ -342,7 +371,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 21
+      "cell": 21,
+      "role": "fitted"
     },
     "t-023": {
       "split": "training",
@@ -355,7 +385,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 22
+      "cell": 22,
+      "role": "heldOut"
     },
     "t-024": {
       "split": "training",
@@ -368,7 +399,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 23
+      "cell": 23,
+      "role": "heldOut"
     },
     "t-025": {
       "split": "training",
@@ -381,7 +413,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 24
+      "cell": 24,
+      "role": "fitted"
     },
     "t-026": {
       "split": "training",
@@ -394,7 +427,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 25
+      "cell": 25,
+      "role": "fitted"
     },
     "t-027": {
       "split": "training",
@@ -407,7 +441,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 26
+      "cell": 26,
+      "role": "fitted"
     },
     "t-028": {
       "split": "training",
@@ -420,7 +455,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 27
+      "cell": 27,
+      "role": "heldOut"
     },
     "t-029": {
       "split": "training",
@@ -433,7 +469,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 28
+      "cell": 28,
+      "role": "heldOut"
     },
     "t-030": {
       "split": "training",
@@ -446,7 +483,8 @@
         "wormVisibility": 0.782
       },
       "atlas": "atlas-training-0",
-      "cell": 29
+      "cell": 29,
+      "role": "fitted"
     },
     "t-031": {
       "split": "training",
@@ -459,7 +497,8 @@
         "wormVisibility": 0.906
       },
       "atlas": "atlas-training-0",
-      "cell": 30
+      "cell": 30,
+      "role": "fitted"
     },
     "t-032": {
       "split": "training",
@@ -472,7 +511,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 31
+      "cell": 31,
+      "role": "fitted"
     },
     "t-033": {
       "split": "training",
@@ -485,7 +525,8 @@
         "wormVisibility": 0.903
       },
       "atlas": "atlas-training-0",
-      "cell": 32
+      "cell": 32,
+      "role": "fitted"
     },
     "t-034": {
       "split": "training",
@@ -498,7 +539,8 @@
         "wormVisibility": 0.943
       },
       "atlas": "atlas-training-0",
-      "cell": 33
+      "cell": 33,
+      "role": "heldOut"
     },
     "t-035": {
       "split": "training",
@@ -511,7 +553,8 @@
         "wormVisibility": 0.906
       },
       "atlas": "atlas-training-0",
-      "cell": 34
+      "cell": 34,
+      "role": "heldOut"
     },
     "t-036": {
       "split": "training",
@@ -524,7 +567,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 35
+      "cell": 35,
+      "role": "fitted"
     },
     "t-037": {
       "split": "training",
@@ -537,7 +581,8 @@
         "wormVisibility": 0.743
       },
       "atlas": "atlas-training-0",
-      "cell": 36
+      "cell": 36,
+      "role": "fitted"
     },
     "t-038": {
       "split": "training",
@@ -550,7 +595,8 @@
         "wormVisibility": 0.706
       },
       "atlas": "atlas-training-0",
-      "cell": 37
+      "cell": 37,
+      "role": "fitted"
     },
     "t-039": {
       "split": "training",
@@ -563,7 +609,8 @@
         "wormVisibility": 0.714
       },
       "atlas": "atlas-training-0",
-      "cell": 38
+      "cell": 38,
+      "role": "heldOut"
     },
     "t-040": {
       "split": "training",
@@ -576,7 +623,8 @@
         "wormVisibility": 0.904
       },
       "atlas": "atlas-training-0",
-      "cell": 39
+      "cell": 39,
+      "role": "fitted"
     },
     "t-041": {
       "split": "training",
@@ -589,7 +637,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 40
+      "cell": 40,
+      "role": "fitted"
     },
     "t-042": {
       "split": "training",
@@ -602,7 +651,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 41
+      "cell": 41,
+      "role": "fitted"
     },
     "t-043": {
       "split": "training",
@@ -615,7 +665,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 42
+      "cell": 42,
+      "role": "fitted"
     },
     "t-044": {
       "split": "training",
@@ -628,7 +679,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 43
+      "cell": 43,
+      "role": "fitted"
     },
     "t-045": {
       "split": "training",
@@ -641,7 +693,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 44
+      "cell": 44,
+      "role": "fitted"
     },
     "t-046": {
       "split": "training",
@@ -654,7 +707,8 @@
         "wormVisibility": 0.932
       },
       "atlas": "atlas-training-0",
-      "cell": 45
+      "cell": 45,
+      "role": "fitted"
     },
     "t-047": {
       "split": "training",
@@ -667,7 +721,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 46
+      "cell": 46,
+      "role": "fitted"
     },
     "t-048": {
       "split": "training",
@@ -680,7 +735,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 47
+      "cell": 47,
+      "role": "fitted"
     },
     "t-049": {
       "split": "training",
@@ -693,7 +749,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 48
+      "cell": 48,
+      "role": "fitted"
     },
     "t-050": {
       "split": "training",
@@ -706,7 +763,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 49
+      "cell": 49,
+      "role": "fitted"
     },
     "t-051": {
       "split": "training",
@@ -719,7 +777,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 50
+      "cell": 50,
+      "role": "fitted"
     },
     "t-052": {
       "split": "training",
@@ -732,7 +791,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 51
+      "cell": 51,
+      "role": "fitted"
     },
     "t-053": {
       "split": "training",
@@ -745,7 +805,8 @@
         "wormVisibility": 0.802
       },
       "atlas": "atlas-training-0",
-      "cell": 52
+      "cell": 52,
+      "role": "fitted"
     },
     "t-054": {
       "split": "training",
@@ -758,7 +819,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 53
+      "cell": 53,
+      "role": "fitted"
     },
     "t-055": {
       "split": "training",
@@ -771,7 +833,8 @@
         "wormVisibility": 0.729
       },
       "atlas": "atlas-training-0",
-      "cell": 54
+      "cell": 54,
+      "role": "fitted"
     },
     "t-056": {
       "split": "training",
@@ -784,7 +847,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 55
+      "cell": 55,
+      "role": "fitted"
     },
     "t-057": {
       "split": "training",
@@ -797,7 +861,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 56
+      "cell": 56,
+      "role": "fitted"
     },
     "t-058": {
       "split": "training",
@@ -810,7 +875,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 57
+      "cell": 57,
+      "role": "fitted"
     },
     "t-059": {
       "split": "training",
@@ -823,7 +889,8 @@
         "wormVisibility": 0.879
       },
       "atlas": "atlas-training-0",
-      "cell": 58
+      "cell": 58,
+      "role": "fitted"
     },
     "t-060": {
       "split": "training",
@@ -836,7 +903,8 @@
         "wormVisibility": 0.962
       },
       "atlas": "atlas-training-0",
-      "cell": 59
+      "cell": 59,
+      "role": "fitted"
     },
     "t-061": {
       "split": "training",
@@ -849,7 +917,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 60
+      "cell": 60,
+      "role": "heldOut"
     },
     "t-062": {
       "split": "training",
@@ -862,7 +931,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 61
+      "cell": 61,
+      "role": "fitted"
     },
     "t-063": {
       "split": "training",
@@ -875,7 +945,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 62
+      "cell": 62,
+      "role": "fitted"
     },
     "t-064": {
       "split": "training",
@@ -888,7 +959,8 @@
         "wormVisibility": 0.945
       },
       "atlas": "atlas-training-0",
-      "cell": 63
+      "cell": 63,
+      "role": "fitted"
     },
     "t-065": {
       "split": "training",
@@ -901,7 +973,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 64
+      "cell": 64,
+      "role": "heldOut"
     },
     "t-066": {
       "split": "training",
@@ -914,7 +987,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 65
+      "cell": 65,
+      "role": "fitted"
     },
     "t-067": {
       "split": "training",
@@ -927,7 +1001,8 @@
         "wormVisibility": 0.798
       },
       "atlas": "atlas-training-0",
-      "cell": 66
+      "cell": 66,
+      "role": "heldOut"
     },
     "t-068": {
       "split": "training",
@@ -940,7 +1015,8 @@
         "wormVisibility": 0.905
       },
       "atlas": "atlas-training-0",
-      "cell": 67
+      "cell": 67,
+      "role": "fitted"
     },
     "t-069": {
       "split": "training",
@@ -953,7 +1029,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 68
+      "cell": 68,
+      "role": "fitted"
     },
     "t-070": {
       "split": "training",
@@ -966,7 +1043,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 69
+      "cell": 69,
+      "role": "fitted"
     },
     "t-071": {
       "split": "training",
@@ -979,7 +1057,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 70
+      "cell": 70,
+      "role": "fitted"
     },
     "t-072": {
       "split": "training",
@@ -992,7 +1071,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 71
+      "cell": 71,
+      "role": "fitted"
     },
     "t-073": {
       "split": "training",
@@ -1005,7 +1085,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 72
+      "cell": 72,
+      "role": "fitted"
     },
     "t-074": {
       "split": "training",
@@ -1018,7 +1099,8 @@
         "wormVisibility": 0.972
       },
       "atlas": "atlas-training-0",
-      "cell": 73
+      "cell": 73,
+      "role": "fitted"
     },
     "t-075": {
       "split": "training",
@@ -1031,7 +1113,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 74
+      "cell": 74,
+      "role": "fitted"
     },
     "t-076": {
       "split": "training",
@@ -1044,7 +1127,8 @@
         "wormVisibility": 0.857
       },
       "atlas": "atlas-training-0",
-      "cell": 75
+      "cell": 75,
+      "role": "fitted"
     },
     "t-077": {
       "split": "training",
@@ -1057,7 +1141,8 @@
         "wormVisibility": 0.874
       },
       "atlas": "atlas-training-0",
-      "cell": 76
+      "cell": 76,
+      "role": "fitted"
     },
     "t-078": {
       "split": "training",
@@ -1070,7 +1155,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 77
+      "cell": 77,
+      "role": "heldOut"
     },
     "t-079": {
       "split": "training",
@@ -1083,7 +1169,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 78
+      "cell": 78,
+      "role": "heldOut"
     },
     "t-080": {
       "split": "training",
@@ -1096,7 +1183,8 @@
         "wormVisibility": 0.902
       },
       "atlas": "atlas-training-0",
-      "cell": 79
+      "cell": 79,
+      "role": "fitted"
     },
     "t-081": {
       "split": "training",
@@ -1109,7 +1197,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 80
+      "cell": 80,
+      "role": "fitted"
     },
     "t-082": {
       "split": "training",
@@ -1122,7 +1211,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 81
+      "cell": 81,
+      "role": "fitted"
     },
     "t-083": {
       "split": "training",
@@ -1135,7 +1225,8 @@
         "wormVisibility": 0.975
       },
       "atlas": "atlas-training-0",
-      "cell": 82
+      "cell": 82,
+      "role": "heldOut"
     },
     "t-084": {
       "split": "training",
@@ -1148,7 +1239,8 @@
         "wormVisibility": 0.871
       },
       "atlas": "atlas-training-0",
-      "cell": 83
+      "cell": 83,
+      "role": "fitted"
     },
     "t-085": {
       "split": "training",
@@ -1161,7 +1253,8 @@
         "wormVisibility": 0.823
       },
       "atlas": "atlas-training-0",
-      "cell": 84
+      "cell": 84,
+      "role": "heldOut"
     },
     "t-086": {
       "split": "training",
@@ -1174,7 +1267,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 85
+      "cell": 85,
+      "role": "fitted"
     },
     "t-087": {
       "split": "training",
@@ -1187,7 +1281,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 86
+      "cell": 86,
+      "role": "fitted"
     },
     "t-088": {
       "split": "training",
@@ -1200,7 +1295,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 87
+      "cell": 87,
+      "role": "fitted"
     },
     "t-089": {
       "split": "training",
@@ -1213,7 +1309,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 88
+      "cell": 88,
+      "role": "fitted"
     },
     "t-090": {
       "split": "training",
@@ -1226,7 +1323,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 89
+      "cell": 89,
+      "role": "heldOut"
     },
     "t-091": {
       "split": "training",
@@ -1239,7 +1337,8 @@
         "wormVisibility": 0.892
       },
       "atlas": "atlas-training-0",
-      "cell": 90
+      "cell": 90,
+      "role": "fitted"
     },
     "t-092": {
       "split": "training",
@@ -1252,7 +1351,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 91
+      "cell": 91,
+      "role": "heldOut"
     },
     "t-093": {
       "split": "training",
@@ -1265,7 +1365,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 92
+      "cell": 92,
+      "role": "fitted"
     },
     "t-094": {
       "split": "training",
@@ -1278,7 +1379,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 93
+      "cell": 93,
+      "role": "fitted"
     },
     "t-095": {
       "split": "training",
@@ -1291,7 +1393,8 @@
         "wormVisibility": 0.901
       },
       "atlas": "atlas-training-0",
-      "cell": 94
+      "cell": 94,
+      "role": "fitted"
     },
     "t-096": {
       "split": "training",
@@ -1304,7 +1407,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 95
+      "cell": 95,
+      "role": "fitted"
     },
     "t-097": {
       "split": "training",
@@ -1317,7 +1421,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 96
+      "cell": 96,
+      "role": "heldOut"
     },
     "t-098": {
       "split": "training",
@@ -1330,7 +1435,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 97
+      "cell": 97,
+      "role": "fitted"
     },
     "t-099": {
       "split": "training",
@@ -1343,7 +1449,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 98
+      "cell": 98,
+      "role": "fitted"
     },
     "t-100": {
       "split": "training",
@@ -1356,7 +1463,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 99
+      "cell": 99,
+      "role": "fitted"
     },
     "t-101": {
       "split": "training",
@@ -1369,7 +1477,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 100
+      "cell": 100,
+      "role": "fitted"
     },
     "t-102": {
       "split": "training",
@@ -1382,7 +1491,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 101
+      "cell": 101,
+      "role": "fitted"
     },
     "t-103": {
       "split": "training",
@@ -1395,7 +1505,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 102
+      "cell": 102,
+      "role": "fitted"
     },
     "t-104": {
       "split": "training",
@@ -1408,7 +1519,8 @@
         "wormVisibility": 0.861
       },
       "atlas": "atlas-training-0",
-      "cell": 103
+      "cell": 103,
+      "role": "heldOut"
     },
     "t-105": {
       "split": "training",
@@ -1421,7 +1533,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 104
+      "cell": 104,
+      "role": "fitted"
     },
     "t-106": {
       "split": "training",
@@ -1434,7 +1547,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 105
+      "cell": 105,
+      "role": "fitted"
     },
     "t-107": {
       "split": "training",
@@ -1447,7 +1561,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 106
+      "cell": 106,
+      "role": "fitted"
     },
     "t-108": {
       "split": "training",
@@ -1460,7 +1575,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 107
+      "cell": 107,
+      "role": "fitted"
     },
     "t-109": {
       "split": "training",
@@ -1473,7 +1589,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 108
+      "cell": 108,
+      "role": "heldOut"
     },
     "t-110": {
       "split": "training",
@@ -1486,7 +1603,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 109
+      "cell": 109,
+      "role": "fitted"
     },
     "t-111": {
       "split": "training",
@@ -1499,7 +1617,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 110
+      "cell": 110,
+      "role": "heldOut"
     },
     "t-112": {
       "split": "training",
@@ -1512,7 +1631,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 111
+      "cell": 111,
+      "role": "fitted"
     },
     "t-113": {
       "split": "training",
@@ -1525,7 +1645,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 112
+      "cell": 112,
+      "role": "fitted"
     },
     "t-114": {
       "split": "training",
@@ -1538,7 +1659,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 113
+      "cell": 113,
+      "role": "fitted"
     },
     "t-115": {
       "split": "training",
@@ -1551,7 +1673,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 114
+      "cell": 114,
+      "role": "fitted"
     },
     "t-116": {
       "split": "training",
@@ -1564,7 +1687,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 115
+      "cell": 115,
+      "role": "fitted"
     },
     "t-117": {
       "split": "training",
@@ -1577,7 +1701,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 116
+      "cell": 116,
+      "role": "heldOut"
     },
     "t-118": {
       "split": "training",
@@ -1590,7 +1715,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 117
+      "cell": 117,
+      "role": "fitted"
     },
     "t-119": {
       "split": "training",
@@ -1603,7 +1729,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 118
+      "cell": 118,
+      "role": "heldOut"
     },
     "t-120": {
       "split": "training",
@@ -1616,7 +1743,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 119
+      "cell": 119,
+      "role": "fitted"
     },
     "t-121": {
       "split": "training",
@@ -1629,7 +1757,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 120
+      "cell": 120,
+      "role": "fitted"
     },
     "t-122": {
       "split": "training",
@@ -1642,7 +1771,8 @@
         "wormVisibility": 0.801
       },
       "atlas": "atlas-training-0",
-      "cell": 121
+      "cell": 121,
+      "role": "fitted"
     },
     "t-123": {
       "split": "training",
@@ -1655,7 +1785,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 122
+      "cell": 122,
+      "role": "fitted"
     },
     "t-124": {
       "split": "training",
@@ -1668,7 +1799,8 @@
         "wormVisibility": 0.911
       },
       "atlas": "atlas-training-0",
-      "cell": 123
+      "cell": 123,
+      "role": "fitted"
     },
     "t-125": {
       "split": "training",
@@ -1681,7 +1813,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 124
+      "cell": 124,
+      "role": "fitted"
     },
     "t-126": {
       "split": "training",
@@ -1694,7 +1827,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 125
+      "cell": 125,
+      "role": "fitted"
     },
     "t-127": {
       "split": "training",
@@ -1707,7 +1841,8 @@
         "wormVisibility": 0.889
       },
       "atlas": "atlas-training-0",
-      "cell": 126
+      "cell": 126,
+      "role": "fitted"
     },
     "t-128": {
       "split": "training",
@@ -1720,7 +1855,8 @@
         "wormVisibility": 0.949
       },
       "atlas": "atlas-training-0",
-      "cell": 127
+      "cell": 127,
+      "role": "fitted"
     },
     "t-129": {
       "split": "training",
@@ -1733,7 +1869,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 128
+      "cell": 128,
+      "role": "fitted"
     },
     "t-130": {
       "split": "training",
@@ -1746,7 +1883,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 129
+      "cell": 129,
+      "role": "fitted"
     },
     "t-131": {
       "split": "training",
@@ -1759,7 +1897,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 130
+      "cell": 130,
+      "role": "fitted"
     },
     "t-132": {
       "split": "training",
@@ -1772,7 +1911,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 131
+      "cell": 131,
+      "role": "fitted"
     },
     "t-133": {
       "split": "training",
@@ -1785,7 +1925,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 132
+      "cell": 132,
+      "role": "fitted"
     },
     "t-134": {
       "split": "training",
@@ -1798,7 +1939,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 133
+      "cell": 133,
+      "role": "heldOut"
     },
     "t-135": {
       "split": "training",
@@ -1811,7 +1953,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 134
+      "cell": 134,
+      "role": "fitted"
     },
     "t-136": {
       "split": "training",
@@ -1824,7 +1967,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 135
+      "cell": 135,
+      "role": "fitted"
     },
     "t-137": {
       "split": "training",
@@ -1837,7 +1981,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 136
+      "cell": 136,
+      "role": "fitted"
     },
     "t-138": {
       "split": "training",
@@ -1850,7 +1995,8 @@
         "wormVisibility": 0.984
       },
       "atlas": "atlas-training-0",
-      "cell": 137
+      "cell": 137,
+      "role": "fitted"
     },
     "t-139": {
       "split": "training",
@@ -1863,7 +2009,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 138
+      "cell": 138,
+      "role": "fitted"
     },
     "t-140": {
       "split": "training",
@@ -1876,7 +2023,8 @@
         "wormVisibility": 0.71
       },
       "atlas": "atlas-training-0",
-      "cell": 139
+      "cell": 139,
+      "role": "fitted"
     },
     "t-141": {
       "split": "training",
@@ -1889,7 +2037,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 140
+      "cell": 140,
+      "role": "heldOut"
     },
     "t-142": {
       "split": "training",
@@ -1902,7 +2051,8 @@
         "wormVisibility": 0.792
       },
       "atlas": "atlas-training-0",
-      "cell": 141
+      "cell": 141,
+      "role": "fitted"
     },
     "t-143": {
       "split": "training",
@@ -1915,7 +2065,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 142
+      "cell": 142,
+      "role": "fitted"
     },
     "t-144": {
       "split": "training",
@@ -1928,7 +2079,8 @@
         "wormVisibility": 0.932
       },
       "atlas": "atlas-training-0",
-      "cell": 143
+      "cell": 143,
+      "role": "fitted"
     },
     "t-145": {
       "split": "training",
@@ -1941,7 +2093,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 144
+      "cell": 144,
+      "role": "fitted"
     },
     "t-146": {
       "split": "training",
@@ -1954,7 +2107,8 @@
         "wormVisibility": 0.89
       },
       "atlas": "atlas-training-0",
-      "cell": 145
+      "cell": 145,
+      "role": "heldOut"
     },
     "t-147": {
       "split": "training",
@@ -1967,7 +2121,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 146
+      "cell": 146,
+      "role": "fitted"
     },
     "t-148": {
       "split": "training",
@@ -1980,7 +2135,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 147
+      "cell": 147,
+      "role": "heldOut"
     },
     "t-149": {
       "split": "training",
@@ -1993,7 +2149,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 148
+      "cell": 148,
+      "role": "fitted"
     },
     "t-150": {
       "split": "training",
@@ -2006,7 +2163,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 149
+      "cell": 149,
+      "role": "fitted"
     },
     "t-151": {
       "split": "training",
@@ -2019,7 +2177,8 @@
         "wormVisibility": 0.779
       },
       "atlas": "atlas-training-0",
-      "cell": 150
+      "cell": 150,
+      "role": "fitted"
     },
     "t-152": {
       "split": "training",
@@ -2032,7 +2191,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 151
+      "cell": 151,
+      "role": "fitted"
     },
     "t-153": {
       "split": "training",
@@ -2045,7 +2205,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 152
+      "cell": 152,
+      "role": "fitted"
     },
     "t-154": {
       "split": "training",
@@ -2058,7 +2219,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 153
+      "cell": 153,
+      "role": "fitted"
     },
     "t-155": {
       "split": "training",
@@ -2071,7 +2233,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 154
+      "cell": 154,
+      "role": "heldOut"
     },
     "t-156": {
       "split": "training",
@@ -2084,7 +2247,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 155
+      "cell": 155,
+      "role": "fitted"
     },
     "t-157": {
       "split": "training",
@@ -2097,7 +2261,8 @@
         "wormVisibility": 0.829
       },
       "atlas": "atlas-training-0",
-      "cell": 156
+      "cell": 156,
+      "role": "fitted"
     },
     "t-158": {
       "split": "training",
@@ -2110,7 +2275,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 157
+      "cell": 157,
+      "role": "fitted"
     },
     "t-159": {
       "split": "training",
@@ -2123,7 +2289,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 158
+      "cell": 158,
+      "role": "fitted"
     },
     "t-160": {
       "split": "training",
@@ -2136,7 +2303,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 159
+      "cell": 159,
+      "role": "fitted"
     },
     "t-161": {
       "split": "training",
@@ -2149,7 +2317,8 @@
         "wormVisibility": 0.769
       },
       "atlas": "atlas-training-0",
-      "cell": 160
+      "cell": 160,
+      "role": "fitted"
     },
     "t-162": {
       "split": "training",
@@ -2162,7 +2331,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 161
+      "cell": 161,
+      "role": "fitted"
     },
     "t-163": {
       "split": "training",
@@ -2175,7 +2345,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 162
+      "cell": 162,
+      "role": "fitted"
     },
     "t-164": {
       "split": "training",
@@ -2188,7 +2359,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 163
+      "cell": 163,
+      "role": "fitted"
     },
     "t-165": {
       "split": "training",
@@ -2201,7 +2373,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 164
+      "cell": 164,
+      "role": "heldOut"
     },
     "t-166": {
       "split": "training",
@@ -2214,7 +2387,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 165
+      "cell": 165,
+      "role": "fitted"
     },
     "t-167": {
       "split": "training",
@@ -2227,7 +2401,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 166
+      "cell": 166,
+      "role": "fitted"
     },
     "t-168": {
       "split": "training",
@@ -2240,7 +2415,8 @@
         "wormVisibility": 0.928
       },
       "atlas": "atlas-training-0",
-      "cell": 167
+      "cell": 167,
+      "role": "fitted"
     },
     "t-169": {
       "split": "training",
@@ -2253,7 +2429,8 @@
         "wormVisibility": 0.896
       },
       "atlas": "atlas-training-0",
-      "cell": 168
+      "cell": 168,
+      "role": "fitted"
     },
     "t-170": {
       "split": "training",
@@ -2266,7 +2443,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 169
+      "cell": 169,
+      "role": "fitted"
     },
     "t-171": {
       "split": "training",
@@ -2279,7 +2457,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 170
+      "cell": 170,
+      "role": "fitted"
     },
     "t-172": {
       "split": "training",
@@ -2292,7 +2471,8 @@
         "wormVisibility": 0.943
       },
       "atlas": "atlas-training-0",
-      "cell": 171
+      "cell": 171,
+      "role": "fitted"
     },
     "t-173": {
       "split": "training",
@@ -2305,7 +2485,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 172
+      "cell": 172,
+      "role": "heldOut"
     },
     "t-174": {
       "split": "training",
@@ -2318,7 +2499,8 @@
         "wormVisibility": 0.988
       },
       "atlas": "atlas-training-0",
-      "cell": 173
+      "cell": 173,
+      "role": "heldOut"
     },
     "t-175": {
       "split": "training",
@@ -2331,7 +2513,8 @@
         "wormVisibility": 0.712
       },
       "atlas": "atlas-training-0",
-      "cell": 174
+      "cell": 174,
+      "role": "fitted"
     },
     "t-176": {
       "split": "training",
@@ -2344,7 +2527,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 175
+      "cell": 175,
+      "role": "heldOut"
     },
     "t-177": {
       "split": "training",
@@ -2357,7 +2541,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 176
+      "cell": 176,
+      "role": "heldOut"
     },
     "t-178": {
       "split": "training",
@@ -2370,7 +2555,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 177
+      "cell": 177,
+      "role": "heldOut"
     },
     "t-179": {
       "split": "training",
@@ -2383,7 +2569,8 @@
         "wormVisibility": 0.744
       },
       "atlas": "atlas-training-0",
-      "cell": 178
+      "cell": 178,
+      "role": "fitted"
     },
     "t-180": {
       "split": "training",
@@ -2396,7 +2583,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 179
+      "cell": 179,
+      "role": "fitted"
     },
     "t-181": {
       "split": "training",
@@ -2409,7 +2597,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 180
+      "cell": 180,
+      "role": "fitted"
     },
     "t-182": {
       "split": "training",
@@ -2422,7 +2611,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 181
+      "cell": 181,
+      "role": "fitted"
     },
     "t-183": {
       "split": "training",
@@ -2435,7 +2625,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 182
+      "cell": 182,
+      "role": "fitted"
     },
     "t-184": {
       "split": "training",
@@ -2448,7 +2639,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 183
+      "cell": 183,
+      "role": "fitted"
     },
     "t-185": {
       "split": "training",
@@ -2461,7 +2653,8 @@
         "wormVisibility": 0.889
       },
       "atlas": "atlas-training-0",
-      "cell": 184
+      "cell": 184,
+      "role": "fitted"
     },
     "t-186": {
       "split": "training",
@@ -2474,7 +2667,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 185
+      "cell": 185,
+      "role": "heldOut"
     },
     "t-187": {
       "split": "training",
@@ -2487,7 +2681,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 186
+      "cell": 186,
+      "role": "heldOut"
     },
     "t-188": {
       "split": "training",
@@ -2500,7 +2695,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 187
+      "cell": 187,
+      "role": "fitted"
     },
     "t-189": {
       "split": "training",
@@ -2513,7 +2709,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 188
+      "cell": 188,
+      "role": "fitted"
     },
     "t-190": {
       "split": "training",
@@ -2526,7 +2723,8 @@
         "wormVisibility": 0.918
       },
       "atlas": "atlas-training-0",
-      "cell": 189
+      "cell": 189,
+      "role": "fitted"
     },
     "t-191": {
       "split": "training",
@@ -2539,7 +2737,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 190
+      "cell": 190,
+      "role": "fitted"
     },
     "t-192": {
       "split": "training",
@@ -2552,7 +2751,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 191
+      "cell": 191,
+      "role": "heldOut"
     },
     "t-193": {
       "split": "training",
@@ -2565,7 +2765,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 192
+      "cell": 192,
+      "role": "fitted"
     },
     "t-194": {
       "split": "training",
@@ -2578,7 +2779,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 193
+      "cell": 193,
+      "role": "fitted"
     },
     "t-195": {
       "split": "training",
@@ -2591,7 +2793,8 @@
         "wormVisibility": 0.787
       },
       "atlas": "atlas-training-0",
-      "cell": 194
+      "cell": 194,
+      "role": "heldOut"
     },
     "t-196": {
       "split": "training",
@@ -2604,7 +2807,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 195
+      "cell": 195,
+      "role": "fitted"
     },
     "t-197": {
       "split": "training",
@@ -2617,7 +2821,8 @@
         "wormVisibility": 0.704
       },
       "atlas": "atlas-training-0",
-      "cell": 196
+      "cell": 196,
+      "role": "fitted"
     },
     "t-198": {
       "split": "training",
@@ -2630,7 +2835,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 197
+      "cell": 197,
+      "role": "fitted"
     },
     "t-199": {
       "split": "training",
@@ -2643,7 +2849,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 198
+      "cell": 198,
+      "role": "fitted"
     },
     "t-200": {
       "split": "training",
@@ -2656,7 +2863,8 @@
         "wormVisibility": 0
       },
       "atlas": "atlas-training-0",
-      "cell": 199
+      "cell": 199,
+      "role": "fitted"
     },
     "p-0001": {
       "split": "pool",

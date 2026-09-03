@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { readPool, regionFor, REQUIRED_ATTRIBUTES, REQUIRED_ATLAS_FIELDS } from '../src/pool/index.js'
-import type { ValidationIssue } from '../src/task/validate.js'
+import {
+  POOL_SPLITS,
+  readPool,
+  regionFor,
+  REQUIRED_ATTRIBUTES,
+  REQUIRED_ATLAS_FIELDS,
+} from '../src/pool/index.js'
+import type { TaskDeclaration } from '../src/task/types.js'
+import { validateDeclaration, type ValidationIssue } from '../src/task/validate.js'
 import { appleDeclaration } from './helpers/apple'
 import { committedManifest } from './helpers/pool'
+import { loadRawDeclaration } from './helpers/load-raw'
 
 const apple = appleDeclaration()
 const manifest = committedManifest()
@@ -191,6 +199,79 @@ describe('structural refusals', () => {
   })
 })
 
+/**
+ * A convolutional task over this pool, declaring its input resolution.
+ *
+ * Built here rather than taken from the shipped declaration so the mismatch can be
+ * produced by changing one declared number, with the manifest left exactly as committed —
+ * which is the disagreement this check exists for.
+ */
+function cnnTask(inputSize: number): TaskDeclaration {
+  const raw = loadRawDeclaration('apple-harvest')
+  const knobs = raw.knobs as Record<string, unknown>[]
+  const declaration = {
+    ...raw,
+    knobs: [
+      ...knobs,
+      {
+        kind: 'choice',
+        id: 'stack',
+        label: 'Convolutional blocks',
+        values: [2, 3],
+        default: 3,
+        help: 'How many blocks the stack has.',
+      },
+      {
+        kind: 'choice',
+        id: 'filters',
+        label: 'Channels in the first block',
+        values: [8, 16],
+        default: 16,
+        help: 'How many filters the first block learns.',
+      },
+    ],
+    diagram: {
+      kind: 'cnn',
+      blocksKnob: 'stack',
+      channelsKnob: 'filters',
+      inputSize,
+      channelsShown: { '8': 2, '16': 3 },
+    },
+  }
+
+  const validated = validateDeclaration(declaration)
+  if (!validated.ok) throw new Error(messages(validated.issues))
+  return validated.declaration
+}
+
+describe('a convolutional task must agree with the pool about the image size', () => {
+  it('accepts the resolution the manifest provides', () => {
+    const result = readPool(copy(manifest), cnnTask(128))
+
+    expect(result.ok ? [] : result.issues).toEqual([])
+  })
+
+  it('refuses a declared resolution the pool does not provide, naming both', () => {
+    const result = readPool(copy(manifest), cnnTask(64))
+
+    if (result.ok) throw new Error('expected a mismatched resolution to be refused')
+    expect(result.issues.some((entry) => entry.code === 'input-size-mismatch')).toBe(true)
+    expect(messages(result.issues)).toContain('64')
+    expect(messages(result.issues)).toContain('128')
+  })
+
+  it('leaves a task declaring no convolutional diagram unchecked', () => {
+    const raw = loadRawDeclaration('apple-harvest')
+    delete raw.diagram
+    const validated = validateDeclaration(raw)
+    if (!validated.ok) throw new Error(messages(validated.issues))
+
+    const result = readPool(copy(manifest), validated.declaration)
+
+    expect(result.ok).toBe(true)
+  })
+})
+
 describe('enumeration order', () => {
   it('enumerates the training split identically on every read', () => {
     const first = readPool(copy(manifest), apple)
@@ -208,5 +289,117 @@ describe('enumeration order', () => {
     const all = [...result.pool.order.training, ...result.pool.order.pool]
     expect(new Set(all).size).toBe(all.length)
     expect(all).toHaveLength(1200)
+  })
+})
+
+describe('training roles', () => {
+  const result = readPool(manifest, apple)
+
+  it('assigns every training image to exactly one role', () => {
+    if (!result.ok) throw new Error(messages(result.issues))
+    const { fitted, heldOut } = result.pool.roles
+    expect(fitted.length + heldOut.length).toBe(200)
+    expect(new Set([...fitted, ...heldOut]).size).toBe(200)
+    expect(heldOut.length).toBeLessThan(fitted.length)
+  })
+
+  it('keeps both roles inside the training split', () => {
+    if (!result.ok) throw new Error(messages(result.issues))
+    for (const id of [...result.pool.roles.fitted, ...result.pool.roles.heldOut]) {
+      expect(result.pool.images[id]?.split).toBe('training')
+    }
+  })
+
+  it('exposes the seed a prediction artifact binds itself to', () => {
+    if (!result.ok) throw new Error(messages(result.issues))
+    expect(result.pool.seed).toBe(manifest.seed)
+    expect(Number.isFinite(result.pool.seed)).toBe(true)
+  })
+
+  it('refuses a training image with no role, naming it', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      delete images['t-004']!.role
+    })
+    expect(issues.some((entry) => entry.code === 'missing-role')).toBe(true)
+    expect(messages(issues)).toContain('t-004')
+  })
+
+  it('refuses a role the pool does not declare, naming the image', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, { role: string }>
+      images['t-004']!.role = 'validation'
+    })
+    expect(issues.some((entry) => entry.code === 'unknown-role')).toBe(true)
+    expect(messages(issues)).toContain('t-004')
+    expect(messages(issues)).toContain('validation')
+  })
+
+  it('refuses a role on an evaluation-pool image, naming it', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, { role?: string }>
+      images['p-0300']!.role = 'heldOut'
+    })
+    expect(issues.some((entry) => entry.code === 'role-outside-training')).toBe(true)
+    expect(messages(issues)).toContain('p-0300')
+  })
+
+  it('refuses a declared role count that disagrees with its images', () => {
+    const issues = issuesFor((draft) => {
+      const splits = draft.splits as { training: { roles: Record<string, { count: number }> } }
+      splits.training.roles.heldOut!.count = 7
+    })
+    expect(issues.some((entry) => entry.code === 'role-count-mismatch')).toBe(true)
+    expect(messages(issues)).toContain('heldOut')
+    expect(messages(issues)).toContain('7')
+    expect(messages(issues)).toContain('40')
+  })
+
+  it('refuses a training split declaring no roles at all', () => {
+    const issues = issuesFor((draft) => {
+      const splits = draft.splits as { training: { roles?: unknown } }
+      delete splits.training.roles
+    })
+    expect(issues.some((entry) => entry.field === 'splits.training.roles')).toBe(true)
+  })
+
+  it('refuses a category held out entirely, naming the role and the category', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, { split: string; category: string; role?: string }>
+      for (const image of Object.values(images)) {
+        if (image.split === 'training' && image.category === 'green') image.role = 'heldOut'
+      }
+      const splits = draft.splits as { training: { roles: Record<string, { count: number }> } }
+      splits.training.roles.fitted!.count -= 40
+      splits.training.roles.heldOut!.count += 40
+    })
+    expect(issues.some((entry) => entry.code === 'category-missing-from-role')).toBe(true)
+    expect(messages(issues)).toContain('green')
+    expect(messages(issues)).toContain('fitted')
+  })
+})
+
+describe('the roles are not a split', () => {
+  it('still declares exactly two splits', () => {
+    expect(POOL_SPLITS).toEqual(['training', 'pool'])
+    expect(Object.keys(manifest.splits).sort()).toEqual(['pool', 'training'])
+  })
+
+  it('refuses a manifest declaring a third split, naming it', () => {
+    const issues = issuesFor((draft) => {
+      const splits = draft.splits as Record<string, unknown>
+      splits.validation = { count: 40 }
+    })
+    expect(issues.some((entry) => entry.code === 'unknown-split')).toBe(true)
+    expect(messages(issues)).toContain('validation')
+  })
+
+  it('still browses all 200 training images, held-out ones included', () => {
+    const result = readPool(manifest, apple)
+    if (!result.ok) throw new Error(messages(result.issues))
+    expect(result.pool.order.training).toHaveLength(200)
+    for (const id of result.pool.roles.heldOut) {
+      expect(result.pool.order.training).toContain(id)
+    }
   })
 })

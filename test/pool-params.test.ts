@@ -7,10 +7,13 @@ import {
   CELL_PX,
   GREEN,
   GREEN_SHARE_TOLERANCE,
+  HELD_OUT_COUNTS,
   HUE_DECIMALS,
   OUT_OF_BAND,
   OUT_OF_BAND_POOL_REDS,
   POOL_RED,
+  ROLE_SEED,
+  SEED,
   SPLIT_SIZES,
   SUBTLE_POOL_WORMS,
   SUBTLE_WORM_CEILING,
@@ -100,6 +103,31 @@ describe('pool generation parameters', () => {
     expect(WORM_VISIBILITY.poolSubtle.max).toBeLessThan(SUBTLE_WORM_CEILING)
     expect(WORM_VISIBILITY.poolObvious.min).toBeGreaterThanOrEqual(SUBTLE_WORM_CEILING)
     expect(WORM_VISIBILITY.training.min).toBeGreaterThan(SUBTLE_WORM_CEILING)
+  })
+
+  it('holds out fewer training images than it fits, in every category', () => {
+    let heldOut = 0
+    for (const [category, count] of Object.entries(HELD_OUT_COUNTS)) {
+      const declared = CATEGORY_COUNTS.training[category as keyof typeof HELD_OUT_COUNTS]
+      // Both roles non-empty per category: a category missing from either one makes a
+      // validation loss that is not measured over what the fitted images cover.
+      expect(count).toBeGreaterThan(0)
+      expect(count).toBeLessThan(declared)
+      heldOut += count
+    }
+    expect(heldOut).toBeLessThan(SPLIT_SIZES.training - heldOut)
+    expect(heldOut).toBe(40)
+  })
+
+  it('names every training category in the held-out counts', () => {
+    expect(Object.keys(HELD_OUT_COUNTS).sort()).toEqual(
+      Object.keys(CATEGORY_COUNTS.training).sort(),
+    )
+  })
+
+  it('draws the roles from a stream of their own', () => {
+    // The whole point of the separate seed: adding roles must not perturb the images.
+    expect(ROLE_SEED).not.toBe(SEED)
   })
 
   it('fits every split into whole atlases of the declared geometry', () => {

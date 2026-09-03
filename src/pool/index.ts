@@ -21,6 +21,17 @@ import type { ValidationIssue } from '../task/validate.js'
 export const POOL_SPLITS = ['training', 'pool'] as const
 export type PoolSplit = (typeof POOL_SPLITS)[number]
 
+/**
+ * The role a training image plays while a model is fitted.
+ *
+ * Roles live *inside* the training split and are deliberately not members of
+ * `POOL_SPLITS`: all 200 training images stay browsable and stay under the `training`
+ * key of a prediction artifact, whichever role they play. A third split name here would
+ * be the mistake the spec spends a whole requirement refusing.
+ */
+export const TRAINING_ROLES = ['fitted', 'heldOut'] as const
+export type TrainingRole = (typeof TRAINING_ROLES)[number]
+
 /** Every field an atlas descriptor must carry. */
 export const REQUIRED_ATLAS_FIELDS = [
   'file',
@@ -57,18 +68,29 @@ export interface PoolImage {
   readonly attributes: Readonly<Record<(typeof REQUIRED_ATTRIBUTES)[number], number>>
   readonly atlas: string
   readonly cell: number
+  /** Training images only. An evaluation-pool image carrying one is refused. */
+  readonly role?: TrainingRole
 }
 
 /** A pool that loaded, with the lookups its consumers need. */
 export interface LoadedPool {
   readonly poolId: string
   readonly schemaVersion: string
+  /** The seed the pool was generated from, which a prediction artifact is bound to. */
+  readonly seed: number
   readonly atlases: Readonly<Record<string, PoolAtlas>>
   readonly images: Readonly<Record<string, PoolImage>>
   /** True category per image id — the only source of ground truth in the system. */
   readonly truth: Readonly<Record<string, CategoryId>>
   /** Image ids per split, in the manifest's order, which never varies. */
   readonly order: Readonly<Record<PoolSplit, readonly string[]>>
+  /**
+   * Training image ids per role, in the same order.
+   *
+   * Kept beside `order` rather than inside it: `order` is keyed by split, and a reader
+   * enumerating its keys must find two splits, not four.
+   */
+  readonly roles: Readonly<Record<TrainingRole, readonly string[]>>
 }
 
 export type PoolValidation =
@@ -229,6 +251,38 @@ function readImage(
     return undefined
   }
 
+  // The role is the training split's alone. Both mistakes are silent if permitted: a
+  // role on an evaluation image suggests a validation loss measured over images no
+  // training run ever saw, and a training image without one belongs to neither role, so
+  // the losses would quietly be measured over a subset of what the manifest declares.
+  if (value.split === 'training') {
+    if (value.role === undefined) {
+      issues.push(
+        issue('missing-role', `Training image "${id}" declares no role.`, id),
+      )
+      return undefined
+    }
+    if (!TRAINING_ROLES.includes(value.role as TrainingRole)) {
+      issues.push(
+        issue(
+          'unknown-role',
+          `Training image "${id}" declares role "${String(value.role)}", which is not a declared role.`,
+          id,
+        ),
+      )
+      return undefined
+    }
+  } else if (value.role !== undefined) {
+    issues.push(
+      issue(
+        'role-outside-training',
+        `Image "${id}" is in split "${String(value.split)}" but declares training role "${String(value.role)}".`,
+        id,
+      ),
+    )
+    return undefined
+  }
+
   const cell = value.cell
   if (typeof cell !== 'number' || !Number.isInteger(cell) || cell < 0 || cell >= atlas.capacity) {
     issues.push(
@@ -242,6 +296,104 @@ function readImage(
   }
 
   return value as unknown as PoolImage
+}
+
+/**
+ * Cross-checks a convolutional task's declared input resolution against the images.
+ *
+ * The resolution is declared on the task rather than read from here because a
+ * declaration is validated at load while a manifest arrives asynchronously — deriving it
+ * would move a structural check into render time, where nothing can refuse. Declaring it
+ * costs the possibility of disagreement, which is what this check spends. The two
+ * disagreeing means either the drawing states spatial sizes the model does not have, or
+ * the model is built for images this pool does not contain; both are silent wrongness of
+ * the kind the whole loader exists to refuse.
+ */
+function checkInputResolution(
+  declaration: TaskDeclaration,
+  atlases: Readonly<Record<string, PoolAtlas>>,
+  issues: ValidationIssue[],
+): void {
+  const diagram = declaration.diagram
+  if (diagram === undefined || diagram.kind !== 'cnn') return
+
+  for (const [id, atlas] of Object.entries(atlases)) {
+    if (atlas.cellSize !== diagram.inputSize) {
+      issues.push(
+        issue(
+          'input-size-mismatch',
+          `The task declares a ${diagram.inputSize}px input, but atlas "${id}" provides ${atlas.cellSize}px images.`,
+          `atlases.${id}.cellSize`,
+        ),
+      )
+    }
+  }
+}
+
+/**
+ * Checks what the training split declares about its roles against the images assigned.
+ *
+ * The declared counts exist so that this disagreement is expressible: a manifest whose
+ * roles were assigned by one rule and counted by another is a generation mistake, and
+ * the alternative — counting the images and calling that the truth — would make the
+ * mistake invisible.
+ */
+function checkRoles(
+  declaredTraining: unknown,
+  roles: Readonly<Record<TrainingRole, readonly string[]>>,
+  images: Readonly<Record<string, PoolImage>>,
+  categories: readonly CategoryId[],
+  issues: ValidationIssue[],
+): void {
+  const declaredRoles = isRecord(declaredTraining) ? declaredTraining.roles : undefined
+  if (!isRecord(declaredRoles)) {
+    issues.push(
+      issue(
+        'missing-field',
+        'The training split declares no roles, so no validation loss can be attributed.',
+        'splits.training.roles',
+      ),
+    )
+    return
+  }
+
+  for (const role of TRAINING_ROLES) {
+    const declared = declaredRoles[role]
+    if (!isRecord(declared) || typeof declared.count !== 'number') {
+      issues.push(
+        issue('missing-field', `Role "${role}" declares no count.`, `splits.training.roles.${role}`),
+      )
+      continue
+    }
+    const present = roles[role].length
+    if (declared.count !== present) {
+      issues.push(
+        issue(
+          'role-count-mismatch',
+          `Role "${role}" declares ${declared.count} images but ${present} are assigned to it.`,
+          `splits.training.roles.${role}`,
+        ),
+      )
+    }
+    if (present === 0) {
+      issues.push(
+        issue('empty-role', `Role "${role}" has no images.`, `splits.training.roles.${role}`),
+      )
+    }
+    // A validation loss measured over categories the fitted images do not cover, or a
+    // category held out entirely, measures something other than what was trained.
+    for (const category of categories) {
+      if (!roles[role].some((id) => images[id]?.category === category)) {
+        issues.push(
+          issue(
+            'category-missing-from-role',
+            `No image in role "${role}" has category "${category}".`,
+            `splits.training.roles.${role}`,
+          ),
+        )
+      }
+    }
+  }
 }
 
 /**
@@ -263,7 +415,7 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
     return { ok: false, issues: [issue('malformed-manifest', 'The pool manifest is not an object.')] }
   }
 
-  for (const field of ['poolId', 'schemaVersion', 'splits', 'atlases', 'images'] as const) {
+  for (const field of ['poolId', 'schemaVersion', 'seed', 'splits', 'atlases', 'images'] as const) {
     if (raw[field] === undefined) {
       issues.push(issue('missing-field', `The pool manifest declares no ${field}.`, field))
     }
@@ -289,7 +441,21 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
     )
   }
 
+  // The seed is what a prediction artifact binds itself to, so an unusable one is
+  // refused here rather than surfacing later as an artifact that cannot state which pool
+  // it was trained against.
+  if (typeof raw.seed !== 'number' || !Number.isFinite(raw.seed)) {
+    issues.push(
+      issue(
+        'malformed-field',
+        `The pool manifest records seed "${String(raw.seed)}", which is not a number.`,
+        'seed',
+      ),
+    )
+  }
+
   const atlases = readAtlases(raw.atlases, issues)
+  checkInputResolution(declaration, atlases, issues)
 
   if (!isRecord(raw.images)) {
     issues.push(issue('malformed-field', 'The pool manifest declares no images.', 'images'))
@@ -300,6 +466,7 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
   const images: Record<string, PoolImage> = {}
   const truth: Record<string, CategoryId> = {}
   const order: Record<PoolSplit, string[]> = { training: [], pool: [] }
+  const roles: Record<TrainingRole, string[]> = { fitted: [], heldOut: [] }
 
   for (const [id, value] of Object.entries(raw.images)) {
     const image = readImage(id, value, atlases, categories, issues)
@@ -307,11 +474,26 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
     images[id] = image
     truth[id] = image.category
     order[image.split].push(id)
+    if (image.role !== undefined) roles[image.role].push(id)
   }
 
   if (!isRecord(raw.splits)) {
     issues.push(issue('malformed-field', 'The pool manifest declares no splits.', 'splits'))
     return { ok: false, issues }
+  }
+
+  // Exactly two splits. A third one is not a harmless extra key: whatever produced it
+  // believes there is a population this reader will never present or score.
+  for (const declaredSplit of Object.keys(raw.splits)) {
+    if (!POOL_SPLITS.includes(declaredSplit as PoolSplit)) {
+      issues.push(
+        issue(
+          'unknown-split',
+          `The pool manifest declares split "${declaredSplit}", which is not a declared split.`,
+          `splits.${declaredSplit}`,
+        ),
+      )
+    }
   }
 
   for (const split of POOL_SPLITS) {
@@ -345,6 +527,8 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
     }
   }
 
+  checkRoles(raw.splits.training, roles, images, categories, issues)
+
   if (issues.length > 0) return { ok: false, issues }
 
   return {
@@ -352,10 +536,12 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
     pool: {
       poolId: String(raw.poolId),
       schemaVersion: String(raw.schemaVersion),
+      seed: Number(raw.seed),
       atlases,
       images,
       truth,
       order: { training: order.training, pool: order.pool },
+      roles: { fitted: roles.fitted, heldOut: roles.heldOut },
     },
   }
 }

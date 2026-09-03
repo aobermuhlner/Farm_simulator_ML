@@ -1,0 +1,32 @@
+[project]
+name = "farm-simulator-training"
+version = "0.0.0"
+description = "Authoring tooling: trains the apple task's models and writes prediction artifacts."
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.5",
+    "numpy>=2.1",
+    "pillow>=11.0",
+    "matplotlib>=3.9",
+]
+
+# CPU-only wheels, explicitly. The default PyPI torch wheel bundles a CUDA runtime —
+# gigabytes of it — for models small enough to train on a laptop CPU in minutes. The
+# `explicit` flag keeps this index reachable only for the packages named below, so
+# nothing else is silently resolved from it.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+# The trainer is run as modules from this directory rather than installed, so pytest is
+# pointed at it explicitly — there is no package to build and nothing to ship.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
