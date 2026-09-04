@@ -25,9 +25,9 @@
 
 ## 5. Regenerate and retrain
 
-- [ ] 5.1 Run `npm run pool:generate` and commit the regenerated pool; verify `test/pool-committed.test.ts`, `test/pool-manifest.test.ts` and `test/pool-distribution.test.ts` pass against the new manifest, and that `training/tests/test_pool.py` still refuses its doctored copies (`cd training && uv run pytest`)
+- [x] 5.1 Run `npm run pool:generate` and commit the regenerated pool; verify `test/pool-committed.test.ts`, `test/pool-manifest.test.ts` and `test/pool-distribution.test.ts` pass against the new manifest, and that `training/tests/test_pool.py` still refuses its doctored copies (`cd training && uv run pytest`)
 - [x] 5.2 Confirm the stale artifacts refuse rather than resolving: verify the prediction-artifact suite reports a pool-seed mismatch naming both seeds, and that opening the task in the app shows that refusal rather than a report
-- [ ] 5.3 Retrain the three shipped configurations (`cd training && uv run python -m farm_training.train`) against the regenerated pool and commit them; verify `test/artifact-shipping.test.ts` passes, including the clean-tree provenance check
+- [x] 5.3 Retrain the three shipped configurations (`cd training && uv run python -m farm_training.train`) against the regenerated pool and commit them; verify `test/artifact-shipping.test.ts` passes, including the clean-tree provenance check
 
 ## 6. The screens
 
@@ -38,11 +38,11 @@
 
 ## 7. Measure and record
 
-- [ ] 7.1 Re-measure the harvest per population for the three retrained configurations and restate `training/README.md`'s findings table and its four findings against the new pool; verify every figure comes from the committed histories and prediction files rather than from a script's own run
-- [ ] 7.2 Open the task in the app, browse the training split, and confirm the apples read as apples and the worm reads as a worm; verify the same grid through a deficiency simulator and record what was seen
-- [ ] 7.3 If a lesson lands materially differently on the regenerated pool, record what was measured in `training/README.md` rather than moving a band until the old numbers come back
+- [x] 7.1 Re-measure the harvest per population for the three retrained configurations and restate `training/README.md`'s findings table and its four findings against the new pool; verify every figure comes from the committed histories and prediction files rather than from a script's own run
+- [x] 7.2 Open the task in the app, browse the training split, and confirm the apples read as apples and the worm reads as a worm; verify the same grid through a deficiency simulator and record what was seen
+- [x] 7.3 If a lesson lands materially differently on the regenerated pool, record what was measured in `training/README.md` rather than moving a band until the old numbers come back
 
 ## 8. Close out
 
-- [ ] 8.1 Run the full suite (`npm test`, `npm run typecheck`, and `cd training && uv run pytest`) and verify everything passes against the regenerated pool and retrained artifacts
-- [ ] 8.2 Sync the `image-pool` delta and the new `colour-vision-safety` spec into `openspec/specs/` and archive the change
+- [x] 8.1 Run the full suite (`npm test`, `npm run typecheck`, and `cd training && uv run pytest`) and verify everything passes against the regenerated pool and retrained artifacts
+- [x] 8.2 Sync the `image-pool` delta and the new `colour-vision-safety` spec into `openspec/specs/` and archive the change
