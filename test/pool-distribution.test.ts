@@ -7,23 +7,31 @@
  * one, which is the failure worth catching — the students see the committed pool.
  *
  * Each `it` here corresponds to a scenario in specs/image-pool/spec.md.
+ *
+ * The band is a property of the *fitted* role, not of the training split: the split's 40
+ * held-out images are drawn from the evaluation pool's populations so that held-out
+ * accuracy estimates harvest accuracy. Assertions about "how the training data looks"
+ * therefore read `fitted(...)`, and the held-out images get assertions of their own.
  */
 
 import { describe, expect, it } from 'vitest'
-import { insideTrainingRedBand } from '../tools/pool/bands.js'
+import { insideFittedRedBand } from '../tools/pool/bands.js'
 import {
   BAND_ATTRIBUTES,
   CATEGORY_COUNTS,
   GREEN,
   GREEN_SHARE_TOLERANCE,
+  HELD_OUT_COUNTS,
+  HELD_OUT_POPULATIONS,
   OUT_OF_BAND_POOL_REDS,
   SPLIT_SIZES,
   SUBTLE_POOL_WORMS,
   SUBTLE_WORM_CEILING,
-  TRAINING_RED,
+  FITTED_RED,
   WORM_VISIBILITY,
   type PoolCategory,
   type SplitName,
+  type TrainingRole,
 } from '../tools/pool/params.js'
 import type { ManifestImage } from '../tools/pool/manifest.js'
 import { committedManifest } from './helpers/pool'
@@ -36,6 +44,14 @@ function imagesIn(split: SplitName, category?: PoolCategory): ManifestImage[] {
     .filter(([, image]) => image.split === split && (category === undefined || image.category === category))
     .map(([, image]) => image)
 }
+
+/** The training images of one role, as the committed manifest declares them. */
+function inRole(role: TrainingRole, category?: PoolCategory): ManifestImage[] {
+  return imagesIn('training', category).filter((image) => image.role === role)
+}
+
+const fitted = (category?: PoolCategory): ManifestImage[] => inRole('fitted', category)
+const heldOut = (category?: PoolCategory): ManifestImage[] => inRole('heldOut', category)
 
 describe('authored sizes and splits', () => {
   it('ships 200 training images and 1000 in the evaluation pool', () => {
@@ -80,35 +96,41 @@ describe('the category mix and green', () => {
     for (const image of [...imagesIn('training', 'green'), ...imagesIn('pool', 'green')]) {
       expect(image.attributes.hue).toBeGreaterThanOrEqual(GREEN.hue.min)
       expect(image.attributes.hue).toBeLessThanOrEqual(GREEN.hue.max)
-      expect(image.attributes.hue).toBeGreaterThan(TRAINING_RED.hue.max)
+      expect(image.attributes.hue).toBeGreaterThan(FITTED_RED.hue.max)
     }
   })
 })
 
 describe('the authored distribution gap', () => {
-  it('keeps the training reds uniform, inside the declared band', () => {
-    for (const image of imagesIn('training', 'red')) {
-      expect(insideTrainingRedBand(image.attributes)).toBe(true)
+  it('keeps the fitted reds uniform, inside the declared band', () => {
+    for (const image of fitted('red')) {
+      expect(insideFittedRedBand(image.attributes)).toBe(true)
     }
+    expect(fitted('red')).toHaveLength(
+      CATEGORY_COUNTS.training.red - HELD_OUT_COUNTS.red,
+    )
   })
 
-  it('puts reds in the harvest that the training split never showed', () => {
-    const outside = imagesIn('pool', 'red').filter((image) => !insideTrainingRedBand(image.attributes))
+  it('puts reds in the harvest that the fitted images never showed', () => {
+    const outside = imagesIn('pool', 'red').filter((image) => !insideFittedRedBand(image.attributes))
     expect(outside).toHaveLength(OUT_OF_BAND_POOL_REDS)
     // Each of them leaves the band on at least one attribute.
     for (const image of outside) {
       const escaped = BAND_ATTRIBUTES.filter((attribute) => {
         const value = image.attributes[attribute]
-        return value < TRAINING_RED[attribute].min || value > TRAINING_RED[attribute].max
+        return value < FITTED_RED[attribute].min || value > FITTED_RED[attribute].max
       })
       expect(escaped.length).toBeGreaterThan(0)
     }
   })
 
-  it('makes every training worm obvious', () => {
-    for (const image of imagesIn('training', 'wormy')) {
-      expect(image.attributes.wormVisibility).toBeGreaterThanOrEqual(WORM_VISIBILITY.training.min)
+  it('makes every fitted worm obvious', () => {
+    for (const image of fitted('wormy')) {
+      expect(image.attributes.wormVisibility).toBeGreaterThanOrEqual(WORM_VISIBILITY.fitted.min)
     }
+    expect(fitted('wormy')).toHaveLength(
+      CATEGORY_COUNTS.training.wormy - HELD_OUT_COUNTS.wormy,
+    )
   })
 
   it('hides subtle worms on otherwise-perfect reds in the harvest', () => {
@@ -119,15 +141,88 @@ describe('the authored distribution gap', () => {
     for (const image of subtle) {
       // Everything except the worm says "training-grade red". This population is the
       // over-regularization lesson.
-      expect(insideTrainingRedBand(image.attributes)).toBe(true)
+      expect(insideFittedRedBand(image.attributes)).toBe(true)
       expect(image.attributes.wormVisibility).toBeGreaterThan(0)
     }
   })
 
-  it('leaves no subtle worm in the training split', () => {
-    for (const image of imagesIn('training', 'wormy')) {
+  it('leaves no subtle worm among the fitted images', () => {
+    for (const image of fitted('wormy')) {
       expect(image.attributes.wormVisibility).toBeGreaterThanOrEqual(SUBTLE_WORM_CEILING)
     }
+  })
+})
+
+describe('the held-out images, drawn from the harvest', () => {
+  it('holds out the authored count of every category', () => {
+    for (const [category, count] of Object.entries(HELD_OUT_COUNTS)) {
+      expect(heldOut(category as PoolCategory)).toHaveLength(count)
+    }
+    expect(heldOut()).toHaveLength(40)
+  })
+
+  it('includes held-out reds outside the fitted band', () => {
+    const outside = heldOut('red').filter((image) => !insideFittedRedBand(image.attributes))
+    expect(outside.length).toBeGreaterThan(0)
+    expect(outside).toHaveLength(HELD_OUT_POPULATIONS.redOutOfBand?.count ?? -1)
+    for (const image of outside) {
+      const escaped = BAND_ATTRIBUTES.filter((attribute) => {
+        const value = image.attributes[attribute]
+        return value < FITTED_RED[attribute].min || value > FITTED_RED[attribute].max
+      })
+      expect(escaped.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('includes held-out worms fainter than any the model is fitted on', () => {
+    const faintestFitted = Math.min(
+      ...fitted('wormy').map((image) => image.attributes.wormVisibility),
+    )
+    const subtler = heldOut('wormy').filter(
+      (image) => image.attributes.wormVisibility < faintestFitted,
+    )
+    // Not a fixed count: the held-out obvious worms are drawn from the pool's obvious
+    // range, which reaches below the fitted range, so some of those fall here too. What
+    // the scenario asks is that the held-out set reaches past what was fitted at all.
+    expect(subtler.length).toBeGreaterThan(0)
+
+    // The subtle population, which is authored: everything except the worm says perfect
+    // fitted red. This is the trap the harvest sets, now visible in the workshop.
+    const subtle = subtler.filter(
+      (image) => image.attributes.wormVisibility < SUBTLE_WORM_CEILING,
+    )
+    expect(subtle).toHaveLength(HELD_OUT_POPULATIONS.wormySubtle?.count ?? -1)
+    for (const image of subtle) {
+      expect(insideFittedRedBand(image.attributes)).toBe(true)
+      expect(image.attributes.wormVisibility).toBeGreaterThan(0)
+    }
+  })
+
+  it('draws each held-out category from the population its harvest counterpart uses', () => {
+    const inBand = heldOut('red').filter((image) => insideFittedRedBand(image.attributes))
+    expect(inBand).toHaveLength(HELD_OUT_POPULATIONS.redInBand?.count ?? -1)
+
+    for (const image of heldOut('green')) {
+      expect(image.attributes.hue).toBeGreaterThanOrEqual(GREEN.hue.min)
+      expect(image.attributes.hue).toBeLessThanOrEqual(GREEN.hue.max)
+      expect(image.attributes.wormVisibility).toBe(0)
+    }
+
+    const subtle = heldOut('wormy').filter(
+      (image) => image.attributes.wormVisibility < SUBTLE_WORM_CEILING,
+    )
+    expect(subtle).toHaveLength(HELD_OUT_POPULATIONS.wormySubtle?.count ?? -1)
+    for (const image of subtle) {
+      expect(image.attributes.wormVisibility).toBeGreaterThanOrEqual(
+        WORM_VISIBILITY.poolSubtle.min,
+      )
+    }
+  })
+
+  it('leaves the held-out images inside the training split, not beside it', () => {
+    expect(Object.keys(manifest.splits).sort()).toEqual(['pool', 'training'])
+    expect(fitted().length + heldOut().length).toBe(SPLIT_SIZES.training)
+    for (const image of heldOut()) expect(image.split).toBe('training')
   })
 })
 

@@ -8,21 +8,22 @@ import {
   GREEN,
   GREEN_SHARE_TOLERANCE,
   HELD_OUT_COUNTS,
+  HELD_OUT_POPULATIONS,
   HUE_DECIMALS,
   OUT_OF_BAND,
   OUT_OF_BAND_POOL_REDS,
   POOL_RED,
-  ROLE_SEED,
   SEED,
   SPLIT_SIZES,
   SUBTLE_POOL_WORMS,
   SUBTLE_WORM_CEILING,
-  TRAINING_RED,
+  FITTED_RED,
   UNIT_DECIMALS,
   WORM_VISIBILITY,
   type Band,
   type SplitName,
 } from '../tools/pool/params.js'
+import { committedManifest } from './helpers/pool'
 
 const SPLITS: readonly SplitName[] = ['training', 'pool']
 
@@ -55,14 +56,14 @@ describe('pool generation parameters', () => {
     )
   })
 
-  it('keeps the training red band inside the pool red spread', () => {
-    // The gap is one band inside another: everything the training reds can be, a pool
+  it('keeps the fitted red band inside the pool red spread', () => {
+    // The gap is one band inside another: everything the fitted reds can be, a pool
     // red can also be, and the pool reaches past it on every attribute.
-    expect(contains(POOL_RED, TRAINING_RED)).toBe(true)
+    expect(contains(POOL_RED, FITTED_RED)).toBe(true)
     for (const attribute of BAND_ATTRIBUTES) {
       const wider =
-        POOL_RED[attribute].min < TRAINING_RED[attribute].min ||
-        POOL_RED[attribute].max > TRAINING_RED[attribute].max
+        POOL_RED[attribute].min < FITTED_RED[attribute].min ||
+        POOL_RED[attribute].max > FITTED_RED[attribute].max
       expect(wider).toBe(true)
     }
   })
@@ -71,9 +72,9 @@ describe('pool generation parameters', () => {
     expect(GREEN.hue.min).toBeGreaterThan(POOL_RED.hue.max)
   })
 
-  it('keeps every out-of-band region clear of the training band by more than a rounding step', () => {
+  it('keeps every out-of-band region clear of the fitted band by more than a rounding step', () => {
     for (const attribute of BAND_ATTRIBUTES) {
-      const band = TRAINING_RED[attribute]
+      const band = FITTED_RED[attribute]
       const step = 10 ** -(attribute === 'hue' ? HUE_DECIMALS : UNIT_DECIMALS)
       for (const region of OUT_OF_BAND[attribute]) {
         const below = region.max < band.min - step
@@ -102,7 +103,7 @@ describe('pool generation parameters', () => {
   it('separates subtle from obvious worms at the ceiling the spec reads', () => {
     expect(WORM_VISIBILITY.poolSubtle.max).toBeLessThan(SUBTLE_WORM_CEILING)
     expect(WORM_VISIBILITY.poolObvious.min).toBeGreaterThanOrEqual(SUBTLE_WORM_CEILING)
-    expect(WORM_VISIBILITY.training.min).toBeGreaterThan(SUBTLE_WORM_CEILING)
+    expect(WORM_VISIBILITY.fitted.min).toBeGreaterThan(SUBTLE_WORM_CEILING)
   })
 
   it('holds out fewer training images than it fits, in every category', () => {
@@ -119,15 +120,53 @@ describe('pool generation parameters', () => {
     expect(heldOut).toBe(40)
   })
 
+  it('partitions the held-out count of each category across the pool populations', () => {
+    // The populations are what the sampler draws; the counts are what the manifest
+    // declares. A disagreement between them would hold out a set of the wrong size in a
+    // category, which no downstream check would name.
+    const perCategory: Record<string, number> = {}
+    for (const population of Object.values(HELD_OUT_POPULATIONS)) {
+      expect(population.count).toBeGreaterThan(0)
+      perCategory[population.category] = (perCategory[population.category] ?? 0) + population.count
+    }
+    expect(perCategory).toEqual(HELD_OUT_COUNTS)
+
+    const total = Object.values(HELD_OUT_POPULATIONS).reduce((sum, p) => sum + p.count, 0)
+    expect(total).toBe(40)
+  })
+
+  it('mirrors the evaluation pool proportions in each held-out category', () => {
+    // Proportional rather than seed-dependent: the held-out set is a small sample of the
+    // harvest, so the harvest's own partition is what it has to reproduce.
+    const outOfBandShare = OUT_OF_BAND_POOL_REDS / CATEGORY_COUNTS.pool.red
+    const heldOutOfBandShare =
+      (HELD_OUT_POPULATIONS.redOutOfBand?.count ?? 0) / HELD_OUT_COUNTS.red
+    expect(heldOutOfBandShare).toBeCloseTo(outOfBandShare, 2)
+
+    const subtleShare = SUBTLE_POOL_WORMS / CATEGORY_COUNTS.pool.wormy
+    const heldSubtleShare = (HELD_OUT_POPULATIONS.wormySubtle?.count ?? 0) / HELD_OUT_COUNTS.wormy
+    expect(heldSubtleShare).toBeCloseTo(subtleShare, 2)
+  })
+
+  it('leaves every category enough fitted images to keep both roles non-empty', () => {
+    for (const [category, held] of Object.entries(HELD_OUT_COUNTS)) {
+      const fitted = CATEGORY_COUNTS.training[category as keyof typeof HELD_OUT_COUNTS] - held
+      expect(fitted).toBeGreaterThan(0)
+    }
+  })
+
   it('names every training category in the held-out counts', () => {
     expect(Object.keys(HELD_OUT_COUNTS).sort()).toEqual(
       Object.keys(CATEGORY_COUNTS.training).sort(),
     )
   })
 
-  it('draws the roles from a stream of their own', () => {
-    // The whole point of the separate seed: adding roles must not perturb the images.
-    expect(ROLE_SEED).not.toBe(SEED)
+  it('ships a pool generated from the seed declared here', () => {
+    // The seed is the pool identity a prediction artifact is bound to. A parameter
+    // change that moves the images without moving the seed would let a stale artifact
+    // load against new apples under the same ids, so the constant and the committed
+    // manifest have to agree before anything downstream can be trusted.
+    expect(committedManifest().seed).toBe(SEED)
   })
 
   it('fits every split into whole atlases of the declared geometry', () => {

@@ -25,7 +25,7 @@ import {
   type SplitName,
   type TrainingRole,
 } from './params.js'
-import { assignRoles, roleCounts } from './roles.js'
+import { assertRolesCanShowTheGap, roleCounts, rolesOf } from './roles.js'
 
 /** How one atlas file is described to a client. */
 export interface AtlasDescriptor {
@@ -123,10 +123,13 @@ export function buildManifest(
   const atlases: Record<string, AtlasDescriptor> = {}
   const images: Record<string, ManifestImage> = {}
 
-  // Roles are derived here, from the images the plans already hold, so the generator
-  // has one order to be stable in and the caller cannot pass an assignment made from a
-  // different sample.
-  const roles = assignRoles(plans.flatMap((plan) => plan.images))
+  // Roles are read here, from the images the plans already hold, so the generator has one
+  // order to be stable in and the caller cannot pass an assignment made from a different
+  // sample. The sampler decided them; this checks that what it decided can still show a
+  // generalization gap before the pool is written.
+  const sampled = plans.flatMap((plan) => plan.images)
+  assertRolesCanShowTheGap(sampled)
+  const roles = rolesOf(sampled)
   const counts = roleCounts(roles)
 
   for (const plan of plans) {

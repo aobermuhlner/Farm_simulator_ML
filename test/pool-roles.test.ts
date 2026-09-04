@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import { insideFittedRedBand } from '../tools/pool/bands.js'
 import {
   CATEGORY_COUNTS,
+  FITTED_RED,
   HELD_OUT_COUNTS,
   SPLIT_SIZES,
+  WORM_VISIBILITY,
   type PoolCategory,
 } from '../tools/pool/params.js'
-import { assignRoles, roleCounts } from '../tools/pool/roles.js'
-import { samplePool } from '../tools/pool/sample.js'
+import { assertRolesCanShowTheGap, heldOutBandDefect, roleCounts, rolesOf } from '../tools/pool/roles.js'
+import { samplePool, type SampledImage } from '../tools/pool/sample.js'
 
 const pool = samplePool()
-const roles = assignRoles(pool)
+const roles = rolesOf(pool)
 
 const training = pool.filter((image) => image.split === 'training')
 
@@ -19,7 +22,7 @@ function idsOf(category: PoolCategory, role: 'fitted' | 'heldOut'): readonly str
     .map((image) => image.id)
 }
 
-describe('training role assignment', () => {
+describe('training roles', () => {
   it('gives every training image exactly one role', () => {
     expect(Object.keys(roles)).toHaveLength(SPLIT_SIZES.training)
     for (const image of training) {
@@ -54,21 +57,67 @@ describe('training role assignment', () => {
     expect(counts.fitted + counts.heldOut).toBe(SPLIT_SIZES.training)
   })
 
-  it('reproduces the same assignment from the same seed', () => {
-    expect(assignRoles(samplePool())).toEqual(roles)
+  it('reproduces both the roles and the apples behind them from the same seed', () => {
+    // The role is drawn with the image now, so reproducibility is one property rather
+    // than two: the same seed has to give back the same partition *and* the same pool.
+    const again = samplePool()
+    expect(rolesOf(again)).toEqual(roles)
+    expect(again).toEqual(pool)
   })
 
-  it('does not disturb the images it assigns roles to', () => {
-    // The separate stream, stated as a test: sampling again after an assignment must
-    // produce the identical pool, or every artifact keyed to these ids would move.
-    expect(samplePool()).toEqual(pool)
+  it('refuses a training image the sampler left without a role', () => {
+    const roleless = training.map(({ role: _role, ...rest }) => rest as SampledImage)
+    expect(() => rolesOf(roleless)).toThrow(/t-001/)
+  })
+})
+
+describe('a held-out set that cannot show the gap', () => {
+  /** The pool with every held-out image of `category` pulled back inside the fitted band. */
+  function confined(category: PoolCategory): readonly SampledImage[] {
+    const middle = (attribute: 'hue' | 'roundness' | 'gloss' | 'lighting'): number =>
+      (FITTED_RED[attribute].min + FITTED_RED[attribute].max) / 2
+
+    return pool.map((image) => {
+      if (image.split !== 'training' || image.role !== 'heldOut') return image
+      if (image.category !== category) return image
+      return {
+        ...image,
+        attributes: {
+          hue: middle('hue'),
+          roundness: middle('roundness'),
+          gloss: middle('gloss'),
+          lighting: middle('lighting'),
+          // Obvious, like every fitted worm: nothing here the model has not already seen.
+          wormVisibility: image.category === 'wormy' ? WORM_VISIBILITY.fitted.max : 0,
+        },
+      }
+    })
+  }
+
+  it('names the red category when every held-out red sits in the fitted band', () => {
+    expect(heldOutBandDefect(confined('red'))).toMatch(/"red"/)
+    expect(() => assertRolesCanShowTheGap(confined('red'))).toThrow(/"red"/)
   })
 
-  it('refuses to hold out more of a category than the split has', () => {
-    const starved = [
-      ...training.filter((image) => image.category !== 'green'),
-      ...training.filter((image) => image.category === 'green').slice(0, 1),
-    ]
-    expect(() => assignRoles(starved)).toThrow(/green/)
+  it('names the wormy category when no held-out worm is fainter than the fitted ones', () => {
+    expect(heldOutBandDefect(confined('wormy'))).toMatch(/"wormy"/)
+    expect(() => assertRolesCanShowTheGap(confined('wormy'))).toThrow(/"wormy"/)
+  })
+
+  it('accepts the pool that ships, which spans both', () => {
+    expect(heldOutBandDefect(pool)).toBeUndefined()
+    expect(() => assertRolesCanShowTheGap(pool)).not.toThrow()
+
+    const heldRed = training.filter((i) => i.role === 'heldOut' && i.category === 'red')
+    expect(heldRed.some((image) => !insideFittedRedBand(image.attributes))).toBe(true)
+  })
+
+  it('refuses a category holding out a count it does not declare', () => {
+    const starved = pool.map((image) =>
+      image.split === 'training' && image.category === 'green' && image.role === 'heldOut'
+        ? { ...image, role: 'fitted' as const }
+        : image,
+    )
+    expect(() => assertRolesCanShowTheGap(starved)).toThrow(/green/)
   })
 })
