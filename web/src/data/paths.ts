@@ -60,6 +60,14 @@ export interface TaskDataPaths {
  */
 export const SHIPPED_TASKS: readonly string[] = ['data/declarations/apple-harvest.json']
 
+/**
+ * The farm itself, declared beside the tasks.
+ *
+ * One farm, because there is one balance, one year and one ledger across every task.
+ * It sits under the same mount, so it is served and copied with no build change.
+ */
+export const SHIPPED_FARM = 'data/declarations/farm.json'
+
 /** The on-disk file a data URL is served from, relative to the repo root. */
 export function sourcePathFor(url: string): string | undefined {
   for (const [mount, dir] of Object.entries(DATA_MOUNTS)) {

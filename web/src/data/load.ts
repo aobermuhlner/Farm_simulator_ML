@@ -24,11 +24,14 @@ import {
 } from '../../../src/task/artifactIndex.js'
 import type { LoadedPool } from '../../../src/pool/index.js'
 import { readPool } from '../../../src/pool/index.js'
+import type { FarmDeclaration } from '../../../src/economy/index.js'
+import { validateFarmDeclaration } from '../../../src/economy/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
 import {
   configurationUrl,
+  SHIPPED_FARM,
   SHIPPED_TASKS,
   taskDataPaths,
   type PoolPaths,
@@ -221,4 +224,22 @@ export async function loadShippedTasks(): Promise<Loaded<readonly LoadedTask[]>>
     ok: true,
     value: loaded.flatMap((result) => (result.ok ? [result.value] : [])),
   }
+}
+
+/**
+ * Fetches the farm declaration and validates it.
+ *
+ * The farm is loaded the same way a task is, through the same refusal contract: a
+ * missing or malformed declaration comes back as issues naming the field, and the shell
+ * shows them instead of opening a farm with a currency it invented.
+ */
+export async function loadFarmDeclaration(
+  path: string = SHIPPED_FARM,
+): Promise<Loaded<FarmDeclaration>> {
+  const fetched = await fetchJson(path)
+  if (!fetched.ok) return fetched
+
+  const validated = validateFarmDeclaration(fetched.value)
+  if (!validated.ok) return { ok: false, issues: validated.issues }
+  return { ok: true, value: validated.declaration }
 }

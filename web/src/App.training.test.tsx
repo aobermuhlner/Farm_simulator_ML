@@ -12,6 +12,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { App } from './App.js'
+import { SHIPPED_FARM } from './data/paths.js'
+import { farmDeclaration } from './test-support/farm.js'
 import { appleManifest, appleTask } from './test-support/pool.js'
 
 afterEach(() => {
@@ -21,6 +23,7 @@ afterEach(() => {
 
 const manifest = appleManifest()
 const task = appleTask()
+const farm = farmDeclaration()
 
 /** Every covered configuration's committed predictions, by the file the index names. */
 function configurationFiles(): Map<string, unknown> {
@@ -45,6 +48,13 @@ function serveManifest(): { readonly calls: () => number } {
   const predictions = configurationFiles()
   vi.stubGlobal('fetch', (input: string) => {
     const url = String(input)
+    if (url.endsWith(SHIPPED_FARM)) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(farm),
+      } as Response)
+    }
     if (url.endsWith('manifest.json')) {
       calls += 1
       return Promise.resolve({

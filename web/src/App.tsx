@@ -7,10 +7,13 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { FarmBar } from './components/FarmBar.js'
 import { Issues } from './components/Issues.js'
 import type { ConfigurationEntry } from '../../src/task/artifact.js'
+import type { Farm, FarmDeclaration } from '../../src/economy/index.js'
+import { openFarm } from '../../src/economy/index.js'
 import type { LoadedTask } from './data/load.js'
-import { loadConfiguration, loadShippedTasks } from './data/load.js'
+import { loadConfiguration, loadFarmDeclaration, loadShippedTasks } from './data/load.js'
 import { loadTrainingSplit } from './data/pool.js'
 import type { ValidationIssue } from '../../src/task/validate.js'
 import type { TaskDeclaration } from '../../src/task/types.js'
@@ -36,6 +39,17 @@ export interface AppProps {
     | { ok: true; value: ConfigurationEntry }
     | { ok: false; issues: readonly ValidationIssue[] }
   >
+  /**
+   * Fetches the farm declaration — the currency, the name and the state play opens at.
+   *
+   * Injected by tests for the same reason `load` is. A farm that will not load is a
+   * refusal on screen rather than a farm with a currency the code invented, so the
+   * shell has to be able to be handed one that refuses.
+   */
+  readonly loadFarm?: () => Promise<
+    | { ok: true; value: FarmDeclaration }
+    | { ok: false; issues: readonly ValidationIssue[] }
+  >
   /** Passed through to the task screen; injected by tests to skip the replay. */
   readonly replayMs?: number
 }
@@ -45,8 +59,27 @@ type Loading =
   | { readonly state: 'loaded'; readonly tasks: readonly LoadedTask[] }
   | { readonly state: 'refused'; readonly issues: readonly ValidationIssue[] }
 
-export function App({ load = loadShippedTasks, loadEntry = loadConfiguration, replayMs }: AppProps) {
+/**
+ * The farm the money, the year and the ledger live in.
+ *
+ * `design.md` — one `useState` in the only component that renders every stage, rather
+ * than a context for a single consumer or a store that `progression-catalog` would have
+ * to unpick when it moves this state into a save. The economy value is immutable, so a
+ * movement is a `setState` with the value the module returned.
+ */
+type Farming =
+  | { readonly state: 'loading' }
+  | { readonly state: 'loaded'; readonly farm: Farm }
+  | { readonly state: 'refused'; readonly issues: readonly ValidationIssue[] }
+
+export function App({
+  load = loadShippedTasks,
+  loadEntry = loadConfiguration,
+  loadFarm = loadFarmDeclaration,
+  replayMs,
+}: AppProps) {
   const [loading, setLoading] = useState<Loading>({ state: 'loading' })
+  const [farming, setFarming] = useState<Farming>({ state: 'loading' })
   const [selected, setSelected] = useState<string | undefined>(undefined)
 
   useEffect(() => {
@@ -64,6 +97,21 @@ export function App({ load = loadShippedTasks, loadEntry = loadConfiguration, re
     }
   }, [load])
 
+  useEffect(() => {
+    let live = true
+    void loadFarm().then((result) => {
+      if (!live) return
+      setFarming(
+        result.ok
+          ? { state: 'loaded', farm: openFarm(result.value) }
+          : { state: 'refused', issues: result.issues },
+      )
+    })
+    return () => {
+      live = false
+    }
+  }, [loadFarm])
+
   const open =
     loading.state === 'loaded'
       ? loading.tasks.find((task) => task.declaration.id === selected)
@@ -77,22 +125,36 @@ export function App({ load = loadShippedTasks, loadEntry = loadConfiguration, re
     return () => loadTrainingSplit(open.paths.pool, declaration)
   }, [open])
 
+  // Either half refusing is the farm refusing: a farm with no currency and a farm with
+  // no tasks are both farms that cannot be opened, and neither gets a bar.
+  const refused =
+    loading.state === 'refused'
+      ? loading.issues
+      : farming.state === 'refused'
+        ? farming.issues
+        : undefined
+  const opening = refused === undefined && (loading.state === 'loading' || farming.state === 'loading')
+
   return (
     <main>
-      {loading.state === 'loading' ? <p role="status">Opening the farm…</p> : null}
+      {opening ? <p role="status">Opening the farm…</p> : null}
 
-      {loading.state === 'refused' ? (
-        <Issues title="The farm could not be opened" issues={loading.issues} />
+      {refused === undefined ? null : (
+        <Issues title="The farm could not be opened" issues={refused} />
+      )}
+
+      {refused === undefined && farming.state === 'loaded' ? (
+        <FarmBar farm={farming.farm} />
       ) : null}
 
-      {loading.state === 'loaded' && open === undefined ? (
+      {refused === undefined && loading.state === 'loaded' && open === undefined ? (
         <FarmOverview
           tasks={loading.tasks.map((task) => task.declaration)}
           onSelect={(task: TaskDeclaration) => setSelected(task.id)}
         />
       ) : null}
 
-      {open === undefined ? null : (
+      {refused !== undefined || open === undefined ? null : (
         <ConfigureTask
           declaration={open.declaration}
           loadEntry={(configurationId) => loadEntry(open, configurationId)}

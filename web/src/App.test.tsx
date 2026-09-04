@@ -8,6 +8,7 @@ import {
   unrelatedDeclaration,
   unrelatedTruth,
 } from './test-support/declarations.js'
+import { loadsFarm } from './test-support/farm.js'
 import { appleTask as committedAppleTask, loadEntryFor, taskFrom } from './test-support/pool.js'
 import { App } from './App.js'
 
@@ -31,7 +32,9 @@ function loads(...tasks: readonly LoadedTask[]) {
  * pacing, and `TrainingRun`'s own suite owns the animation.
  */
 function renderApp(...tasks: readonly LoadedTask[]) {
-  return render(<App load={loads(...tasks)} loadEntry={loadEntryFor} replayMs={0} />)
+  return render(
+    <App load={loads(...tasks)} loadEntry={loadEntryFor} loadFarm={loadsFarm()} replayMs={0} />,
+  )
 }
 
 async function openTask(title: string): Promise<void> {
@@ -83,6 +86,7 @@ describe('the four stages of the simulator', () => {
             issues: [{ code: 'data-unreachable', message: 'Could not fetch the declaration.' }],
           })
         }
+        loadFarm={loadsFarm()}
       />,
     )
 
