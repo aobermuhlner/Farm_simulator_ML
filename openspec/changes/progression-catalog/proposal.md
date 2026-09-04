@@ -57,13 +57,18 @@ a deeper stack is something to earn.
   deliberate absence of tamper protection.
 
 ### Modified Capabilities
-- `task-contract`: provisional. The declared shape of a knob gains availability, so
-  *Knob declarations drive the configuration screen* has to say what a locked value does.
+- `task-contract`: *Knob declarations drive the configuration screen* has to say what a
+  locked value does. The knob's declared *shape* does not gain a field: availability is
+  decided outside the task declaration, so a declaration reads the same whatever a student
+  owns — see `design.md`, "The catalog names what it opens".
 - `simulator-shell`: provisional. A market stage, and the invariant over catalog nouns.
+- `game-economy`: *The farm's state is not presented as saved* forbade claiming a save and
+  forbade offering to reset the farm. Both are things this change now does, so the
+  requirement is removed and `game-save` carries what it was protecting.
 
 ## Impact
 
-To be determined. New `declarations/catalog.json`, `src/progression/`, `src/save/`, and a
-market screen. Touches the knob declaration schema, its validator and the configuration
-screen. Reads nothing new from `prediction-artifacts` but must not let a student select a
+New `declarations/catalog.json`, `src/progression/`, `src/save/`, `web/src/data/save.ts`
+and a market screen. Touches the configuration screen and the farm overview; the knob
+declaration schema and its validator are deliberately left alone. Reads nothing new from `prediction-artifacts` but must not let a student select a
 configuration it does not cover. Deletes `openspec/changes/knob-availability/`.
