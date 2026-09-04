@@ -60,40 +60,70 @@ grid cost more than the earlier depth-only measurements suggested. The first run
 to three configurations for reviewability regardless: someone has to look at each curve
 and decide it teaches what it should.
 
-## What the first three runs showed
+## What the three runs show
 
-Reviewed 2026-09-03, against the committed artifact. Accuracy is the highest-probability
-category, per population:
+Reviewed 2026-09-04, against the committed artifact, on pool seed 20260904 — the pool
+whose held-out 40 are drawn from the harvest's own populations. Every figure below is read
+out of the committed histories and prediction files; nothing here was measured by a run of
+its own.
+
+The end of each run, from the recorded per-epoch history:
 
 | | channels 8 | channels 16 | channels 32 |
 | --- | --- | --- | --- |
-| final fitted loss | 0.410 | 0.149 | 0.032 |
-| final held-out loss | 0.408 | 0.140 | 0.024 |
-| training worms | 0% | 100% | 100% |
-| pool reds, in band | 100% | 99.5% | 100% |
-| pool reds, out of band | 84% | 59% | 63% |
-| pool worms, obvious | 30% | 65% | 63% |
-| pool worms, subtle | 0% | 16% | 14% |
+| final fitted accuracy | 84.4% | 98.1% | 100.0% |
+| final held-out accuracy | 80.0% | 80.0% | 80.0% |
+| gap | 4.4 pp | 18.1 pp | 20.0 pp |
+| final fitted loss | 0.374 | 0.077 | 0.035 |
+| final held-out loss | 0.472 | 0.623 | 0.790 |
 
-Three findings, all of which the game design has to live with:
+Accuracy is the highest-probability category, per population, over the committed
+predictions:
 
-1. **The held-out slice shows no gap.** Validation loss tracks training loss and sits
-   slightly below it at every width, because the held-out 40 are drawn from the same
-   authored band as the fitted 160 — unseen images of an entirely seen distribution. The
-   generalization gap is between the training split and the evaluation pool (100% on
-   training worms, 14% on the pool's subtle ones), and that is the harvest report's story,
-   not the loss curve's. Whatever `training-simulation` says about the curves must not
-   promise a gap they do not contain.
-2. **Width alone does teach, at the bottom end.** channels 8 cannot see a worm at all —
-   0% on the training worms it was fitted on — and its apparent 84% on out-of-band reds is
-   the same failure wearing a good number: it calls almost everything red. Moving to 16 is
-   the visible lesson: worms learned perfectly, unseen reds dropping to 59%.
-3. **The top end teaches little.** channels 16 and 32 behave almost identically on every
-   population. The third step of the width knob currently costs 70 s of training and shows
-   a student nothing new.
+| population | n | channels 8 | channels 16 | channels 32 |
+| --- | --- | --- | --- | --- |
+| fitted reds | 80 | 100% | 100% | 100% |
+| fitted worms | 40 | 38% | 92% | 100% |
+| held-out reds, in band | 8 | 100% | 100% | 100% |
+| held-out reds, out of band | 12 | 83% | 83% | 83% |
+| held-out worms, obvious | 6 | 67% | 67% | 67% |
+| held-out worms, subtle | 4 | 0% | 0% | 0% |
+| pool reds, in band | 200 | 99% | 99% | 99% |
+| pool reds, out of band | 300 | 55% | 53% | 51% |
+| pool worms, obvious | 150 | 58% | 64% | 66% |
+| pool worms, subtle | 100 | 12% | 21% | 26% |
+| pool greens | 250 | 100% | 100% | 100% |
 
-No shaping was applied, and none is needed: the lesson lands in the harvest breakdown as
-measured.
+Four findings:
+
+1. **The held-out slice now shows the gap.** This supersedes the 2026-09-03 finding that
+   it showed none — that was true, and it was the defect `held-out-generalization` set out
+   to remove. The two loss curves start together and separate from roughly epoch 15: at
+   channels 32 the fitted loss falls to 0.035 while the held-out loss *rises* to 0.790, and
+   fitted accuracy reaches 100% against 80% held out. That is textbook overfitting, drawn
+   on the screen the student reads before they spend a month. The proposal estimated ~74%
+   held-out; the measured figure is 80%, so the gap is real and slightly narrower than
+   estimated. What was measured is what is recorded — the pool was not reshaped to hit the
+   estimate.
+2. **The held-out headline is coarse, and flat across the three widths.** All three land on
+   exactly 80% — 32 of 40 images — because 40 images give 2.5% granularity and the eight
+   they miss are the same eight populations every time: two out-of-band reds, two obvious
+   worms, all four subtle worms. The *loss* curve is what separates the widths, and it
+   separates dramatically. A student reading accuracy alone at this scale learns less than
+   one reading the curve; the report's per-category breakdown remains where the real story
+   is told.
+3. **Width alone does teach, at the bottom end.** channels 8 gets 38% of the worms it was
+   fitted on, and its 55% on out-of-band pool reds is not a good number wearing a disguise
+   any more than before: it is barely separating the categories at all. Moving to 16 is the
+   visible lesson — fitted worms 38% to 92%, subtle pool worms 12% to 21%.
+4. **The top end still teaches little on the harvest, but now teaches on the curve.**
+   channels 16 and 32 differ by a few points on every pool population. What does separate
+   them is the overfitting itself: 18.1 pp of gap against 20.0 pp, and a held-out loss of
+   0.623 against 0.790. The third step of the width knob is still the most expensive to
+   train, and now shows a student a steeper divergence rather than a different harvest.
+
+No shaping was applied, and none is needed: the lesson lands in the loss curve and in the
+harvest breakdown as measured.
 
 ## What a run records
 

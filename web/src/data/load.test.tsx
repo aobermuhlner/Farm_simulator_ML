@@ -144,7 +144,9 @@ describe('loading a task', () => {
     if (loaded.ok) return
     const message = loaded.issues.map((issue) => issue.message).join(' ')
     expect(message).toContain('12345')
-    expect(message).toContain('20260902')
+    // Read from the committed manifest, not repeated: the pool seed moves whenever the
+    // populations behind the ids do, and a literal here would outlive the pool it names.
+    expect(message).toContain(String((MANIFEST as { seed: number }).seed))
   })
 
   it('returns no task data at all from a mismatch', async () => {

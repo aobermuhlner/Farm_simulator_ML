@@ -15,15 +15,15 @@
 
 - [x] 3.1 Run `npm run pool:generate` and commit the regenerated pool; verify `test/pool-committed.test.ts` and `test/pool-manifest.test.ts` pass against the new manifest and that `training/tests/test_pool.py` still refuses its doctored copies (`cd training && uv run pytest`)
 - [x] 3.2 Confirm the stale artifacts refuse rather than resolving: verify the prediction-artifact suite reports a pool-seed mismatch naming both seeds, and that opening the task in the app shows that refusal rather than a report
-- [ ] 3.3 Retrain the three shipped configurations (`cd training && uv run python -m farm_training.train`) against the regenerated pool and commit them; verify `test/artifact-shipping.test.ts` passes, including the clean-tree provenance check
+- [x] 3.3 Retrain the three shipped configurations (`cd training && uv run python -m farm_training.train`) against the regenerated pool and commit them; verify `test/artifact-shipping.test.ts` passes, including the clean-tree provenance check
 
 ## 4. Measure and record
 
-- [ ] 4.1 Measure the fitted and held-out accuracy per epoch for each retrained configuration and record the final gap; verify the numbers come from the committed histories rather than from a separate script's own run
-- [ ] 4.2 Restate `training/README.md`'s findings — finding 1 said the held-out slice shows no gap, which this change is meant to end — with the measured fitted-versus-held-out figures and the per-population harvest table regenerated from the new pool
-- [ ] 4.3 Open the task in the app and confirm the replay's two accuracy curves visibly separate and the two loss curves no longer lie on top of each other; if the gap is materially narrower than the design's estimate, record what was measured rather than reshaping the pool
+- [x] 4.1 Measure the fitted and held-out accuracy per epoch for each retrained configuration and record the final gap; verify the numbers come from the committed histories rather than from a separate script's own run
+- [x] 4.2 Restate `training/README.md`'s findings — finding 1 said the held-out slice shows no gap, which this change is meant to end — with the measured fitted-versus-held-out figures and the per-population harvest table regenerated from the new pool
+- [x] 4.3 Open the task in the app and confirm the replay's two accuracy curves visibly separate and the two loss curves no longer lie on top of each other; if the gap is materially narrower than the design's estimate, record what was measured rather than reshaping the pool
 
 ## 5. Close out
 
-- [ ] 5.1 Run the full suite (`npm test`, `npm run typecheck`, and `cd training && uv run pytest`) and verify everything passes against the regenerated pool and retrained artifacts
-- [ ] 5.2 Sync the `image-pool` delta into `openspec/specs/image-pool/spec.md` and archive the change
+- [x] 5.1 Run the full suite (`npm test`, `npm run typecheck`, and `cd training && uv run pytest`) and verify everything passes against the regenerated pool and retrained artifacts
+- [x] 5.2 Sync the `image-pool` delta into `openspec/specs/image-pool/spec.md` and archive the change
