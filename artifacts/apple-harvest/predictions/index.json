@@ -9,7 +9,7 @@
   "pool": {
     "poolId": "pools/apple-harvest",
     "schemaVersion": "1.0.0",
-    "seed": 20260904
+    "seed": 855711213
   },
   "encoding": {
     "decimals": 3,
@@ -27,7 +27,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "8400fead267880bab681f9e99c52282ed7da43e0",
+        "revision": "62d4f05d0f0c5bc289a79ad8557be90d1488a3dd",
         "dirty": false
       },
       "hyperparameters": {
@@ -67,7 +67,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "8400fead267880bab681f9e99c52282ed7da43e0",
+        "revision": "62d4f05d0f0c5bc289a79ad8557be90d1488a3dd",
         "dirty": false
       },
       "hyperparameters": {
@@ -107,7 +107,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "8400fead267880bab681f9e99c52282ed7da43e0",
+        "revision": "62d4f05d0f0c5bc289a79ad8557be90d1488a3dd",
         "dirty": false
       },
       "hyperparameters": {
