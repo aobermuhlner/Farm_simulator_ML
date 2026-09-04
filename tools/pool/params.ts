@@ -15,9 +15,16 @@
  * from orange onto a deep crimson, whose blue content is the only thing a dichromat's
  * surviving channel has to separate the categories with; green moved away from teal
  * toward yellow-green, because the blue green picks up past 125 degrees converges with
- * crimson's on that same channel. Both windows were rendered and looked at as well: every
- * apple in them still reads as the "ripe red apple" or "unripe green apple" the ground
- * truth calls it.
+ * crimson's on that same channel.
+ *
+ * Both windows were then rendered and looked at. The fitted band and the middle of the
+ * spread read as ripe red apples; at -30 and -26, the far edge of the lower out-of-band
+ * region, an apple reads as a plum rather than as an apple, and every one of them is
+ * still labelled "ripe red apple" in the ground truth a student is scored against. That
+ * is the same character the old palette's +14 orange had and it is deliberate: the
+ * out-of-band population exists to be the apples the fitted band does not cover. It is
+ * recorded here rather than corrected by narrowing the window, because the window is
+ * where the deficiency measurement put it.
  */
 
 /** The categories this pool declares, matching `declarations/apple-harvest.json`. */
