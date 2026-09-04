@@ -6,14 +6,18 @@
  * asserted by tests. Nothing here is derived at generation time: change a number, run
  * `npm run pool:generate`, and the committed pool moves with it.
  *
- * Hue is degrees from pure red in the range (-180, 180]. Design writes the fitted red
- * band as 355-5 and the pool spread as 348-14; both are written here without the wrap
- * around 360, so band containment is a plain numeric comparison instead of modular
- * arithmetic that a test would have to repeat.
+ * Hue is degrees from pure red in the range (-180, 180], written without the wrap around
+ * 360 so band containment is a plain numeric comparison instead of modular arithmetic
+ * that a test would have to repeat.
  *
- * The pool spread stops at -12 and +14 because it was rendered and looked at: by -20 a
- * red apple reads as a magenta plum and by +24 as an orange, and every one of these is
- * labelled "ripe red apple" in the ground truth a student is scored against.
+ * The red window sits at -30..-6 and the green one at 75..120 because
+ * `openspec/changes/colour-accessibility/design.md` measured them there. Red moved away
+ * from orange onto a deep crimson, whose blue content is the only thing a dichromat's
+ * surviving channel has to separate the categories with; green moved away from teal
+ * toward yellow-green, because the blue green picks up past 125 degrees converges with
+ * crimson's on that same channel. Both windows were rendered and looked at as well: every
+ * apple in them still reads as the "ripe red apple" or "unripe green apple" the ground
+ * truth calls it.
  */
 
 /** The categories this pool declares, matching `declarations/apple-harvest.json`. */
@@ -39,18 +43,95 @@ export interface Band {
 /** Attribute names in the order the manifest records them. */
 export const BAND_ATTRIBUTES = ['hue', 'roundness', 'gloss', 'lighting'] as const
 
+/** The saturation and lightness a body is filled at, at one declared hue. */
+export interface TonePoint {
+  readonly hue: number
+  readonly saturation: number
+  readonly lightness: number
+}
+
 /**
- * The one seed the whole pool derives from. Committed rather than passed in, so that
- * regenerating is a checked-in fact and not a command someone has to remember.
+ * The tone a body is filled at, as a function of the hue it was drawn from.
  *
- * Moved from 20260902 when the held-out role started drawing from the evaluation pool
- * distributions. The images behind the ids changed, so the pool has to declare an
- * identity the artifacts trained against the old one do not match: `prediction-artifacts`
- * binds an artifact by pool id, schema version and seed, and none of the other two moves
- * when the sampling groups change. Without the bump a stale artifact would load silently
- * and score one pool predictions against another pool images.
+ * `openspec/changes/colour-accessibility/design.md` — under simulated deuteranopia the
+ * whole hue arc from red through orange to green collapses onto one chromaticity, so no
+ * choice of red and green is chromatically distinguishable to a dichromat and the
+ * separation has to come from lightness instead. A single `BODY_LIGHTNESS` for every
+ * apple made that impossible: `lighting` moved apparent lightness further than the
+ * categories differed from each other, and a brightly lit red and a shadowed green
+ * measured 0.4 apart — a quarter of a just-noticeable difference.
+ *
+ * A function of hue rather than of category, deliberately. `draw.ts` receives an
+ * attribute vector and no category, and keying colour on category would put a signal in
+ * the pixels that the manifest's recorded attributes do not explain — which is precisely
+ * the property that makes the authored distribution gap checkable. The bands are disjoint
+ * in hue, so a ramp gives the two categories different tones without the drawing knowing
+ * that categories exist.
+ *
+ * The stretch between -6 and 75 is defined and never drawn from; `test/pool-params.test.ts`
+ * holds every drawable hue inside the range these points cover.
  */
-export const SEED = 20260904
+export const BODY_TONE: readonly TonePoint[] = [
+  { hue: -30, saturation: 0.88, lightness: 0.35 },
+  { hue: -6, saturation: 0.86, lightness: 0.36 },
+  { hue: 75, saturation: 0.66, lightness: 0.59 },
+  { hue: 120, saturation: 0.64, lightness: 0.6 },
+]
+
+/** The tone one hue is filled at: linear between the control points, clamped outside. */
+export function bodyTone(hue: number): { readonly saturation: number; readonly lightness: number } {
+  const first = BODY_TONE[0] as TonePoint
+  const last = BODY_TONE[BODY_TONE.length - 1] as TonePoint
+  if (hue <= first.hue) return { saturation: first.saturation, lightness: first.lightness }
+  if (hue >= last.hue) return { saturation: last.saturation, lightness: last.lightness }
+
+  for (let i = 1; i < BODY_TONE.length; i += 1) {
+    const low = BODY_TONE[i - 1] as TonePoint
+    const high = BODY_TONE[i] as TonePoint
+    if (hue <= high.hue) {
+      const t = (hue - low.hue) / (high.hue - low.hue)
+      return {
+        saturation: low.saturation + t * (high.saturation - low.saturation),
+        lightness: low.lightness + t * (high.lightness - low.lightness),
+      }
+    }
+  }
+  /* c8 ignore next */
+  throw new Error(`no tone declared for hue ${hue}`)
+}
+
+/**
+ * The flat shadow `lighting` draws, as an opacity falling with the light.
+ *
+ * Declared here rather than written into `draw.ts` so that the seed below can digest it.
+ * Everything a pixel depends on has to be reachable from one place for that to work.
+ */
+export interface ShadeCoefficients {
+  readonly base: number
+  readonly perLighting: number
+}
+
+export const SHADE_COEFFICIENTS: ShadeCoefficients = { base: 0.5, perLighting: -0.42 }
+
+/** The flat specular highlight `gloss` draws: an opacity and an ellipse that grow with it. */
+export interface GlossCoefficients {
+  readonly opacityBase: number
+  readonly opacityPerGloss: number
+  readonly rxBase: number
+  readonly rxPerGloss: number
+  readonly ryBase: number
+  readonly ryPerGloss: number
+}
+
+export const GLOSS_COEFFICIENTS: GlossCoefficients = {
+  opacityBase: 0.1,
+  opacityPerGloss: 0.6,
+  rxBase: 7,
+  rxPerGloss: 7,
+  ryBase: 10,
+  ryPerGloss: 9,
+}
+
 
 /** The role a training image plays: fitted on, or held out to measure validation loss. */
 export const TRAINING_ROLES = ['fitted', 'heldOut'] as const
@@ -110,6 +191,88 @@ export const CELL_PX = 128
 export const ATLAS_PX = 2048
 export const CELLS_PER_ATLAS = (ATLAS_PX / CELL_PX) ** 2
 
+/** Everything a pixel is drawn from, gathered so the seed below can cover all of it. */
+export interface RenderParameters {
+  readonly tone: readonly TonePoint[]
+  readonly shade: ShadeCoefficients
+  readonly gloss: GlossCoefficients
+  readonly cellPx: number
+}
+
+/** The drawing as it stands. */
+export const RENDER_PARAMETERS: RenderParameters = {
+  tone: BODY_TONE,
+  shade: SHADE_COEFFICIENTS,
+  gloss: GLOSS_COEFFICIENTS,
+  cellPx: CELL_PX,
+}
+
+/** The render parameters as one ordered, unambiguous string. */
+export function renderFingerprint(render: RenderParameters): string {
+  return [
+    ...render.tone.flatMap((point) => [point.hue, point.saturation, point.lightness]),
+    render.shade.base,
+    render.shade.perLighting,
+    render.gloss.opacityBase,
+    render.gloss.opacityPerGloss,
+    render.gloss.rxBase,
+    render.gloss.rxPerGloss,
+    render.gloss.ryBase,
+    render.gloss.ryPerGloss,
+    render.cellPx,
+  ].join(',')
+}
+
+/**
+ * FNV-1a, 32 bit, written out here on purpose.
+ *
+ * A digest that moved with a Node version would silently change the pool identity on a
+ * machine that never touched a parameter, so neither `node:crypto` nor a dependency will
+ * do. Four lines of arithmetic over the same string produce the same number anywhere.
+ */
+function fnv1a(text: string, start: number): number {
+  let hash = start >>> 0
+  for (let i = 0; i < text.length; i += 1) {
+    hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0
+  }
+  return hash >>> 0
+}
+
+/**
+ * The date the pool was last deliberately republished.
+ *
+ * Authored, and the only half of the seed a person edits. Moved from 20260902 when the
+ * held-out role started drawing from the evaluation pool distributions, and again on
+ * 20260904 for the palette. Bumping it forces a new pool identity even when no drawing
+ * parameter moved — a resample is sometimes the point.
+ */
+export const AUTHORED_SEED = 20260904
+
+/**
+ * The seed the pool actually derives from, and the one the manifest declares.
+ *
+ * The authored date combined with a digest of every parameter the pixels are drawn from.
+ * `colour-accessibility/design.md` — the palette is declared data now, and a later change
+ * is invited to tune it. Editing a control point changes every pixel while leaving the
+ * manifest ids, attributes, splits, roles and counts byte-identical, so the binding a
+ * prediction artifact relies on — pool id, schema version and seed — would see nothing
+ * wrong and would score the old pool predictions against the recoloured images. That is
+ * exactly the silent failure the binding exists to prevent, arriving through the one door
+ * it did not watch.
+ *
+ * Deriving rather than adding a fourth binding value keeps the manifest shape and the
+ * schema version where they are. One number, one field, as before.
+ *
+ * Consequence, accepted: a palette edit now re-samples every image rather than only
+ * recolouring it, since the sampler draws from this number. A palette edit already means a
+ * new pool and a full retrain, so it costs a larger manifest diff and nothing else.
+ */
+export function derivedSeed(authored: number, render: RenderParameters): number {
+  return fnv1a(`${authored}|${renderFingerprint(render)}`, 0x811c9dc5)
+}
+
+export const SEED = derivedSeed(AUTHORED_SEED, RENDER_PARAMETERS)
+
 /** Decimal places attributes are rounded to before they reach the manifest. */
 export const HUE_DECIMALS = 1
 export const UNIT_DECIMALS = 3
@@ -133,7 +296,7 @@ export const CATEGORY_COUNTS: Readonly<Record<SplitName, Readonly<Record<PoolCat
  * images are drawn from the evaluation pool's distributions, so they reach past it.
  */
 export const FITTED_RED: Band = {
-  hue: { min: -5, max: 5 },
+  hue: { min: -22, max: -12 },
   roundness: { min: 0.9, max: 1 },
   gloss: { min: 0.6, max: 0.8 },
   lighting: { min: 0.4, max: 0.6 },
@@ -141,7 +304,7 @@ export const FITTED_RED: Band = {
 
 /** The wider spread the evaluation pool's reds are drawn from. */
 export const POOL_RED: Band = {
-  hue: { min: -12, max: 14 },
+  hue: { min: -30, max: -6 },
   roundness: { min: 0.6, max: 1 },
   gloss: { min: 0.2, max: 0.95 },
   lighting: { min: 0.25, max: 0.85 },
@@ -149,7 +312,7 @@ export const POOL_RED: Band = {
 
 /** Green, held well away from the red band in both splits. */
 export const GREEN: Band = {
-  hue: { min: 90, max: 140 },
+  hue: { min: 75, max: 120 },
   roundness: { min: 0.7, max: 1 },
   gloss: { min: 0.3, max: 0.85 },
   lighting: { min: 0.3, max: 0.8 },
@@ -163,8 +326,8 @@ export const GREEN: Band = {
  */
 export const OUT_OF_BAND: Readonly<Record<keyof Band, readonly Range[]>> = {
   hue: [
-    { min: -12, max: -6 },
-    { min: 6, max: 14 },
+    { min: -30, max: -23 },
+    { min: -11, max: -6 },
   ],
   roundness: [{ min: 0.6, max: 0.89 }],
   gloss: [

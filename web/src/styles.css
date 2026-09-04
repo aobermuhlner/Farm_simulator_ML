@@ -1,3 +1,16 @@
+/*
+ * The palette. Every colour in the product is declared in this block and in the dark
+ * block below it, and nowhere else — `web/src/palette.test.tsx` measures the pairs that
+ * carry a distinction under simulated colour vision deficiency, and a colour written as a
+ * literal further down the file is a colour that check cannot see.
+ *
+ * `--series-*` are the two training curves. The held-out series used to be `--warn`,
+ * which measured 5.1 in the dark theme under simulated deuteranopia — a pair a
+ * deuteranope reads as one colour — and was always a slight lie about what the curve
+ * means: a held-out loss rising is the lesson, not an error. `--warn` stays the colour of
+ * a problem, on the issues panel, where it is read against paper and never against a
+ * series. See `openspec/changes/colour-accessibility/design.md`.
+ */
 :root {
   color-scheme: light dark;
   --ink: #1c1b17;
@@ -5,6 +18,8 @@
   --line: #d8d2c4;
   --accent: #6a7b3c;
   --warn: #8a3b2a;
+  --series-fitted: #6a7b3c;
+  --series-held-out: #3d4b9e;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -15,6 +30,8 @@
     --line: #3b382f;
     --accent: #a6bb63;
     --warn: #e0876f;
+    --series-fitted: #a6bb63;
+    --series-held-out: #8f95e8;
   }
 }
 
@@ -315,11 +332,11 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 .curve-drawing .grid text.start { text-anchor: start; }
 
 .curve-drawing polyline { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
-.curve-drawing .fitted polyline, .curve-drawing .fitted .head { stroke: var(--accent); fill: none; }
-.curve-drawing .fitted .head { fill: var(--accent); }
+.curve-drawing .fitted polyline, .curve-drawing .fitted .head { stroke: var(--series-fitted); fill: none; }
+.curve-drawing .fitted .head { fill: var(--series-fitted); }
 
-.curve-drawing .held-out polyline { stroke: var(--warn); stroke-dasharray: 4 2.5; }
-.curve-drawing .held-out .head { fill: var(--warn); }
+.curve-drawing .held-out polyline { stroke: var(--series-held-out); stroke-dasharray: 4 2.5; }
+.curve-drawing .held-out .head { fill: var(--series-held-out); }
 
 .legend { font-size: 0.78rem; color: color-mix(in srgb, var(--ink) 65%, transparent); margin: 0.6rem 0 0; }
 
@@ -333,8 +350,8 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 }
 
 .legend .key:first-child { margin-inline-start: 0; }
-.legend .key.fitted { background: var(--accent); }
-.legend .key.held-out { background: var(--warn); }
+.legend .key.fitted { background: var(--series-fitted); }
+.legend .key.held-out { background: var(--series-held-out); }
 
 @media (prefers-reduced-motion: reduce) {
   .training-run.running > h2::after,

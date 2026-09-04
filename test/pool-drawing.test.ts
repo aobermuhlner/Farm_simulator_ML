@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ImageAttributes } from '../tools/pool/bands.js'
 import { Resvg } from '@resvg/resvg-js'
 import { appleParts, hslToHex, hueDegrees, toSvg, type AppleParts } from '../tools/pool/draw.js'
+import { bodyTone } from '../tools/pool/params.js'
 
 const BASE: ImageAttributes = {
   hue: 0,
@@ -91,10 +92,23 @@ describe('attribute to drawing mapping', () => {
     expect(hueDegrees(120)).toBe(120)
   })
 
-  it('gives green a green body and red a red one', () => {
-    expect(appleParts({ ...BASE, hue: 120 }).body.fill).toBe(hslToHex(120, 0.72, 0.46))
-    expect(appleParts({ ...BASE, hue: -5 }).body.fill).toBe(hslToHex(355, 0.72, 0.46))
+  it('gives green a green body and red a red one, at the tone the ramp declares', () => {
+    for (const hue of [120, -5, -22, 75]) {
+      const tone = bodyTone(hue)
+      expect(appleParts({ ...BASE, hue }).body.fill).toBe(
+        hslToHex(hue, tone.saturation, tone.lightness),
+      )
+    }
     expect(appleParts({ ...BASE, hue: 120 }).body.fill).toMatch(/^#[0-9a-f]{6}$/)
+  })
+
+  it('fills two apples sharing a hue with the same colour, whatever else differs', () => {
+    // The palette is a function of hue and of nothing else, which is what keeps the pixels
+    // explainable from the attributes the manifest records. A category-keyed palette would
+    // put a signal in the images the recorded attributes do not account for.
+    const one = appleParts({ hue: -18, roundness: 0.6, gloss: 0.2, lighting: 0.25, wormVisibility: 0 })
+    const two = appleParts({ hue: -18, roundness: 1, gloss: 0.95, lighting: 0.85, wormVisibility: 0.9 })
+    expect(one.body.fill).toBe(two.body.fill)
   })
 })
 

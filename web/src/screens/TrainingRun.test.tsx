@@ -6,6 +6,8 @@
  * the collapsed form the other suites use.
  */
 
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TrainingEpoch } from '../../../src/task/artifact.js'
@@ -141,5 +143,50 @@ describe("the numbers come from the artifact, not from the screen", () => {
     // The topmost gridline is labelled with the worst loss in the run, so the drop a
     // student sees is the drop that happened rather than one the axis invented.
     expect(within(lossChart).getByText('1.120')).toBeDefined()
+  })
+})
+
+/**
+ * Colour is never the only thing that tells the two curves apart.
+ *
+ * `colour-vision-safety` requires this independently of how well the palette scores: the
+ * verified palette is what makes the images sortable, and this is what keeps the rest of
+ * the product legible to the student the palette does not reach. The stroke pattern lives
+ * in the stylesheet rather than in the markup, so half of this reads the stylesheet — a
+ * jsdom render applies no stylesheet and would report every stroke as identical.
+ */
+describe('the two series differ by more than their colour', () => {
+  const CSS = readFileSync(resolve(process.cwd(), 'web/src/styles.css'), 'utf8')
+
+  it('draws each series in its own group, so a rule can reach exactly one of them', () => {
+    renderRun(0)
+    for (const chart of charts()) {
+      expect(chart.querySelector('.series.fitted polyline')).not.toBeNull()
+      expect(chart.querySelector('.series.held-out polyline')).not.toBeNull()
+    }
+  })
+
+  it('gives one series a dash pattern and the other none', () => {
+    const dashed = /\.curve-drawing \.held-out polyline \{[^}]*stroke-dasharray:\s*([^;}]+)/.exec(CSS)
+    expect(dashed?.[1]?.trim()).toBe('4 2.5')
+    const fitted = /\.curve-drawing \.fitted polyline[^{]*\{([^}]*)\}/.exec(CSS)
+    expect(fitted?.[1]).not.toMatch(/stroke-dasharray/)
+  })
+
+  it('names both series in the key, in words', () => {
+    renderRun(0)
+    const legend = document.querySelector('.legend')
+    if (legend === null) throw new Error('the replay should carry a key')
+    expect(legend.textContent).toContain('images it was fitted on')
+    expect(legend.textContent).toContain('images held out of training')
+  })
+
+  it('labels the figures and the curves in text as well, not only by colour', () => {
+    renderRun(0)
+    const labels = [...document.querySelectorAll('.live-figures dt')].map(
+      (cell) => cell.textContent,
+    )
+    expect(labels).toContain('Accuracy, held-out images')
+    expect(labels).toContain('Accuracy, images it was fitted on')
   })
 })

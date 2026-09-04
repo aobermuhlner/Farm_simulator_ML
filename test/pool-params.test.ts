@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   ATLAS_PX,
+  AUTHORED_SEED,
   BAND_ATTRIBUTES,
+  BODY_TONE,
   CATEGORY_COUNTS,
   CELLS_PER_ATLAS,
   CELL_PX,
@@ -13,6 +15,7 @@ import {
   OUT_OF_BAND,
   OUT_OF_BAND_POOL_REDS,
   POOL_RED,
+  RENDER_PARAMETERS,
   SEED,
   SPLIT_SIZES,
   SUBTLE_POOL_WORMS,
@@ -20,6 +23,7 @@ import {
   FITTED_RED,
   UNIT_DECIMALS,
   WORM_VISIBILITY,
+  derivedSeed,
   type Band,
   type SplitName,
 } from '../tools/pool/params.js'
@@ -70,6 +74,33 @@ describe('pool generation parameters', () => {
 
   it('holds green well away from the red band', () => {
     expect(GREEN.hue.min).toBeGreaterThan(POOL_RED.hue.max)
+  })
+
+  it('declares a tone for every hue the bands can draw', () => {
+    // Outside the control points the ramp clamps, which would fill an apple from an
+    // interpolation the declaration never made. Every drawable hue has to sit inside the
+    // declared range so that the palette a test measures is the palette that is drawn.
+    const points = [...BODY_TONE].sort((one, two) => one.hue - two.hue)
+    const first = points[0]
+    const last = points[points.length - 1]
+    expect(first).toBeDefined()
+    expect(last).toBeDefined()
+    for (const band of [FITTED_RED, POOL_RED, GREEN]) {
+      expect(band.hue.min).toBeGreaterThanOrEqual((first as { hue: number }).hue)
+      expect(band.hue.max).toBeLessThanOrEqual((last as { hue: number }).hue)
+    }
+    for (const region of OUT_OF_BAND.hue) {
+      expect(region.min).toBeGreaterThanOrEqual((first as { hue: number }).hue)
+      expect(region.max).toBeLessThanOrEqual((last as { hue: number }).hue)
+    }
+  })
+
+  it('declares the tone points in ascending hue, so the interpolation is well defined', () => {
+    for (let i = 1; i < BODY_TONE.length; i += 1) {
+      expect((BODY_TONE[i] as { hue: number }).hue).toBeGreaterThan(
+        (BODY_TONE[i - 1] as { hue: number }).hue,
+      )
+    }
   })
 
   it('keeps every out-of-band region clear of the fitted band by more than a rounding step', () => {
@@ -164,9 +195,58 @@ describe('pool generation parameters', () => {
   it('ships a pool generated from the seed declared here', () => {
     // The seed is the pool identity a prediction artifact is bound to. A parameter
     // change that moves the images without moving the seed would let a stale artifact
-    // load against new apples under the same ids, so the constant and the committed
+    // load against new apples under the same ids, so the derived value and the committed
     // manifest have to agree before anything downstream can be trusted.
     expect(committedManifest().seed).toBe(SEED)
+  })
+
+  it('derives the seed from the parameters the pixels are drawn from', () => {
+    expect(SEED).toBe(derivedSeed(AUTHORED_SEED, RENDER_PARAMETERS))
+    // One number in one field, the shape the manifest has always declared.
+    expect(Number.isSafeInteger(SEED)).toBe(true)
+    expect(SEED).toBeGreaterThan(0)
+  })
+
+  it('moves the seed when a tone control point moves', () => {
+    // The whole point of deriving it. A recolouring leaves the manifest ids, attributes,
+    // splits, roles and counts byte-identical, so without this a stale prediction artifact
+    // would load against recoloured apples and score them without complaint.
+    const first = BODY_TONE[0] as { hue: number; saturation: number; lightness: number }
+    const perturbed = {
+      ...RENDER_PARAMETERS,
+      tone: [{ ...first, lightness: first.lightness + 0.01 }, ...BODY_TONE.slice(1)],
+    }
+    expect(derivedSeed(AUTHORED_SEED, perturbed)).not.toBe(SEED)
+  })
+
+  it('moves the seed when an overlay coefficient or the cell size moves', () => {
+    const shaded = {
+      ...RENDER_PARAMETERS,
+      shade: { ...RENDER_PARAMETERS.shade, perLighting: RENDER_PARAMETERS.shade.perLighting - 0.01 },
+    }
+    const glossier = {
+      ...RENDER_PARAMETERS,
+      gloss: { ...RENDER_PARAMETERS.gloss, ryPerGloss: RENDER_PARAMETERS.gloss.ryPerGloss + 1 },
+    }
+    const bigger = { ...RENDER_PARAMETERS, cellPx: RENDER_PARAMETERS.cellPx * 2 }
+    for (const render of [shaded, glossier, bigger]) {
+      expect(derivedSeed(AUTHORED_SEED, render)).not.toBe(SEED)
+    }
+  })
+
+  it('leaves the seed alone when a parameter the drawing never reads moves', () => {
+    // A change that leaves the pixels alone leaves the seed alone, so the committed
+    // prediction artifacts still load. Split sizes, category counts and the worm
+    // visibility bands are all outside what the drawing reads for a pixel's colour.
+    expect(derivedSeed(AUTHORED_SEED, { ...RENDER_PARAMETERS })).toBe(SEED)
+    expect(derivedSeed(AUTHORED_SEED, { ...RENDER_PARAMETERS, tone: [...BODY_TONE] })).toBe(SEED)
+  })
+
+  it('moves the seed when the authored date is bumped with the drawing unchanged', () => {
+    // A resample is sometimes the point, and the authored half is how it is asked for.
+    expect(derivedSeed(AUTHORED_SEED + 1, RENDER_PARAMETERS)).not.toBe(SEED)
+    expect(AUTHORED_SEED).toBeGreaterThan(20000000)
+    expect(AUTHORED_SEED).toBeLessThan(30000000)
   })
 
   it('fits every split into whole atlases of the declared geometry', () => {

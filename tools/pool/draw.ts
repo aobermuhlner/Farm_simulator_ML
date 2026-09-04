@@ -18,7 +18,7 @@
  */
 
 import type { ImageAttributes } from './bands.js'
-import { CELL_PX } from './params.js'
+import { CELL_PX, GLOSS_COEFFICIENTS, SHADE_COEFFICIENTS, bodyTone } from './params.js'
 
 /** Rounds to two decimals so the emitted SVG is byte-stable and readable. */
 function n(value: number): number {
@@ -29,10 +29,6 @@ function n(value: number): number {
 export function hueDegrees(hue: number): number {
   return n(((hue % 360) + 360) % 360)
 }
-
-/** Saturation and lightness are fixed, so hue is the only colour the attributes move. */
-const BODY_SATURATION = 0.72
-const BODY_LIGHTNESS = 0.46
 
 /**
  * HSL to a hex colour.
@@ -70,6 +66,20 @@ export function hslToHex(hue: number, saturation: number, lightness: number): st
   return `#${channel(r)}${channel(g)}${channel(b)}`
 }
 
+/**
+ * The colour one hue is filled with.
+ *
+ * Saturation and lightness used to be two constants in this file. They are now the
+ * `BODY_TONE` ramp in `params.ts`, because a dichromat cannot separate red from green
+ * chromatically at all and the separation has to come from lightness instead — see
+ * `openspec/changes/colour-accessibility/design.md`. Hue is still the only attribute that
+ * moves colour, so the one-attribute-one-part decomposition below is unchanged.
+ */
+export function bodyFill(hue: number): string {
+  const { saturation, lightness } = bodyTone(hue)
+  return hslToHex(hue, saturation, lightness)
+}
+
 /** The apple silhouette. Rounder apples are taller and have a shallower top notch. */
 export function bodyPath(roundness: number): string {
   const cx = CELL_PX / 2
@@ -104,16 +114,20 @@ export function appleParts(attributes: ImageAttributes): AppleParts {
 
   return {
     body: {
-      fill: hslToHex(hue, BODY_SATURATION, BODY_LIGHTNESS),
+      fill: bodyFill(hue),
       d: bodyPath(roundness),
     },
     // Less light means more shadow over the same body colour, which keeps lighting a
     // single opacity rather than a second colour to keep in step with hue.
-    shade: { opacity: quantize(0.5 - 0.42 * lighting) },
+    shade: {
+      opacity: quantize(SHADE_COEFFICIENTS.base + SHADE_COEFFICIENTS.perLighting * lighting),
+    },
     gloss: {
-      opacity: quantize(0.1 + 0.6 * gloss),
-      rx: n(7 + 7 * gloss),
-      ry: n(10 + 9 * gloss),
+      opacity: quantize(
+        GLOSS_COEFFICIENTS.opacityBase + GLOSS_COEFFICIENTS.opacityPerGloss * gloss,
+      ),
+      rx: n(GLOSS_COEFFICIENTS.rxBase + GLOSS_COEFFICIENTS.rxPerGloss * gloss),
+      ry: n(GLOSS_COEFFICIENTS.ryBase + GLOSS_COEFFICIENTS.ryPerGloss * gloss),
     },
     // A worm at zero visibility is not drawn at all, which is what green and clean red
     // apples get.
