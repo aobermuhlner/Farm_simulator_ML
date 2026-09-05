@@ -29,8 +29,15 @@ import { validateFarmDeclaration } from '../../../src/economy/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
+import type { Catalog } from '../../../src/progression/index.js'
+import {
+  checkCatalogAgainstTasks,
+  checkCatalogCoverage,
+  validateCatalog,
+} from '../../../src/progression/index.js'
 import {
   configurationUrl,
+  SHIPPED_CATALOG,
   SHIPPED_FARM,
   SHIPPED_TASKS,
   taskDataPaths,
@@ -242,4 +249,37 @@ export async function loadFarmDeclaration(
   const validated = validateFarmDeclaration(fetched.value)
   if (!validated.ok) return { ok: false, issues: validated.issues }
   return { ok: true, value: validated.declaration }
+}
+
+/**
+ * Fetches the catalog and checks it three ways.
+ *
+ * Structure first, then every reference against the tasks that were loaded, then what a
+ * purchase would open against what each task's artifact covers. The last two need the
+ * tasks in hand, which is why the catalog is loaded after them rather than beside them —
+ * a catalog naming a knob no task declares is a build mistake, and it must reach the
+ * student as that rather than as a knob that quietly never unlocks.
+ */
+export async function loadCatalog(
+  farm: FarmDeclaration,
+  tasks: readonly LoadedTask[],
+  path: string = SHIPPED_CATALOG,
+): Promise<Loaded<Catalog>> {
+  const fetched = await fetchJson(path)
+  if (!fetched.ok) return fetched
+
+  const validated = validateCatalog(fetched.value, farm)
+  if (!validated.ok) return { ok: false, issues: validated.issues }
+
+  const declarations = tasks.map((task) => task.declaration)
+  const references = checkCatalogAgainstTasks(validated.catalog, declarations)
+  if (references.length > 0) return { ok: false, issues: references }
+
+  const coverage = Object.fromEntries(
+    tasks.map((task) => [task.declaration.id, task.index.coverage]),
+  )
+  const untrained = checkCatalogCoverage(validated.catalog, declarations, coverage)
+  if (untrained.length > 0) return { ok: false, issues: untrained }
+
+  return { ok: true, value: validated.catalog }
 }

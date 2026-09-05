@@ -140,11 +140,51 @@ describe('changing the decision rule regenerates nothing', () => {
       kind: 'threshold',
       thresholds: { red: 0.95, green: 0.95, wormy: 0.95 },
       fallbackAction: 'decline',
+      priority: ['wormy', 'green', 'red'],
     })
 
     expect(JSON.stringify(artifact)).toBe(before)
     expect(byHighest).not.toEqual(byCost)
     expect(byThreshold.every((action) => action === 'decline')).toBe(true)
+  })
+
+  it('changes the chosen actions when only the priority order changes', () => {
+    // Priority is declared data over categories, so reordering it is a change to the
+    // decision rule and nothing else: the identifier is composed of knob ids and values,
+    // and the stored distributions never mention an action at all.
+    const before = JSON.stringify(artifact)
+    const resolved = resolveConfiguration(apple, OVER_REGULARIZED)
+    if (!resolved.ok) throw new Error('expected the configuration to resolve')
+
+    const entry = artifact.configurations['blocks2-channels8-regularization3-dropout0.5']
+    if (entry === undefined) throw new Error('fixture configuration missing')
+
+    const byPriority = (priority: string[]): { id: string; actions: string[] } => {
+      const task: TaskDeclaration = {
+        ...apple,
+        policy: {
+          kind: 'threshold',
+          thresholds: { red: 0.5, green: 0.1, wormy: 0.25 },
+          fallbackAction: 'discard',
+          priority,
+        },
+      }
+      const looked = lookupConfiguration(task, resolved.configuration, artifact)
+      if (!looked.ok) throw new Error('expected the configuration to be covered')
+      return {
+        id: looked.configurationId,
+        actions: Object.values(entry.predictions.pool).map((distribution) =>
+          chooseAction(task, distribution),
+        ),
+      }
+    }
+
+    const declaredOrder = byPriority(['red', 'green', 'wormy'])
+    const wormsFirst = byPriority(['wormy', 'green', 'red'])
+
+    expect(declaredOrder.actions).not.toEqual(wormsFirst.actions)
+    expect(wormsFirst.id).toBe(declaredOrder.id)
+    expect(JSON.stringify(artifact)).toBe(before)
   })
 
   it('keeps the configuration identifier unchanged when the policy changes', () => {

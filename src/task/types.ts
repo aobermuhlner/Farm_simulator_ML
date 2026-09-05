@@ -60,13 +60,26 @@ export interface HighestProbabilityPolicy {
 
 /**
  * Chooses a category's action once that category's probability meets its
- * threshold. Ties break by declared category order; nothing clearing any
- * threshold falls back to `fallbackAction`.
+ * threshold. When several clear at once the declared `priority` decides;
+ * nothing clearing any threshold falls back to `fallbackAction`.
  */
 export interface ThresholdPolicy {
   readonly kind: 'threshold'
   readonly thresholds: Readonly<Record<CategoryId, number>>
   readonly fallbackAction: ActionId
+  /**
+   * Which category decides when more than one clears its threshold, earliest first.
+   * Names every declared category exactly once.
+   *
+   * Declared rather than read off `categories`, and that is not a convenience. The
+   * declared category order is not the task's to choose for this purpose:
+   * `prediction-artifacts` indexes every stored probability vector by it, so a task with
+   * shipped predictions could not reorder its categories to express a change of priority
+   * without invalidating an artifact that has nothing to do with the decision rule. Nor
+   * is priority inferred from the thresholds, which would fuse two independent
+   * declarations and silently reorder the policy whenever a threshold moved.
+   */
+  readonly priority: readonly CategoryId[]
 }
 
 /** Chooses the action with the greatest expected payoff over the distribution. */

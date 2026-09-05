@@ -101,12 +101,26 @@ export function chooseAction(
     }
 
     case 'threshold': {
+      // Several categories can clear at once, and with distinct actions behind them that
+      // is the choice of action itself, not a formality. The declared priority order
+      // decides it — never the declared category order, which the prediction artifact's
+      // vector indexing has already spoken for.
+      let chosen: CategoryId | undefined
+      let rank = Number.POSITIVE_INFINITY
       for (const [index, category] of declaration.categories.entries()) {
         const threshold = policy.thresholds[category.id]
         if (threshold === undefined) continue
-        if ((distribution[index] ?? 0) >= threshold) return actionFor(declaration, category.id)
+        if ((distribution[index] ?? 0) < threshold) continue
+        const place = policy.priority.indexOf(category.id)
+        // A category the order does not name is a declaration the validator refuses; it
+        // ranks last here rather than being dropped, so a clearing category still acts.
+        const placed = place === -1 ? policy.priority.length : place
+        if (placed < rank) {
+          rank = placed
+          chosen = category.id
+        }
       }
-      return policy.fallbackAction
+      return chosen === undefined ? policy.fallbackAction : actionFor(declaration, chosen)
     }
 
     case 'cost-optimal': {

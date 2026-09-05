@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0.0",
+  "groups": [
+    { "id": "orchard", "label": "Orchard" },
+    { "id": "labour", "label": "Labour" },
+    { "id": "data", "label": "Data" },
+    { "id": "models", "label": "Models" }
+  ],
+  "ownedAtStart": [],
+  "items": [
+    {
+      "id": "deeper-stacks",
+      "group": "models",
+      "label": "Deeper stacks",
+      "copy": "Two more blocks for the robot's eye, so it can recognise shapes larger than a patch — and has that much more room to memorise the orchard it was shown.",
+      "notForSaleReason": "No model has been trained for a deeper stack yet, so buying this would buy a run that cannot be scored.",
+      "opens": [
+        { "kind": "knob-values", "task": "apple-harvest", "knob": "blocks", "values": [3, 4] }
+      ]
+    },
+    {
+      "id": "stronger-regularization",
+      "group": "models",
+      "label": "Loss regularization",
+      "copy": "The dial that pushes training towards simpler answers. Turn it off to watch a model obsess over one perfect fruit; turn it up until it stops noticing the worm.",
+      "notForSaleReason": "No model has been trained at any other setting yet, so buying this would buy a run that cannot be scored.",
+      "opens": [
+        { "kind": "knob-values", "task": "apple-harvest", "knob": "regularization", "values": [0, 2, 3] }
+      ]
+    },
+    {
+      "id": "dropout-layers",
+      "group": "models",
+      "label": "Dropout layers",
+      "copy": "Switches off a share of the pattern detectors at random during each training step, so no single one can carry the decision on its own.",
+      "notForSaleReason": "No model has been trained with dropout yet, so buying this would buy a run that cannot be scored.",
+      "opens": [
+        { "kind": "knob-values", "task": "apple-harvest", "knob": "dropout", "values": [0.2, 0.5] }
+      ]
+    }
+  ]
+}

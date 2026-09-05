@@ -143,18 +143,3 @@ re-deriving it from anything else. A record once appended SHALL NOT change.
 #### Scenario: The year in progress is not in the ledger
 - **WHEN** a year has been opened and no harvest recorded for it yet
 - **THEN** the ledger holds no record for that year
-
-### Requirement: The farm's state is not presented as saved
-
-The farm's money, its year and its ledger SHALL last for the session they were made in.
-Until persistence is specified, nothing SHALL claim the farm is saved, offer to save,
-restore or reset it, or present a previous session's state as recoverable.
-
-#### Scenario: A session opens at the declared opening state
-- **WHEN** the farm is opened afresh
-- **THEN** the balance, the year and an empty ledger are the declared opening state
-
-#### Scenario: Nothing claims to save
-- **WHEN** money and the year are shown
-- **THEN** no control offers to save, load, restore or reset the farm
-- **AND** nothing states that progress is kept

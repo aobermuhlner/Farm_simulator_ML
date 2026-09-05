@@ -9,6 +9,7 @@ import {
   unrelatedTruth,
 } from './test-support/declarations.js'
 import { loadsFarm } from './test-support/farm.js'
+import { loadsCatalog, memoryStorage, savesTo } from './test-support/progression.js'
 import { appleTask as committedAppleTask, loadEntryFor, taskFrom } from './test-support/pool.js'
 import { App } from './App.js'
 
@@ -33,7 +34,14 @@ function loads(...tasks: readonly LoadedTask[]) {
  */
 function renderApp(...tasks: readonly LoadedTask[]) {
   return render(
-    <App load={loads(...tasks)} loadEntry={loadEntryFor} loadFarm={loadsFarm()} replayMs={0} />,
+    <App
+      load={loads(...tasks)}
+      loadEntry={loadEntryFor}
+      loadFarm={loadsFarm()}
+      loadShop={loadsCatalog()}
+      {...savesTo(memoryStorage())}
+      replayMs={0}
+    />,
   )
 }
 

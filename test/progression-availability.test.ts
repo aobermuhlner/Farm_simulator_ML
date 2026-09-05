@@ -1,0 +1,166 @@
+/**
+ * Ownership in, availability out — and nothing else in.
+ *
+ * The rule this suite defends is the one the whole progression system rests on: what a
+ * student may select is a function of the catalog and the ids owned, and of no other
+ * state of the farm. A test that let the year or the balance in would be a test that
+ * allowed a second gating system to grow beside the first.
+ */
+
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { computeAvailability, knobAvailability, lockedValue, taskAvailability } from '../src/progression/index.js'
+import { appleDeclaration } from './helpers/apple.js'
+import { loadRawDeclaration } from './helpers/load-raw.js'
+import { catalogWith, pricedItem, soundCatalog, unpricedItem } from './helpers/catalog.js'
+
+const apple = appleDeclaration()
+const tasks = [apple]
+
+/** The values of one knob a given ownership may select. */
+function openValues(owned: readonly string[], catalog = catalogOf(), knobId = 'channels') {
+  const task = taskAvailability(computeAvailability(catalog, tasks, owned), apple.id)
+  if (task === undefined) throw new Error('the availability must cover the shipped task')
+  const knob = knobAvailability(task, knobId)
+  return (knob?.values ?? []).filter((value) => value.available).map((value) => value.value)
+}
+
+function catalogOf() {
+  return soundCatalog(catalogWith([pricedItem(), unpricedItem()]))
+}
+
+describe('what the catalog does not mention is open', () => {
+  it('offers every value of an unmentioned knob from the first day', () => {
+    // `regularization` is named by no item in this catalog, so all four of its steps are
+    // there whatever is owned — default-open, rather than default-locked.
+    expect(openValues([], catalogOf(), 'regularization')).toEqual([0, 1, 2, 3])
+  })
+
+  it('offers everything when the catalog holds no items at all', () => {
+    const empty = soundCatalog(catalogWith([]))
+    expect(openValues([], empty, 'channels')).toEqual([8, 16, 32])
+    expect(openValues([], empty, 'blocks')).toEqual([2, 3, 4])
+  })
+})
+
+describe('what the catalog mentions is locked until it is bought', () => {
+  it('locks a mentioned value and names the item that opens it', () => {
+    const task = taskAvailability(computeAvailability(catalogOf(), tasks, []), apple.id)
+    const locked = lockedValue(task, 'channels', 8)
+
+    expect(locked?.available).toBe(false)
+    expect(locked?.openedBy?.id).toBe('wider-blocks')
+    expect(locked?.openedBy?.label).toBe('Wider blocks')
+  })
+
+  it('leaves the knob’s declared default selectable while the rest is locked', () => {
+    expect(openValues([], catalogOf(), 'channels')).toEqual([16])
+  })
+
+  it('opens exactly what the item declares once it is owned', () => {
+    expect(openValues(['wider-blocks'])).toEqual([8, 16, 32])
+  })
+
+  it('changes no other knob when one item is bought', () => {
+    const before = computeAvailability(catalogOf(), tasks, [])
+    const after = computeAvailability(catalogOf(), tasks, ['wider-blocks'])
+
+    for (const knob of apple.knobs) {
+      if (knob.id === 'channels') continue
+      expect(
+        knobAvailability(taskAvailability(after, apple.id)!, knob.id),
+        `${knob.id} changed`,
+      ).toEqual(knobAvailability(taskAvailability(before, apple.id)!, knob.id))
+    }
+  })
+
+  it('stops naming an opener once the value is available', () => {
+    const task = taskAvailability(computeAvailability(catalogOf(), tasks, ['wider-blocks']), apple.id)
+    expect(lockedValue(task, 'channels', 8)).toBeUndefined()
+    expect(knobAvailability(task!, 'channels')?.values.every((value) => value.openedBy === undefined)).toBe(
+      true,
+    )
+  })
+
+  it('shows every declared value whether or not it is available', () => {
+    const task = taskAvailability(computeAvailability(catalogOf(), tasks, []), apple.id)
+    expect(knobAvailability(task!, 'channels')?.values.map((value) => value.value)).toEqual([8, 16, 32])
+    expect(knobAvailability(task!, 'blocks')?.values.map((value) => value.value)).toEqual([2, 3, 4])
+  })
+})
+
+describe('ownership is the only input', () => {
+  it('takes the catalog, the tasks and the owned ids, and nothing else', () => {
+    expect(computeAvailability.length).toBe(3)
+  })
+
+  it('answers identically for two farms differing in everything but ownership', () => {
+    // Neither farm is passed at all, which is the point: there is no argument through
+    // which a year, a balance, a ledger or a knob history could reach this.
+    const early = computeAvailability(catalogOf(), tasks, ['wider-blocks'])
+    const late = computeAvailability(catalogOf(), tasks, ['wider-blocks'])
+    expect(late).toEqual(early)
+  })
+
+  it('opens nothing further as money and years accumulate', () => {
+    expect(openValues([])).toEqual([16])
+    expect(openValues([])).toEqual(openValues([]))
+  })
+})
+
+describe('a task declaration says nothing about availability', () => {
+  it('carries no field of its own for what opens a value', () => {
+    const raw = loadRawDeclaration('apple-harvest')
+    const text = JSON.stringify(raw)
+
+    for (const field of ['available"', 'availability', 'requires', 'unlock', 'locked', 'price']) {
+      // `available` is the task-level flag and is allowed; a knob-level one is not, which
+      // is why the knobs are searched rather than the whole file for that one.
+      expect(JSON.stringify(raw.knobs), field).not.toContain(field)
+    }
+    expect(text).toContain('"available"')
+  })
+
+  it('is the same file after a value is opened as before it', () => {
+    const before = JSON.stringify(apple)
+    computeAvailability(catalogOf(), tasks, [])
+    computeAvailability(catalogOf(), tasks, ['wider-blocks'])
+
+    expect(JSON.stringify(apple)).toBe(before)
+    for (const knob of apple.knobs) {
+      expect(knob.default, `${knob.id} default`).toBe(
+        appleDeclaration().knobs.find((candidate) => candidate.id === knob.id)?.default,
+      )
+    }
+  })
+})
+
+describe('the progression engine stays free of the browser', () => {
+  it('imports neither React nor a storage API', () => {
+    const files: string[] = []
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name)
+        if (statSync(path).isDirectory()) walk(path)
+        else if (/\.ts$/.test(name)) files.push(path)
+      }
+    }
+    walk(join(process.cwd(), 'src/progression'))
+    walk(join(process.cwd(), 'src/save'))
+
+    const offences = files.filter((file) => {
+      const text = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      return (
+        /from ['"]react/.test(text) ||
+        /from ['"][^'"]*web\//.test(text) ||
+        /\blocalStorage\b|\bsessionStorage\b|\bwindow\b|\bdocument\b/.test(text)
+      )
+    })
+
+    expect(files.length).toBeGreaterThan(4)
+    expect(offences.map((file) => relative(process.cwd(), file))).toEqual([])
+  })
+})

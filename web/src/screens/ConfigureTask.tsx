@@ -8,6 +8,8 @@
 
 import { useState } from 'react'
 import type { ConfigurationEntry } from '../../../src/task/artifact.js'
+import type { TaskAvailability } from '../../../src/progression/index.js'
+import { knobAvailability } from '../../../src/progression/index.js'
 import { resolveArchitecture } from '../../../src/task/diagram.js'
 import type { RunOutcome } from '../../../src/scoring/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
@@ -48,6 +50,20 @@ export interface ConfigureTaskProps {
    * sit through it; the screen otherwise uses the pacing the replay declares.
    */
   readonly replayMs?: number
+  /**
+   * Which of each knob's declared values this farm may select, and what opens the rest.
+   *
+   * Passed in rather than worked out here: the progression module is the only place
+   * unlock rules live, and a screen that decided for itself would be a screen that could
+   * disagree with the one that refuses the run.
+   */
+  readonly availability?: TaskAvailability
+  /** Presents a price in the farm's declared currency, for a locked value that has one. */
+  readonly formatPrice?: (units: number) => string
+  /** The knob values to open at — what the student last left, where a save kept them. */
+  readonly initialValues?: KnobValues
+  /** Reports every change, so the shell can keep them between visits. */
+  readonly onValuesChange?: (values: KnobValues) => void
 }
 
 /** A finished run, remembered with the configuration that produced it. */
@@ -81,14 +97,20 @@ export function ConfigureTask({
   onBack,
   loadSplit,
   replayMs,
+  availability,
+  formatPrice,
+  initialValues,
+  onValuesChange,
 }: ConfigureTaskProps) {
-  const [values, setValues] = useState<KnobValues>(() => defaultKnobValues(declaration))
+  const [values, setValues] = useState<KnobValues>(
+    () => initialValues ?? defaultKnobValues(declaration),
+  )
   const [finished, setFinished] = useState<Finished | undefined>(undefined)
   const [refusal, setRefusal] = useState<readonly ValidationIssue[] | undefined>(undefined)
   const [browsing, setBrowsing] = useState(false)
   const [stage, setStage] = useState<Stage>({ kind: 'untrained' })
 
-  const identified = identifyConfiguration(declaration, values)
+  const identified = identifyConfiguration(declaration, values, availability)
   const currentId = identified.ok ? identified.id : undefined
   // Derived, not stored: the drawing is a function of the values already held above, so
   // there is no second copy of the configuration to keep in step. Undefined for a task
@@ -96,7 +118,11 @@ export function ConfigureTask({
   const architecture = resolveArchitecture(declaration, values)
 
   function setKnob(id: string, value: string | number): void {
-    setValues((previous) => ({ ...previous, [id]: value }))
+    const next = { ...values, [id]: value }
+    setValues(next)
+    // Reported from the handler rather than from inside the updater: a state updater must
+    // stay a pure function of what it is given, and React may call one twice.
+    onValuesChange?.(next)
     // A report belongs to the configuration that produced it. Clearing the
     // refusal too, so a stale explanation never sits under new knob values.
     setRefusal(undefined)
@@ -107,9 +133,11 @@ export function ConfigureTask({
   }
 
   async function train(): Promise<void> {
-    const identified = identifyConfiguration(declaration, values)
+    const identified = identifyConfiguration(declaration, values, availability)
     if (!identified.ok) {
-      setRefusal(identified.issues)
+      // Not repeated as a second refusal: the settings block below already carries these
+      // issues for as long as the values that caused them are the ones in the knobs.
+      setRefusal(undefined)
       setFinished(undefined)
       setStage({ kind: 'untrained' })
       return
@@ -193,6 +221,12 @@ export function ConfigureTask({
                 knob={knob}
                 value={values[knob.id] ?? knob.default}
                 onChange={(value) => setKnob(knob.id, value)}
+                availability={
+                  availability === undefined
+                    ? undefined
+                    : knobAvailability(availability, knob.id)?.values
+                }
+                formatPrice={formatPrice}
               />
             ))}
           </fieldset>

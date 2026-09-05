@@ -1,8 +1,17 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { cleanup, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { appleDeclaration } from './test-support/declarations.js'
+import { formatUnits } from '../../src/economy/index.js'
+import {
+  computeAvailability,
+  knobAvailability,
+  taskAvailability,
+} from '../../src/progression/index.js'
+import { KnobControl } from './components/KnobControl.js'
+import { appleDeclaration, unrelatedDeclaration } from './test-support/declarations.js'
 import { farmDeclaration } from './test-support/farm.js'
+import { shippedCatalog, soundCatalog } from './test-support/progression.js'
 import type { SummaryFact } from './components/FarmBar.js'
 
 const repoRoot = process.cwd()
@@ -66,6 +75,53 @@ function leaks(text: string, vocabulary: readonly string[]): string[] {
   return vocabulary.filter((word) => code.includes(word))
 }
 
+const catalog = shippedCatalog()
+
+/**
+ * Every id the catalog declares — item ids and group ids.
+ *
+ * Matched the way a task's ids are: in quotes, or on the left of a comparison. A group id
+ * like `data` is an ordinary word inside a path, and an import is wiring rather than
+ * rendered text, so anything looser would outlaw `./data/load.js`.
+ */
+const DECLARED_CATALOG_IDS = [
+  ...catalog.items.map((item) => item.id),
+  ...catalog.groups.map((group) => group.id),
+]
+
+/**
+ * Every label the catalog declares — item labels and group labels.
+ *
+ * Matched whole, the way the farm's name is: a group label like "Data" lives inside
+ * `TaskDataPaths`, and its letters are not the catalog's to reserve. Shop copy is not
+ * matched at all, because a sentence cannot be pasted into a screen without its label
+ * going with it, and the label is what is checked.
+ */
+const DECLARED_CATALOG_LABELS = [
+  ...catalog.items.map((item) => item.label),
+  ...catalog.groups.map((group) => group.label),
+]
+
+/** Reports every declared label appearing as a whole word in a source. */
+function labelLeaks(text: string, vocabulary: readonly string[]): string[] {
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  return vocabulary.filter((word) =>
+    new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(code),
+  )
+}
+
+/**
+ * Reports every declared id appearing as a quoted string or on the left of a comparison.
+ *
+ * Comments go first, for the same reason they do above: `FarmBar`'s own comment quotes
+ * §5.1's mockup, which writes "data: 1 000 photos", and a mockup in prose is not a screen
+ * branching on a group id.
+ */
+function idLeaks(text: string, ids: readonly string[]): string[] {
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  return ids.filter((id) => new RegExp(`['"\`]${id}['"\`]|\\b${id}\\b\\s*(===|!==|:)`).test(code))
+}
+
 /** Every id the apple declaration declares — none may appear in the screens. */
 const DECLARED_IDS = [
   apple.id,
@@ -77,6 +133,16 @@ const DECLARED_IDS = [
 describe('the shell contains no task-specific code paths', () => {
   it('has screens to check', () => {
     expect(screenSources().length).toBeGreaterThan(4)
+  })
+
+  it('checks the ids the task actually declares, however many actions that is', () => {
+    // The vocabulary is built from the declaration, so widening the action set widens what
+    // is forbidden without anyone remembering to update a list. The second test task stays
+    // at two actions on purpose: between them the suite proves the screens assume neither
+    // two nor three.
+    expect(DECLARED_IDS).toEqual(expect.arrayContaining(apple.actions.map((a) => a.id)))
+    expect(apple.actions).toHaveLength(3)
+    expect(unrelatedDeclaration().actions).toHaveLength(2)
   })
 
   it('names no declared id of the apple task', () => {
@@ -185,6 +251,136 @@ export const x = 1
   })
 })
 
+describe('the shell contains no catalog-specific code paths', () => {
+  it('has a catalog vocabulary to check', () => {
+    expect(DECLARED_CATALOG_IDS.length).toBeGreaterThan(4)
+    expect(DECLARED_CATALOG_LABELS.length).toBeGreaterThan(4)
+  })
+
+  it('names no id the catalog declares', () => {
+    const offences: string[] = []
+    for (const file of screenSources()) {
+      for (const id of idLeaks(readFileSync(file, 'utf8'), DECLARED_CATALOG_IDS)) {
+        offences.push(`${relative(repoRoot, file)} names "${id}"`)
+      }
+    }
+    expect(offences).toEqual([])
+  })
+
+  it('names no label the catalog declares', () => {
+    const offences: string[] = []
+    for (const file of screenSources()) {
+      for (const word of labelLeaks(readFileSync(file, 'utf8'), DECLARED_CATALOG_LABELS)) {
+        offences.push(`${relative(repoRoot, file)} contains "${word}"`)
+      }
+    }
+    expect(offences).toEqual([])
+  })
+
+  it('catches an item label pasted into a screen', () => {
+    const label = catalog.items[0]?.label ?? ''
+    const pasted = `export function Row() {
+  return <h3>${label}</h3>
+}
+`
+    expect(labelLeaks(pasted, DECLARED_CATALOG_LABELS)).toEqual([label])
+  })
+
+  it('catches a group label pasted into a screen', () => {
+    const label = catalog.groups[0]?.label ?? ''
+    const pasted = `export function Section() {
+  return <h2>${label}</h2>
+}
+`
+    expect(labelLeaks(pasted, DECLARED_CATALOG_LABELS)).toEqual([label])
+  })
+
+  it('catches an item id branched on in a screen', () => {
+    const id = catalog.items[0]?.id ?? ''
+    expect(idLeaks(`if (item.id === '${id}') return null`, DECLARED_CATALOG_IDS)).toEqual([id])
+  })
+
+  it('is not fooled by a label that only appears in a comment', () => {
+    const label = catalog.items[0]?.label ?? ''
+    expect(
+      labelLeaks(
+        `// the row is ${label}
+export const x = 1
+`,
+        DECLARED_CATALOG_LABELS,
+      ),
+    ).toEqual([])
+  })
+
+  it('is not fooled by a group id inside an import path', () => {
+    expect(idLeaks(`import { loadTask } from './data/load.js'`, DECLARED_CATALOG_IDS)).toEqual([])
+  })
+})
+
+describe('no screen names an unlock condition', () => {
+  it('pairs no item id with a knob id anywhere in the screens', () => {
+    const knobIds = apple.knobs.map((knob) => knob.id)
+    const itemIds = catalog.items.map((item) => item.id)
+    const offences: string[] = []
+
+    for (const file of screenSources()) {
+      const text = readFileSync(file, 'utf8')
+      const items = idLeaks(text, itemIds)
+      const knobs = idLeaks(text, knobIds)
+      if (items.length > 0 && knobs.length > 0) {
+        offences.push(
+          `${relative(repoRoot, file)} pairs ${items.join(', ')} with ${knobs.join(', ')}`,
+        )
+      }
+      // Neither half may be there at all, which is the stronger claim of the two.
+      if (items.length > 0) offences.push(`${relative(repoRoot, file)} names ${items.join(', ')}`)
+      if (knobs.length > 0) offences.push(`${relative(repoRoot, file)} names ${knobs.join(', ')}`)
+    }
+
+    expect(offences).toEqual([])
+  })
+
+  it('reads what opens a locked thing from the catalog, wherever it is shown', () => {
+    // A catalog sharing nothing with the shipped one. If the opener's label and price
+    // reach the screen, they were read from the value rather than written into a
+    // component — which is the only way a market for another farm can render here.
+    const knob = apple.knobs[0]
+    if (knob === undefined) throw new Error('the task must declare a knob')
+    const other = soundCatalog({
+      schemaVersion: '1.0.0',
+      groups: [{ id: 'toolshed', label: 'Toolshed' }],
+      ownedAtStart: [],
+      items: [
+        {
+          id: 'brass-callipers',
+          group: 'toolshed',
+          label: 'Brass callipers',
+          copy: 'For measuring things very precisely.',
+          price: 5,
+          opens: [{ kind: 'knob-values', task: apple.id, knob: knob.id, values: [3] }],
+        },
+      ],
+    })
+    const task = taskAvailability(computeAvailability(other, [apple], []), apple.id)
+    if (task === undefined) throw new Error('the availability must cover the task')
+
+    render(
+      <KnobControl
+        knob={knob}
+        value={knob.default}
+        onChange={() => undefined}
+        availability={knobAvailability(task, knob.id)?.values}
+        formatPrice={(units) => formatUnits(units, farm)}
+      />,
+    )
+
+    const note = screen.getByText(/Brass callipers/)
+    expect(note.textContent).toContain('Brass callipers')
+    expect(note.textContent).toContain(formatUnits(500, farm))
+    cleanup()
+  })
+})
+
 describe('the engine stays framework-free', () => {
   it('imports nothing from the screens and nothing from React', () => {
     const engineFiles: string[] = []
@@ -203,11 +399,20 @@ describe('the engine stays framework-free', () => {
     })
 
     expect(engineFiles.length).toBeGreaterThan(4)
-    // The economy is engine code, so the purity rule has to be seen to cover it rather
-    // than merely to have walked past it.
-    expect(
-      engineFiles.filter((file) => relative(repoRoot, file).includes('economy')).length,
-    ).toBeGreaterThan(2)
+    // The economy, the progression module and the save codec are all engine code, so the
+    // purity rule has to be seen to cover each of them rather than merely to have walked
+    // past it. A module the walk missed would pass this test by being absent.
+    for (const [module, least] of [
+      ['economy', 3],
+      ['progression', 5],
+      ['save', 1],
+    ] as const) {
+      expect(
+        engineFiles.filter((file) => relative(repoRoot, file).split(/[\\/]/).includes(module))
+          .length,
+        `${module} is not covered by the purity walk`,
+      ).toBeGreaterThanOrEqual(least)
+    }
     expect(offences.map((file) => relative(repoRoot, file))).toEqual([])
   })
 })

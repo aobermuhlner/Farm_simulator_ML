@@ -20,18 +20,22 @@
   ],
   "actions": [
     {
-      "id": "pick",
-      "label": "Pick it"
+      "id": "crate-red",
+      "label": "Crate as red"
     },
     {
-      "id": "decline",
-      "label": "Leave it on the tree"
+      "id": "crate-green",
+      "label": "Crate as green"
+    },
+    {
+      "id": "discard",
+      "label": "Throw it away"
     }
   ],
   "categoryActions": {
-    "red": "pick",
-    "green": "decline",
-    "wormy": "decline"
+    "red": "crate-red",
+    "green": "crate-green",
+    "wormy": "discard"
   },
   "knobs": [
     {
@@ -83,24 +87,27 @@
   ],
   "payoffs": {
     "red": {
-      "pick": 1.0,
-      "decline": 0.0
+      "crate-red": 0.4,
+      "crate-green": 0.2,
+      "discard": 0.0
     },
     "green": {
-      "pick": -0.2,
-      "decline": 0.0
+      "crate-red": -0.3,
+      "crate-green": 0.2,
+      "discard": 0.0
     },
     "wormy": {
-      "pick": -2.0,
-      "decline": 0.0
+      "crate-red": -1.5,
+      "crate-green": -1.5,
+      "discard": 0.0
     }
   },
   "policy": {
     "kind": "highest-probability"
   },
   "teaching": {
-    "summary": "Your picking robot decides, apple by apple, whether to take it or leave it. Take the ripe reds and you get paid. Take a wormy one and an angry customer costs you far more than the apple was worth.",
-    "theory": "The knobs below do not change the apples, only how much freedom the robot's eye had while learning. It looks at small patches of the picture at a time, block by block, so what it learns are patterns — a colour, a curve, the broken skin around a worm hole — rather than whole apples in fixed positions. Too little restraint and it learns patterns so particular that they match one training apple and nothing else. Too much and every apple flattens into \"reddish or not\", worms included. The harvest report shows you which mistake you made."
+    "summary": "Your sorting robot looks at each apple and does one of three things with it: into the red crate, into the green crate, or onto the reject heap. A ripe red in the red crate is worth the most; put that same apple in the green crate and nobody complains, you simply earn half as much. Send a green one to the red buyer and they open the crate and fine you more than the apple was ever worth. A worm in either crate is the expensive mistake, and it costs the same whichever crate it turns up in — the complaint is about the worm, not the label. Rejecting an apple earns nothing, and never costs you anything either.",
+    "theory": "The knobs below do not change the apples, only how much freedom the robot's eye had while learning. It looks at small patches of the picture at a time, block by block, so what it learns are patterns — a colour, a curve, the broken skin around a worm hole — rather than whole apples in fixed positions. Too little restraint and it learns patterns so particular that they match one training apple and nothing else. Too much and every apple flattens into \"reddish or not\", worms included. The harvest report breaks the run down by what each apple really was and where the robot put it, so you can see which mistake you made — and there is more than one to make."
   },
   "diagram": {
     "kind": "cnn",

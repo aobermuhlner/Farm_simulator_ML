@@ -25,14 +25,17 @@ function run(knobs: Readonly<Record<string, unknown>>, split: 'training' | 'pool
 }
 
 describe('earnings are the sum of payoff entries', () => {
-  it('loses money on the over-regularized configuration, which sells wormy apples', () => {
-    // 3 reds picked at +1.00, one green declined at 0, 2 wormy picked at -2.00.
+  it('loses money on the over-regularized configuration, which crates wormy apples', () => {
+    // 3 reds crated as red at +0.40, one green crated as green at +0.20, and 2 wormy
+    // apples crated as red at -1.50 each.
     const { outcome } = run(OVER_REGULARIZED, 'pool')
     expect(outcome.evaluated).toBe(6)
-    expect(outcome.earnings).toBeCloseTo(-1, 10)
+    expect(outcome.earnings).toBeCloseTo(-1.6, 10)
   })
 
-  it('earns little on the over-selective configuration, which declines good reds', () => {
+  it('earns little on the over-selective configuration, which downgrades good reds', () => {
+    // One red crated as red at +0.40, two more crated as green at +0.20 each, one green
+    // crated as green at +0.20, and both worms thrown away at nothing.
     const { outcome } = run(OVER_SELECTIVE, 'pool')
     expect(outcome.earnings).toBeCloseTo(1, 10)
   })
@@ -70,12 +73,13 @@ describe('earnings are the sum of payoff entries', () => {
   it('shows why accuracy alone understates an over-selective configuration', () => {
     const harvest = run(OVER_SELECTIVE, 'pool').outcome
 
-    // Declining is the correct action for two of the three categories, so a
-    // decline-heavy model still scores respectably on accuracy. What it cannot
-    // hide is the count of reds it refused.
+    // Two of its three reds go into the green crate: a cheap-looking mistake that costs
+    // half the margin on more than half the crop, and one that shows up neither as a worm
+    // sold nor as an apple thrown away. What it cannot hide is the count of reds it
+    // mis-crated.
     const reds = harvest.images.filter((image) => image.trueCategory === 'red')
     expect(reds).toHaveLength(3)
-    expect(reds.filter((image) => image.action === 'decline')).toHaveLength(2)
+    expect(reds.filter((image) => image.action === 'crate-green')).toHaveLength(2)
   })
 })
 
@@ -97,39 +101,42 @@ describe('outcomes are reported per category and action combination', () => {
     expect(total).toBe(outcome.evaluated)
   })
 
-  it('shows the over-regularized configuration selling two wormy apples', () => {
+  it('shows the over-regularized configuration crating two wormy apples', () => {
     const { outcome } = run(OVER_REGULARIZED, 'pool')
     expect(outcome.counts).toEqual({
-      red: { pick: 3, decline: 0 },
-      green: { pick: 0, decline: 1 },
-      wormy: { pick: 2, decline: 0 },
+      red: { 'crate-red': 3, 'crate-green': 0, discard: 0 },
+      green: { 'crate-red': 0, 'crate-green': 1, discard: 0 },
+      wormy: { 'crate-red': 2, 'crate-green': 0, discard: 0 },
     })
   })
 
   it('makes an over-selective configuration diagnosable rather than merely low-scoring', () => {
     const { outcome } = run(OVER_SELECTIVE, 'pool')
 
-    // It rarely picks, including on red, where picking is the correct action.
-    expect(outcome.counts.red?.pick).toBe(1)
-    expect(outcome.counts.red?.decline).toBe(2)
+    // It rarely fills the red crate, including on red, where that is the correct action.
+    expect(outcome.counts.red?.['crate-red']).toBe(1)
+    expect(outcome.counts.red?.['crate-green']).toBe(2)
 
-    // The counts where declining was correct are separate cells, so "good at
-    // spotting worms" cannot be confused with "declines nearly everything".
-    expect(outcome.counts.wormy?.decline).toBe(2)
-    expect(outcome.counts.green?.decline).toBe(1)
-    expect(outcome.counts.red?.pick).not.toBe(outcome.counts.wormy?.decline)
+    // The counts where throwing an apple away was correct are separate cells, so "good at
+    // spotting worms" cannot be confused with "sends nearly everything to the green
+    // crate". With three actions the two ways of being wrong about a red are separate
+    // cells too: a red in the green crate is not a red on the reject heap.
+    expect(outcome.counts.wormy?.discard).toBe(2)
+    expect(outcome.counts.green?.['crate-green']).toBe(1)
+    expect(outcome.counts.red?.discard).toBe(0)
+    expect(outcome.counts.red?.['crate-red']).not.toBe(outcome.counts.wormy?.discard)
   })
 
   it('distinguishes the two failures that a single earnings number would blur', () => {
     const overRegularized = run(OVER_REGULARIZED, 'pool').outcome
     const overSelective = run(OVER_SELECTIVE, 'pool').outcome
 
-    // One sells wormy apples; the other refuses good reds. Neither diagnosis is
+    // One crates wormy apples; the other downgrades good reds. Neither diagnosis is
     // available from the totals alone.
-    expect(overRegularized.counts.wormy?.pick).toBeGreaterThan(0)
-    expect(overSelective.counts.wormy?.pick).toBe(0)
-    expect(overSelective.counts.red?.decline).toBeGreaterThan(
-      overRegularized.counts.red?.decline as number,
+    expect(overRegularized.counts.wormy?.['crate-red']).toBeGreaterThan(0)
+    expect(overSelective.counts.wormy?.['crate-red']).toBe(0)
+    expect(overSelective.counts.red?.['crate-green']).toBeGreaterThan(
+      overRegularized.counts.red?.['crate-green'] as number,
     )
   })
 })

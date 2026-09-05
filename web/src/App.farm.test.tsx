@@ -18,6 +18,14 @@ import { credit, formatUnits, openFarm, toUnits } from '../../src/economy/index.
 import { App } from './App.js'
 import { FarmBar } from './components/FarmBar.js'
 import { farmDeclaration, loadsFarm } from './test-support/farm.js'
+import { loadsCatalog, memoryStorage, savesTo } from './test-support/progression.js'
+import { STORAGE_UNAVAILABLE } from './data/save.js'
+
+/** What the storage edge reports when the browser will not keep anything. */
+const refusedStorage = {
+  code: STORAGE_UNAVAILABLE,
+  message: 'This browser would not keep this change, so progress is not being kept this session.',
+}
 import { appleTask as committedAppleTask, loadEntryFor } from './test-support/pool.js'
 
 afterEach(cleanup)
@@ -36,6 +44,8 @@ function renderApp(loadFarm = loadsFarm()) {
       load={() => Promise.resolve({ ok: true as const, value: [appleTask] })}
       loadEntry={loadEntryFor}
       loadFarm={loadFarm}
+      loadShop={loadsCatalog()}
+      {...savesTo(memoryStorage())}
       replayMs={0}
     />,
   )
@@ -211,30 +221,42 @@ describe('the bar follows the money', () => {
   })
 })
 
-describe('nothing claims to save the farm', () => {
-  it('offers no save, load, restore or reset on any stage', async () => {
-    renderApp()
-    await screen.findByRole('region', { name: 'Farm status' })
+describe('the farm says what it does about progress', () => {
+  it('claims nothing about saving while storage will not have it', async () => {
+    // `game-economy`'s "the farm's state is not presented as saved" was removed by
+    // `progression-catalog`, which specifies persistence — but the honesty rule survives
+    // for the one case where the claim would be false.
+    render(
+      <App
+        load={() => Promise.resolve({ ok: true as const, value: [appleTask] })}
+        loadEntry={loadEntryFor}
+        loadFarm={loadsFarm()}
+        loadShop={loadsCatalog()}
+        readSave={() => ({ ok: false as const, issue: refusedStorage })}
+        writeSave={() => ({ ok: false as const, issue: refusedStorage })}
+        clearSave={() => ({ ok: false as const, issue: refusedStorage })}
+        replayMs={0}
+      />,
+    )
 
-    const checkStage = () => {
-      for (const word of [/save/i, /^load$/i, /restore/i, /reset/i]) {
-        expect(screen.queryByRole('button', { name: word }), `a control offers ${word}`).toBeNull()
-      }
-      for (const claim of [
-        /progress is (kept|saved)/i,
-        /saved automatically/i,
-        /your farm is saved/i,
-        /pick up where you left off/i,
-      ]) {
-        expect(screen.queryByText(claim), `copy claims ${claim}`).toBeNull()
-      }
+    expect(await screen.findByText(/progress is not being kept/i)).toBeDefined()
+    for (const claim of [/progress is (kept|saved)$/i, /saved automatically/i]) {
+      expect(screen.queryByText(claim), `copy claims ${claim}`).toBeNull()
     }
 
-    checkStage()
+    // Playable all the same: storage refusing blocks nothing.
     await openTask()
-    checkStage()
     await runMonth()
-    checkStage()
+    expect(await screen.findByRole('region', { name: 'Run report' })).toBeDefined()
+  })
+
+  it('offers to start again, and says what that discards', async () => {
+    renderApp()
+    await userEvent.click(await screen.findByRole('button', { name: 'Start a new farm' }))
+
+    expect(screen.getByText(/discards this one/i).textContent).toMatch(/money/i)
+    expect(screen.getByText(/discards this one/i).textContent).toMatch(/bought/i)
+    expect(screen.getByText(/discards this one/i).textContent).toMatch(/year/i)
   })
 })
 

@@ -70,8 +70,14 @@ function twoCategories(raw: Record<string, unknown>): TaskDeclaration {
     { id: 'ripe', label: 'Ripe one' },
     { id: 'unripe', label: 'Unripe one' },
   ]
-  copy.categoryActions = { ripe: 'pick', unripe: 'decline' }
-  copy.payoffs = { ripe: { pick: 4, decline: 0 }, unripe: { pick: -1, decline: 0 } }
+  // Two actions of its own, not the shipped task's three. A task declaring two must keep
+  // working, and this is the suite that would notice if the engine started assuming more.
+  copy.actions = [
+    { id: 'take', label: 'Take it' },
+    { id: 'leave', label: 'Leave it' },
+  ]
+  copy.categoryActions = { ripe: 'take', unripe: 'leave' }
+  copy.payoffs = { ripe: { take: 4, leave: 0 }, unripe: { take: -1, leave: 0 } }
   copy.policy = { kind: 'highest-probability' }
   const validated = validateDeclaration(copy)
   if (!validated.ok) throw new Error(validated.issues.map((issue) => issue.message).join(' '))

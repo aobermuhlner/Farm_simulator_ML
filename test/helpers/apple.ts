@@ -50,7 +50,7 @@ export function trueCategory(imageId: string): string {
   return category
 }
 
-/** The over-regularized configuration: sells wormy apples. */
+/** The over-regularized configuration: crates wormy apples. */
 export const OVER_REGULARIZED = {
   blocks: 2,
   channels: 8,
@@ -58,7 +58,7 @@ export const OVER_REGULARIZED = {
   dropout: 0.5,
 } as const
 
-/** The under-regularized configuration: over-selective, declines good reds. */
+/** The under-regularized configuration: over-selective, downgrades good reds. */
 export const OVER_SELECTIVE = {
   blocks: 4,
   channels: 32,

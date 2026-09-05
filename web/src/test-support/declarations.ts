@@ -52,6 +52,10 @@ export function appleTruth(): Readonly<Record<string, CategoryId>> {
  * A task sharing nothing with the apple lesson — different categories, actions,
  * knobs and vocabulary. If the screens can render this, they are rendering
  * declarations rather than apples.
+ *
+ * It declares two actions where the apple task declares three, and that is deliberate
+ * rather than left over: a screen that had quietly learned either count would fail against
+ * the other. Widen this one and the suite stops proving the screens assume no count at all.
  */
 export function unrelatedDeclaration(): TaskDeclaration {
   const declaration = {

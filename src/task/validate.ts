@@ -205,6 +205,57 @@ function checkPayoffs(
   }
 }
 
+/**
+ * The action a category is declared to call for must be that category's best-paying one.
+ *
+ * `categoryActions` says what is *correct* and `payoffs` says what is *paid*. When the two
+ * disagree the task pays for a mistake: hill-climbing earnings stops agreeing with learning
+ * the lesson, and the report labels as correct a cell the run pays less for. A tie counts as
+ * a disagreement — an action paying exactly as much as the correct one makes the correct one
+ * optional.
+ *
+ * Only rows `checkPayoffs` found complete are examined, so a missing cell is reported once as
+ * a hole rather than a second time as a disagreement.
+ */
+function checkPayoffAgreement(
+  payoffs: unknown,
+  mapping: unknown,
+  categoryIds: readonly string[],
+  actionIds: readonly string[],
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(payoffs) || !isRecord(mapping)) return
+
+  for (const category of categoryIds) {
+    const row = payoffs[category]
+    if (!isRecord(row)) continue
+
+    const declared = mapping[category]
+    if (typeof declared !== 'string' || !actionIds.includes(declared)) continue
+
+    const paid = (action: string): number | undefined => {
+      const cell = row[action]
+      return typeof cell === 'number' && Number.isFinite(cell) ? cell : undefined
+    }
+    if (actionIds.some((action) => paid(action) === undefined)) continue
+
+    const declaredValue = paid(declared) as number
+    for (const action of actionIds) {
+      if (action === declared) continue
+      const value = paid(action) as number
+      if (value < declaredValue) continue
+      issues.push({
+        code: 'payoff-contradicts-mapping',
+        field: `payoffs.${category}.${action}`,
+        message:
+          `Category "${category}" is declared to call for action "${declared}", but action ` +
+          `"${action}" pays ${value} against ${declaredValue} in that category's row. A ` +
+          `category's declared action must pay strictly more than every other declared action.`,
+      })
+    }
+  }
+}
+
 function checkPolicy(
   policy: unknown,
   categoryIds: readonly string[],
@@ -253,6 +304,62 @@ function checkPolicy(
       code: 'malformed-field',
       field: 'policy.fallbackAction',
       message: 'Threshold policy must declare a fallbackAction that is one of the declared actions.',
+    })
+  }
+
+  checkPriority(policy.priority, categoryIds, issues)
+}
+
+/**
+ * The order that decides when several categories clear their thresholds at once.
+ *
+ * Required of every threshold task, not only of one declaring more than two actions: a
+ * rule that changes shape with the action count is the hidden binary assumption over
+ * again, one level up. Each defect names the category at fault, because "the priority
+ * order is wrong" tells the author of a declaration nothing they can act on.
+ */
+function checkPriority(
+  priority: unknown,
+  categoryIds: readonly string[],
+  issues: ValidationIssue[],
+): void {
+  if (!Array.isArray(priority)) {
+    issues.push({
+      code: 'malformed-priority',
+      field: 'policy.priority',
+      message:
+        'Threshold policy must declare a priority order naming every declared category exactly once.',
+    })
+    return
+  }
+
+  const named: string[] = []
+  priority.forEach((entry, index) => {
+    if (typeof entry !== 'string' || !categoryIds.includes(entry)) {
+      issues.push({
+        code: 'malformed-priority',
+        field: `policy.priority[${index}]`,
+        message: `Threshold policy's priority order names ${JSON.stringify(entry)}, which is not a declared category.`,
+      })
+      return
+    }
+    if (named.includes(entry)) {
+      issues.push({
+        code: 'malformed-priority',
+        field: `policy.priority[${index}]`,
+        message: `Threshold policy's priority order names category "${entry}" more than once.`,
+      })
+      return
+    }
+    named.push(entry)
+  })
+
+  for (const category of categoryIds) {
+    if (named.includes(category)) continue
+    issues.push({
+      code: 'malformed-priority',
+      field: 'policy.priority',
+      message: `Threshold policy's priority order does not name category "${category}".`,
     })
   }
 }
@@ -704,7 +811,10 @@ export function validateDeclaration(input: unknown): DeclarationValidation {
     checkCategoryActions(input.categoryActions, categoryIds, actionIds, issues)
   }
   if (input.knobs !== undefined) checkKnobs(input.knobs, issues)
-  if (input.payoffs !== undefined) checkPayoffs(input.payoffs, categoryIds, actionIds, issues)
+  if (input.payoffs !== undefined) {
+    checkPayoffs(input.payoffs, categoryIds, actionIds, issues)
+    checkPayoffAgreement(input.payoffs, input.categoryActions, categoryIds, actionIds, issues)
+  }
   if (input.policy !== undefined) checkPolicy(input.policy, categoryIds, actionIds, issues)
   if (input.teaching !== undefined) checkTeaching(input.teaching, issues)
 

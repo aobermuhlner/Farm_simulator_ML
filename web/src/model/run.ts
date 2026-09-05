@@ -10,7 +10,9 @@
 
 import type { ConfigurationEntry, PredictionArtifact } from '../../../src/task/artifact.js'
 import { configurationId } from '../../../src/task/configId.js'
-import { defaultConfiguration, resolveConfiguration } from '../../../src/task/configuration.js'
+import { defaultConfiguration } from '../../../src/task/configuration.js'
+import type { TaskAvailability } from '../../../src/progression/index.js'
+import { resolveSelectable } from '../../../src/progression/index.js'
 import type { RunResult } from '../../../src/scoring/index.js'
 import { runHarvest } from '../../../src/scoring/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
@@ -30,12 +32,17 @@ export function defaultKnobValues(declaration: TaskDeclaration): KnobValues {
  * The configuration identifier the current knob values resolve to, or the
  * issues that stop them resolving. Order-independent, because the engine builds
  * the id from the declared knob order rather than from selection order.
+ *
+ * `availability` adds the second of the three refusals: a value the declaration permits
+ * but the farm does not yet own refuses as locked, before anything is fetched. Omitting
+ * it locks nothing, which is the same default-open rule the engine works by.
  */
 export function identifyConfiguration(
   declaration: TaskDeclaration,
   values: KnobValues,
+  availability?: TaskAvailability,
 ): { readonly ok: true; readonly id: string } | { readonly ok: false; readonly issues: readonly { code: string; message: string; field?: string }[] } {
-  const resolved = resolveConfiguration(declaration, values)
+  const resolved = resolveSelectable(declaration, values, availability)
   if (!resolved.ok) return { ok: false, issues: resolved.issues }
   return { ok: true, id: configurationId(resolved.configuration) }
 }

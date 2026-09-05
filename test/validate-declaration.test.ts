@@ -66,19 +66,19 @@ describe('categories, actions and their mapping', () => {
   })
 
   it('rejects a declaration with fewer than two actions', () => {
-    const issues = issuesOf(withField('actions', [{ id: 'pick', label: 'Pick it' }]))
+    const issues = issuesOf(withField('actions', [{ id: 'crate-red', label: 'Crate as red' }]))
     expect(issues.some((i) => i.code === 'too-few' && i.field === 'actions')).toBe(true)
   })
 
   it('rejects a category that is not mapped to any action', () => {
-    const issues = issuesOf(withField('categoryActions', { red: 'pick', green: 'decline' }))
+    const issues = issuesOf(withField('categoryActions', { red: 'crate-red', green: 'crate-green' }))
     expect(issues.some((i) => i.code === 'unmapped-category')).toBe(true)
     expect(issues.some((i) => i.message.includes('"wormy"'))).toBe(true)
   })
 
   it('rejects a mapping that points at an action the task never declared', () => {
     const issues = issuesOf(
-      withField('categoryActions', { red: 'pick', green: 'decline', wormy: 'incinerate' }),
+      withField('categoryActions', { red: 'crate-red', green: 'crate-green', wormy: 'incinerate' }),
     )
     expect(issues.some((i) => i.code === 'unknown-action')).toBe(true)
     expect(issues.some((i) => i.message.includes('incinerate'))).toBe(true)
@@ -87,10 +87,10 @@ describe('categories, actions and their mapping', () => {
   it('rejects a mapping key that is not a declared category', () => {
     const issues = issuesOf(
       withField('categoryActions', {
-        red: 'pick',
-        green: 'decline',
-        wormy: 'decline',
-        bruised: 'decline',
+        red: 'crate-red',
+        green: 'crate-green',
+        wormy: 'discard',
+        bruised: 'discard',
       }),
     )
     expect(issues.some((i) => i.code === 'unknown-category')).toBe(true)
@@ -135,26 +135,26 @@ describe('categories, actions and their mapping', () => {
 describe('payoff table completeness', () => {
   it('rejects a table missing one combination, naming that combination', () => {
     const partial = structuredClone(apple.payoffs) as Record<string, Record<string, number>>
-    delete partial.wormy?.pick
+    delete partial.wormy?.['crate-red']
     const issues = issuesOf(withField('payoffs', partial))
     const incomplete = issues.filter((i) => i.code === 'incomplete-payoff-table')
     expect(incomplete).toHaveLength(1)
     expect(incomplete[0]?.message).toContain('"wormy"')
-    expect(incomplete[0]?.message).toContain('"pick"')
+    expect(incomplete[0]?.message).toContain('"crate-red"')
   })
 
   it('rejects a table missing an entire category row', () => {
     const partial = structuredClone(apple.payoffs) as Record<string, unknown>
     delete partial.green
     const issues = issuesOf(withField('payoffs', partial))
-    expect(issues.filter((i) => i.code === 'incomplete-payoff-table')).toHaveLength(2)
+    expect(issues.filter((i) => i.code === 'incomplete-payoff-table')).toHaveLength(3)
   })
 
   it('rejects a non-numeric payoff cell', () => {
     const partial = structuredClone(apple.payoffs) as Record<string, Record<string, unknown>>
-    if (partial.red) partial.red.pick = 'a lot'
+    if (partial.red) partial.red['crate-red'] = 'a lot'
     const issues = issuesOf(withField('payoffs', partial))
-    expect(issues.some((i) => i.field === 'payoffs.red.pick')).toBe(true)
+    expect(issues.some((i) => i.field === 'payoffs.red.crate-red')).toBe(true)
   })
 })
 
@@ -180,12 +180,49 @@ describe('decision policy declaration', () => {
     expect(issues.map((i) => i.field)).toContain('policy.fallbackAction')
   })
 
+  it('requires a threshold policy to declare a priority order at all', () => {
+    const issues = issuesOf(
+      withField('policy', {
+        kind: 'threshold',
+        thresholds: { red: 0.6, green: 0.5, wormy: 0.2 },
+        fallbackAction: 'discard',
+      }),
+    )
+    expect(issues.some((i) => i.code === 'malformed-priority')).toBe(true)
+  })
+
+  it('rejects a priority order that omits, repeats or invents a category, naming it', () => {
+    const cases = [
+      { priority: ['red', 'green'], named: 'wormy' },
+      { priority: ['red', 'red', 'green', 'wormy'], named: 'red' },
+      { priority: ['red', 'green', 'wormy', 'bruised'], named: 'bruised' },
+    ]
+
+    for (const { priority, named } of cases) {
+      const issues = issuesOf(
+        withField('policy', {
+          kind: 'threshold',
+          thresholds: { red: 0.6, green: 0.5, wormy: 0.2 },
+          fallbackAction: 'discard',
+          priority,
+        }),
+      )
+      const faults = issues.filter((i) => i.code === 'malformed-priority')
+      expect(faults.length, `${priority.join(', ')} should be refused`).toBeGreaterThan(0)
+      expect(
+        faults.some((issue) => issue.message.includes(named)),
+        `the refusal of ${priority.join(', ')} should name "${named}"`,
+      ).toBe(true)
+    }
+  })
+
   it('accepts a well-formed threshold policy', () => {
     const result = validateDeclaration(
       withField('policy', {
         kind: 'threshold',
         thresholds: { red: 0.6, green: 0.5, wormy: 0.2 },
-        fallbackAction: 'decline',
+        fallbackAction: 'discard',
+        priority: ['wormy', 'red', 'green'],
       }),
     )
     expect(result.ok ? [] : result.issues).toEqual([])
@@ -230,5 +267,123 @@ describe('knob declarations', () => {
   it('rejects an empty knob list', () => {
     const issues = issuesOf(withField('knobs', []))
     expect(issues.some((i) => i.field === 'knobs')).toBe(true)
+  })
+})
+
+describe('a category’s declared action is its best-paying action', () => {
+  const mapping = apple.categoryActions as Record<string, string>
+  const actionIds = (apple.actions as { id: string; label: string }[]).map((action) => action.id)
+  const categoryIds = (apple.categories as { id: string }[]).map((category) => category.id)
+
+  /** The shipped table with one cell repriced. */
+  function repriced(category: string, action: string, value: number): Record<string, unknown> {
+    const payoffs = structuredClone(apple.payoffs) as Record<string, Record<string, number>>
+    const row = payoffs[category]
+    if (row === undefined) throw new Error(`the shipped table has no row for "${category}"`)
+    row[action] = value
+    return withField('payoffs', payoffs)
+  }
+
+  /** Some declared action that is not the one `category` is declared to call for. */
+  function rivalOf(category: string): string {
+    const rival = actionIds.find((action) => action !== mapping[category])
+    if (rival === undefined) throw new Error(`no rival action for category "${category}"`)
+    return rival
+  }
+
+  /** What the shipped table pays for one cell. */
+  function paid(category: string, action: string): number {
+    const value = (apple.payoffs as Record<string, Record<string, number>>)[category]?.[action]
+    if (typeof value !== 'number') throw new Error(`no payoff for ${category}/${action}`)
+    return value
+  }
+
+  it('accepts the shipped declaration, so the rule formalises rather than repairs', () => {
+    const result = validateDeclaration(apple)
+    expect(result.ok ? [] : result.issues.filter((i) => i.code === 'payoff-contradicts-mapping'))
+      .toEqual([])
+  })
+
+  it('rejects a row where another action outpays the declared one, naming all three', () => {
+    const category = categoryIds[0] as string
+    const declared = mapping[category] as string
+    const rival = rivalOf(category)
+
+    const issues = issuesOf(repriced(category, rival, paid(category, declared) + 1))
+    const disagreement = issues.filter((i) => i.code === 'payoff-contradicts-mapping')
+    expect(disagreement).toHaveLength(1)
+    expect(disagreement[0]?.message).toContain(`"${category}"`)
+    expect(disagreement[0]?.message).toContain(`"${declared}"`)
+    expect(disagreement[0]?.message).toContain(`"${rival}"`)
+  })
+
+  it('rejects an exact tie between the declared action and another', () => {
+    const category = categoryIds[0] as string
+    const declared = mapping[category] as string
+    const rival = rivalOf(category)
+
+    const issues = issuesOf(repriced(category, rival, paid(category, declared)))
+    const disagreement = issues.filter((i) => i.code === 'payoff-contradicts-mapping')
+    expect(disagreement).toHaveLength(1)
+    expect(disagreement[0]?.message).toContain(`"${category}"`)
+    expect(disagreement[0]?.message).toContain(`"${declared}"`)
+    expect(disagreement[0]?.message).toContain(`"${rival}"`)
+  })
+
+  it('reports a hole in the table once, as a hole rather than also as a disagreement', () => {
+    const category = categoryIds[0] as string
+    const payoffs = structuredClone(apple.payoffs) as Record<string, Record<string, number>>
+    delete payoffs[category]?.[rivalOf(category)]
+
+    const issues = issuesOf(withField('payoffs', payoffs))
+    expect(issues.filter((i) => i.code === 'incomplete-payoff-table')).toHaveLength(1)
+    expect(issues.filter((i) => i.code === 'payoff-contradicts-mapping')).toEqual([])
+  })
+
+  it('refuses Game_design.md §4.1’s first-pass table, naming wormy', () => {
+    // The table the rule was written for: wormy is declared to call for discard at 0.00
+    // while crating a wormy apple pays +0.40, so "crate everything" is the best-paying
+    // strategy — the diagnosis trap inverted.
+    const issues = issuesOf({
+      ...apple,
+      actions: [
+        { id: 'crate-red', label: 'Crate as red' },
+        { id: 'crate-green', label: 'Crate as green' },
+        { id: 'discard', label: 'Throw it away' },
+      ],
+      categoryActions: { red: 'crate-red', green: 'crate-green', wormy: 'discard' },
+      payoffs: {
+        red: { 'crate-red': 0.4, 'crate-green': 0.2, discard: 0 },
+        green: { 'crate-red': -0.3, 'crate-green': 0.2, discard: 0 },
+        wormy: { 'crate-red': 0.4, 'crate-green': 0.2, discard: 0 },
+      },
+    })
+    const disagreement = issues.filter((i) => i.code === 'payoff-contradicts-mapping')
+    expect(disagreement).toHaveLength(2)
+    for (const issue of disagreement) {
+      expect(issue.message).toContain('"wormy"')
+      expect(issue.message).toContain('"discard"')
+    }
+    expect(disagreement.map((i) => i.field)).toEqual([
+      'payoffs.wormy.crate-red',
+      'payoffs.wormy.crate-green',
+    ])
+  })
+
+  it('accepts an action that no category calls for, when no row pays it best', () => {
+    // A cautious action — never the right answer to a certain image, available for an
+    // uncertain one — stays legal. The rule is about the actions a category does declare.
+    const payoffs = structuredClone(apple.payoffs) as Record<string, Record<string, number>>
+    for (const row of Object.values(payoffs)) {
+      row.hold = Math.min(...Object.values(row)) - 1
+    }
+    const result = validateDeclaration({
+      ...apple,
+      actions: [...(apple.actions as unknown[]), { id: 'hold', label: 'Set it aside' }],
+      payoffs,
+    })
+
+    expect(result.ok ? [] : result.issues).toEqual([])
+    expect(result.ok).toBe(true)
   })
 })

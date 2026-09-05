@@ -31,9 +31,9 @@ describe('apple-harvest declaration: categories, actions and mapping', () => {
     expect(actions.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('declares the three apple categories and the two robot actions', () => {
+  it('declares the three apple categories and the three sorting actions', () => {
     expect(categories.map((c) => c.id)).toEqual(['red', 'green', 'wormy'])
-    expect(actions.map((a) => a.id)).toEqual(['pick', 'decline'])
+    expect(actions.map((a) => a.id)).toEqual(['crate-red', 'crate-green', 'discard'])
   })
 
   it('gives every category and action a student-facing label', () => {
@@ -51,8 +51,11 @@ describe('apple-harvest declaration: categories, actions and mapping', () => {
     }
   })
 
-  it('maps red to pick, and both green and wormy to decline', () => {
-    expect(mapping).toEqual({ red: 'pick', green: 'decline', wormy: 'decline' })
+  it('maps each category to an action of its own, so the diagonal is the correct run', () => {
+    // A bijection, unlike the two-action framing this replaced. It is why the report's
+    // diagonal reads as a confusion matrix without having to be explained as one.
+    expect(mapping).toEqual({ red: 'crate-red', green: 'crate-green', wormy: 'discard' })
+    expect(new Set(Object.values(mapping)).size).toBe(actions.length)
   })
 
   it('maps no category that was not declared', () => {
@@ -199,6 +202,14 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
   const categories = (declaration.categories as { id: string }[]).map((c) => c.id)
   const actions = (declaration.actions as { id: string }[]).map((a) => a.id)
   const payoffs = declaration.payoffs as Record<string, Record<string, number>>
+  const mapping = declaration.categoryActions as Record<string, string>
+
+  /** The action a category is declared to call for, named through the declaration. */
+  function mappedTo(category: string): string {
+    const action = mapping[category]
+    if (action === undefined) throw new Error(`no declared action for category "${category}"`)
+    return action
+  }
 
   it('defines a value for every category-and-action combination', () => {
     const missing: string[] = []
@@ -212,22 +223,48 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
     expect(missing).toEqual([])
   })
 
-  it('fills exactly the six cells the three categories and two actions span', () => {
-    expect(categories.length * actions.length).toBe(6)
+  it('fills exactly the nine cells the three categories and three actions span', () => {
+    expect(categories.length * actions.length).toBe(9)
     const cells = Object.values(payoffs).flatMap((row) => Object.keys(row))
-    expect(cells).toHaveLength(6)
+    expect(cells).toHaveLength(9)
+    for (const value of Object.values(payoffs).flatMap((row) => Object.values(row))) {
+      expect(value).toBeTypeOf('number')
+      expect(Number.isFinite(value)).toBe(true)
+    }
   })
 
-  it('prices selling a wormy apple as the most expensive mistake', () => {
-    const worstCell = Math.min(
-      ...Object.values(payoffs).flatMap((row) => Object.values(row)),
-    )
-    expect(payoffs.wormy?.pick).toBe(worstCell)
-    expect(payoffs.wormy?.pick).toBeLessThan(payoffs.green?.pick as number)
+  it('prices crating a wormy apple as the worst outcome in the table', () => {
+    const every = Object.values(payoffs).flatMap((row) => Object.values(row))
+    const worst = Math.min(...every)
+    const crating = actions.filter((action) => action !== mappedTo('wormy'))
+
+    for (const action of crating) {
+      expect(payoffs.wormy?.[action], `crating a wormy apple as ${action}`).toBe(worst)
+    }
   })
 
-  it('pays for picking a ripe red apple', () => {
-    expect(payoffs.red?.pick as number).toBeGreaterThan(0)
+  it('prices a worm in the crate the same whichever crate it is in', () => {
+    // The complaint is about the worm, not the label, and keeping the two crating cells
+    // equal is what keeps the matrix's two axes independent: which crate an apple went
+    // into is one kind of mistake, whether it should have been crated at all is another.
+    const crating = actions.filter((action) => action !== mappedTo('wormy'))
+    const priced = crating.map((action) => payoffs.wormy?.[action])
+    expect(new Set(priced).size).toBe(1)
+  })
+
+  it('pays best for crating a ripe red apple as red, and fines nothing for the near miss', () => {
+    const row = payoffs.red as Record<string, number>
+    const declared = row[mappedTo('red')] as number
+
+    expect(declared).toBe(Math.max(...Object.values(row)))
+    expect(declared).toBeGreaterThan(0)
+    // Selling a red as green is not fined: the lost margin is the whole penalty.
+    expect(row[mappedTo('green')] as number).toBeGreaterThan(0)
+  })
+
+  it('fines a green apple sold as red harder than throwing it away', () => {
+    const row = payoffs.green as Record<string, number>
+    expect(row[mappedTo('red')] as number).toBeLessThan(row[mappedTo('wormy')] as number)
   })
 
   it('declares a decision policy of a kind decision-policy defines', () => {
@@ -241,6 +278,79 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
       expect(teaching[field]).toBeTypeOf('string')
       expect(teaching[field]?.length).toBeGreaterThan(0)
     }
+  })
+
+  it('tells the student what the sorter does and what each mistake costs', () => {
+    const summary = (declaration.teaching as Record<string, string>).summary as string
+
+    // Three destinations, not a yes and a no: the copy is the only prose a student reads
+    // that spells the framing out, so it has to carry the widened one.
+    for (const phrase of ['red crate', 'green crate']) {
+      expect(summary.toLowerCase(), `the summary should mention the ${phrase}`).toContain(phrase)
+    }
+    // Both crating mistakes are priced in words, and so is rejecting an apple.
+    expect(summary.toLowerCase()).toContain('half as much')
+    expect(summary.toLowerCase()).toContain('fine')
+    expect(summary.toLowerCase()).toContain('worm in either crate')
+    expect(summary.toLowerCase()).toMatch(/earns nothing/)
+  })
+
+  it('claims nothing about training, in either copy field', () => {
+    // CLAUDE.md's honesty line: the models are pretrained and pressing train replays a
+    // stored run, so the task-level copy describes sorting and promises no training.
+    const teaching = declaration.teaching as Record<string, string>
+    const copy = `${teaching.summary} ${teaching.theory}`.toLowerCase()
+
+    for (const claim of ['train the', 'training the', 'trains the', 'we train', 'you train']) {
+      expect(copy, `the copy should not claim "${claim}"`).not.toContain(claim)
+    }
+  })
+
+  it('leaves the knob help copy to the knobs, which this widening did not touch', () => {
+    const knobs = declaration.knobs as Record<string, unknown>[]
+    const expected: Record<string, string> = {
+      blocks: 'How many blocks the robot',
+      channels: 'How many different patterns the first block looks for',
+      regularization: 'How hard training pushes the network towards simpler answers',
+      dropout: 'The fraction of the pattern detectors switched off at random',
+    }
+
+    for (const knob of knobs) {
+      const opening = expected[String(knob.id)]
+      expect(opening, `no expected help copy recorded for knob ${String(knob.id)}`).toBeTypeOf('string')
+      expect(String(knob.help)).toContain(opening as string)
+      // The actions are a task-level concern; a knob that named one would be teaching the
+      // lesson twice, in the place that has to survive the next task.
+      for (const action of actions) {
+        expect(String(knob.help), `knob ${String(knob.id)} names action ${action}`).not.toContain(
+          action,
+        )
+      }
+    }
+  })
+
+  it('prices the table against the crop mix Game_design.md §4.5 quotes', () => {
+    // 55% red, 35% green, 10% wormy — the mix behind the ~1 740 CHF on 6 000 apples §4.5
+    // gives for year one. The blanket strategies are the check that matters: under §4.1's
+    // uncorrected table one of them earned most of perfect play while never once rejecting
+    // a worm, which is the diagnosis trap inverted.
+    const mix: Record<string, number> = { red: 0.55, green: 0.35, wormy: 0.1 }
+    const perApple = (chosen: (category: string) => string): number =>
+      categories.reduce(
+        (total, category) =>
+          total + (mix[category] as number) * (payoffs[category]?.[chosen(category)] as number),
+        0,
+      )
+
+    const perfect = perApple((category) => mappedTo(category))
+    expect(perfect).toBeCloseTo(0.29, 10)
+    expect(perfect * 6000).toBeCloseTo(1740, 6)
+
+    const blanket = actions.map((action) => [action, perApple(() => action)] as const)
+    for (const [action, earned] of blanket) {
+      expect(earned, `always choosing ${action} must not match perfect play`).toBeLessThan(perfect)
+    }
+    expect(Math.min(...blanket.map(([, earned]) => earned))).toBeLessThan(0)
   })
 
   it('declares whether the task is playable or merely announced', () => {

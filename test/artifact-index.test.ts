@@ -182,7 +182,7 @@ describe('ground truth and decisions', () => {
 
   it('refuses a configuration file that carries a chosen action', () => {
     const issues = fileIssues((draft) => {
-      draft.action = 'pick'
+      draft.action = 'crate-red'
     })
     expect(issues.some((entry) => entry.code === 'artifact-states-truth')).toBe(true)
     expect(messages(issues)).toContain('action')

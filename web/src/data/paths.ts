@@ -68,6 +68,15 @@ export const SHIPPED_TASKS: readonly string[] = ['data/declarations/apple-harves
  */
 export const SHIPPED_FARM = 'data/declarations/farm.json'
 
+/**
+ * The catalog of everything the farm can buy, declared beside the farm it prices.
+ *
+ * One catalog, because there is one balance to spend and one set of things to spend it
+ * on. It sits under the same mount as the declarations, so it is served and copied with
+ * no build change — the same thing `farm.json` proved one change ago.
+ */
+export const SHIPPED_CATALOG = 'data/declarations/catalog.json'
+
 /** The on-disk file a data URL is served from, relative to the repo root. */
 export function sourcePathFor(url: string): string | undefined {
   for (const [mount, dir] of Object.entries(DATA_MOUNTS)) {
