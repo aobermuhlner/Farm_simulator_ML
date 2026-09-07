@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "taskId": "apple-harvest",
   "categories": [
     "red",
@@ -8,7 +8,7 @@
   ],
   "pool": {
     "poolId": "pools/apple-harvest",
-    "schemaVersion": "1.0.0",
+    "schemaVersion": "1.1.0",
     "seed": 855711213
   },
   "encoding": {
@@ -27,7 +27,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "62d4f05d0f0c5bc289a79ad8557be90d1488a3dd",
+        "revision": "7a52f7677cca8642614bf9f00c0dc41185e716c3",
         "dirty": false
       },
       "hyperparameters": {
@@ -67,7 +67,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "62d4f05d0f0c5bc289a79ad8557be90d1488a3dd",
+        "revision": "7a52f7677cca8642614bf9f00c0dc41185e716c3",
         "dirty": false
       },
       "hyperparameters": {
@@ -107,7 +107,7 @@
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "62d4f05d0f0c5bc289a79ad8557be90d1488a3dd",
+        "revision": "7a52f7677cca8642614bf9f00c0dc41185e716c3",
         "dirty": false
       },
       "hyperparameters": {
