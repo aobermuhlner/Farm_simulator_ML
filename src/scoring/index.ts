@@ -12,7 +12,7 @@
  */
 
 import { chooseAction, distributionProblem } from '../policy/index.js'
-import type { PredictionArtifact, SplitName } from '../task/artifact.js'
+import type { ConfigurationEntry, PredictionArtifact, SplitName } from '../task/artifact.js'
 import { lookupConfiguration } from '../task/artifact.js'
 import { resolveConfiguration } from '../task/configuration.js'
 import type { ActionId, CategoryId, TaskDeclaration } from '../task/types.js'
@@ -102,7 +102,25 @@ export function runHarvest(
   const found = lookupConfiguration(declaration, resolved.configuration, artifact)
   if (!found.ok) return { ok: false, issues: found.issues }
 
-  const rows = found.entry.predictions[split]
+  return scoreEntry(declaration, found.configurationId, found.entry, split, truth)
+}
+
+/**
+ * Scores one split of one configuration's predictions, given the entry already in hand.
+ *
+ * Split out of `runHarvest` because a crop can be brought in by a configuration that was
+ * put to work rather than by the knob values currently on screen, and there is no honest
+ * way back from an identifier to the values that composed it. Everything after the lookup
+ * is the same code, so the two paths cannot drift into scoring differently.
+ */
+export function scoreEntry(
+  declaration: TaskDeclaration,
+  identifier: string,
+  entry: ConfigurationEntry,
+  split: SplitName,
+  truth: Readonly<Record<string, CategoryId>>,
+): RunResult {
+  const rows = entry.predictions[split]
   const issues: ValidationIssue[] = []
   const images: EvaluatedImage[] = []
 
@@ -133,9 +151,5 @@ export function runHarvest(
 
   if (issues.length > 0) return { ok: false, issues }
 
-  return {
-    ok: true,
-    configurationId: found.configurationId,
-    outcome: scoreRun(declaration, images),
-  }
+  return { ok: true, configurationId: identifier, outcome: scoreRun(declaration, images) }
 }

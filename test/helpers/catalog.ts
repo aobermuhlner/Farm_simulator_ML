@@ -26,6 +26,8 @@ export const testFarm: FarmDeclaration = {
   precision: 2,
   openingBalance: 1000,
   openingYear: 1,
+  openingCrop: 12,
+  cropComposition: { red: 0.5, green: 0.25, wormy: 0.25 },
 }
 
 /** The shipped catalog file, unvalidated, as a test that reads raw shape needs it. */

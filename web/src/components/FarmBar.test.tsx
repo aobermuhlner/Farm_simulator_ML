@@ -22,6 +22,8 @@ const declaration: FarmDeclaration = {
   precision: 2,
   openingBalance: 2000,
   openingYear: 3,
+  openingCrop: 10,
+  cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
 /** A second farm, declaring a different name and a different currency. */
@@ -31,6 +33,8 @@ const other: FarmDeclaration = {
   precision: 0,
   openingBalance: 40,
   openingYear: 11,
+  openingCrop: 6,
+  cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
 describe('the bar shows the year, the money and the farm', () => {

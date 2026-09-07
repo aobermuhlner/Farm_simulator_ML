@@ -1,6 +1,6 @@
 {
   "_comment": "Hand-written stand-in for the real artifact that prediction-artifacts will generate. Two configurations, chosen to carry the two teaching points. Probability vectors are indexed by the categories array; no action or label is stored anywhere.",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "taskId": "apple-harvest",
   "categories": [
     "red",

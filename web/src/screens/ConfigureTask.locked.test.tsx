@@ -46,7 +46,6 @@ function renderTask(owned: readonly string[], loadEntry = vi.fn(entryLoader(appl
     <ConfigureTask
       declaration={apple}
       loadEntry={loadEntry}
-      truth={appleTruth()}
       availability={availability(owned)}
       formatPrice={(units) => formatUnits(units, farm)}
       initialValues={{ blocks: 2, channels: 8, regularization: 1, dropout: 0 }}
@@ -67,13 +66,13 @@ describe('a locked configuration never reaches an artifact', () => {
     expect(screen.getByRole('alert').textContent).toContain('not yet owned')
   })
 
-  it('produces no report, no earnings and no training history from the refusal', async () => {
+  it('produces no model to put to work, no earnings and no training history from the refusal', async () => {
     renderTask([])
     await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
 
     expect(screen.queryByRole('region', { name: 'Run report' })).toBeNull()
     expect(screen.queryByText(/Total earnings/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Run a month' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Put this model to work' })).toBeNull()
     expect(screen.queryByRole('img', { name: /training/i })).toBeNull()
   })
 
@@ -102,7 +101,6 @@ describe('the untrained refusal is still reachable', () => {
       <ConfigureTask
         declaration={apple}
         loadEntry={loadEntry}
-        truth={appleTruth()}
         availability={availability(['wider-blocks'])}
         formatPrice={(units) => formatUnits(units, farm)}
         initialValues={{ blocks: 2, channels: 16, regularization: 3, dropout: 0 }}

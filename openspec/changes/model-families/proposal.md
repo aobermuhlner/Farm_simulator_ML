@@ -28,8 +28,17 @@ Without this abstraction every rung would grow its own report screen, and the
 
 - A model family becomes a declared entity: id, its own knobs, its own diagram, its
   catalog entry, its teaching copy, and its **prediction source** — `artifact` or `live`.
+- A family declares an **icon and a short label** for the labour slot on the farm card, so
+  a student can see at a glance which family is working which crop. `workshop-harvest-split`
+  specifies that slot and requires what fills it to be declared rather than written into a
+  screen; this change is what supplies a family's half of it. The farm declaration supplies
+  the manual labour's, since the hands are the absence of a family.
 - A task declares several families with one active; the student chooses among the ones
-  they own. Which family is active is saved state.
+  they own. Which family is active is saved state. **Which family is active is not which
+  configuration is at work** — `workshop-harvest-split`'s labour slot is a separate,
+  deliberately committed piece of state, so that opening the picker to look at a tree does
+  not take the network off the orchard. The picker swaps the settings panel; the slot
+  decides who brings in the crop.
 - A family registry and the two evaluators, behind a single
   `predict(image, config) -> Distribution`.
 - Per-family knob values are remembered independently, so tuning the network does not

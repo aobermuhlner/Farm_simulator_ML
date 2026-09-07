@@ -3,5 +3,15 @@
   "currency": "CHF",
   "precision": 2,
   "openingBalance": 2000,
-  "openingYear": 1
+  "openingYear": 1,
+  "openingCrop": 10,
+  "cropComposition": {
+    "red": 0.55,
+    "green": 0.35,
+    "wormy": 0.1
+  },
+  "manualLabour": {
+    "icon": "✋",
+    "label": "Sorted by hand"
+  }
 }

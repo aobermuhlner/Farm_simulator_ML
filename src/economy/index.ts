@@ -5,8 +5,18 @@
  * cultivar is, and nothing here reaches a screen except through a value it returns.
  */
 
-export type { FarmDeclaration, FarmValidation } from './declaration.js'
-export { REQUIRED_FARM_FIELDS, validateFarmDeclaration } from './declaration.js'
+export type {
+  CropComposition,
+  FarmAutomation,
+  FarmDeclaration,
+  FarmValidation,
+  ManualLabourDeclaration,
+} from './declaration.js'
+export {
+  OPTIONAL_FARM_FIELDS,
+  REQUIRED_FARM_FIELDS,
+  validateFarmDeclaration,
+} from './declaration.js'
 export { formatUnits, toAmount, toUnits } from './amounts.js'
 export type { Farm, FarmChange, Movement, YearRecord } from './farm.js'
 export {
@@ -17,3 +27,13 @@ export {
   openFarm,
   recordHarvest,
 } from './farm.js'
+export type { ClosedYear, CropBroughtIn, YearInProgress } from './year.js'
+export {
+  bringIn,
+  broughtIn,
+  closeYear,
+  isComplete,
+  openYear,
+  outstanding,
+  totalPaid,
+} from './year.js'

@@ -270,6 +270,72 @@ describe('knob declarations', () => {
   })
 })
 
+/**
+ * The separator joins the parts of a configuration identifier, so an identifier carrying
+ * it inside a part cannot be read back to the values it was composed from — and a slot
+ * naming one that cannot be read back is dropped on restore, silently taking a student's
+ * model off the task. It is refused at authoring time instead.
+ */
+describe('the identifier separator cannot enter a knob id or a declared value', () => {
+  /** The shipped knobs with one of them replaced by `edit`'s result. */
+  function knobsWith(
+    pick: (knobs: Record<string, unknown>[]) => Record<string, unknown> | undefined,
+    edit: (knob: Record<string, unknown>) => void,
+  ): Record<string, unknown> {
+    const knobs = structuredClone(apple.knobs) as Record<string, unknown>[]
+    const knob = pick(knobs)
+    if (knob === undefined) throw new Error('the shipped declaration has no such knob')
+    edit(knob)
+    return withField('knobs', knobs)
+  }
+
+  it('refuses a knob whose id contains the separator, naming that id', () => {
+    const issues = issuesOf(
+      knobsWith(
+        (knobs) => knobs[0],
+        (knob) => {
+          knob.id = 'conv-blocks'
+        },
+      ),
+    )
+    const refusal = issues.find((i) => i.code === 'separator-in-identifier')
+    expect(refusal?.field).toBe('knobs[0].id')
+    expect(refusal?.message).toContain('conv-blocks')
+  })
+
+  it('refuses a choice knob permitting a hyphenated string value, naming that value', () => {
+    const issues = issuesOf(
+      knobsWith(
+        (knobs) => knobs[0],
+        (knob) => {
+          knob.values = ['two-blocks', 'three']
+          knob.default = 'three'
+        },
+      ),
+    )
+    const refusal = issues.find((i) => i.code === 'separator-in-identifier')
+    expect(refusal?.field).toBe('knobs[0].values')
+    expect(refusal?.message).toContain('blocks')
+    expect(refusal?.message).toContain('two-blocks')
+  })
+
+  it('refuses a slider whose range walks to a negative value, naming that value', () => {
+    const issues = issuesOf(
+      knobsWith(
+        (knobs) => knobs.find((knob) => knob.kind === 'slider'),
+        (knob) => {
+          knob.min = -1
+        },
+      ),
+    )
+    const refusal = issues.find((i) => i.code === 'separator-in-identifier')
+    expect(refusal?.field).toBe('knobs[2]')
+    expect(refusal?.message).toContain('regularization')
+    expect(refusal?.message).toContain('-1')
+  })
+
+})
+
 describe('a category’s declared action is its best-paying action', () => {
   const mapping = apple.categoryActions as Record<string, string>
   const actionIds = (apple.actions as { id: string; label: string }[]).map((action) => action.id)
@@ -385,5 +451,68 @@ describe('a category’s declared action is its best-paying action', () => {
 
     expect(result.ok ? [] : result.issues).toEqual([])
     expect(result.ok).toBe(true)
+  })
+})
+
+describe('what one person can sort by hand', () => {
+  it('requires both figures, naming the one that is missing', () => {
+    for (const field of ['perHarvest', 'secondsPerImage'] as const) {
+      const handSorting = structuredClone(apple.handSorting) as Record<string, unknown>
+      delete handSorting[field]
+      const issues = issuesOf(withField('handSorting', handSorting))
+      expect(
+        issues.map((issue) => issue.field),
+        `omitting "${field}" should be reported`,
+      ).toContain(`handSorting.${field}`)
+    }
+  })
+
+  it('refuses a field that is not an object at all', () => {
+    const issues = issuesOf(withField('handSorting', 60))
+    expect(issues.map((issue) => issue.field)).toContain('handSorting')
+  })
+
+  it('refuses a sorting limit that could not show every category once', () => {
+    const categories = (apple.categories as { id: string }[]).length
+    const issues = issuesOf(
+      withField('handSorting', { perHarvest: categories - 1, secondsPerImage: 60 }),
+    )
+    const refusal = issues.find((issue) => issue.code === 'sorting-limit-too-small')
+    expect(refusal?.field).toBe('handSorting.perHarvest')
+    expect(refusal?.message).toContain(String(categories))
+  })
+
+  it('accepts a sorting limit of exactly one image per declared category', () => {
+    const categories = (apple.categories as { id: string }[]).length
+    const result = validateDeclaration(
+      withField('handSorting', { perHarvest: categories, secondsPerImage: 60 }),
+    )
+    expect(result.ok ? [] : result.issues).toEqual([])
+  })
+
+  it('refuses a sorting limit that is not a whole number of images', () => {
+    for (const perHarvest of [0, -10, 12.5, '60', null]) {
+      const issues = issuesOf(withField('handSorting', { perHarvest, secondsPerImage: 60 }))
+      expect(
+        issues.map((issue) => issue.field),
+        `${JSON.stringify(perHarvest)} should be refused`,
+      ).toContain('handSorting.perHarvest')
+    }
+  })
+
+  it('refuses a time cap of zero or less, so no rate can be infinite or negative', () => {
+    for (const secondsPerImage of [0, -1, Number.POSITIVE_INFINITY, '60']) {
+      const issues = issuesOf(withField('handSorting', { perHarvest: 60, secondsPerImage }))
+      const refusal = issues.find((issue) => issue.field === 'handSorting.secondsPerImage')
+      expect(refusal, `${JSON.stringify(secondsPerImage)} should be refused`).toBeDefined()
+      expect(refusal?.message).toContain('greater than zero')
+    }
+  })
+
+  it('accepts a fractional time cap, which is a duration rather than a count', () => {
+    const result = validateDeclaration(
+      withField('handSorting', { perHarvest: 60, secondsPerImage: 2.5 }),
+    )
+    expect(result.ok ? [] : result.issues).toEqual([])
   })
 })

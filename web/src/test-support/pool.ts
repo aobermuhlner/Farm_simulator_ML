@@ -8,6 +8,8 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { Farm } from '../../../src/economy/index.js'
+import { openFarm } from '../../../src/economy/index.js'
 import type { LoadedPool } from '../../../src/pool/index.js'
 import { readPool } from '../../../src/pool/index.js'
 import type { ConfigurationEntry, PredictionArtifact } from '../../../src/task/artifact.js'
@@ -19,9 +21,10 @@ import {
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import type { Loaded, LoadedTask } from '../data/load.js'
 import { dataUrlFor, taskDataPaths } from '../data/paths.js'
-import type { TrainingSplitView } from '../data/pool.js'
-import { trainingSplitView } from '../data/pool.js'
+import type { CropView, TrainingSplitView } from '../data/pool.js'
+import { cropView, trainingSplitView } from '../data/pool.js'
 import { appleDeclaration } from './declarations.js'
+import { farmDeclaration } from './farm.js'
 
 const repoRoot = process.cwd()
 
@@ -180,4 +183,70 @@ export function loadEntryFor(
     return Promise.resolve({ ok: false, issues: issue === undefined ? [] : [issue] })
   }
   return Promise.resolve({ ok: true, value: entry })
+}
+
+/** A farm at its declared opening state, with this year's crop set to `cropSize`. */
+export function farmSorting(cropSize?: number): Farm {
+  const opened = openFarm(farmDeclaration())
+  return cropSize === undefined ? opened : { ...opened, cropSize }
+}
+
+/**
+ * A year's crop of the committed pool, as the sorting screen receives it.
+ *
+ * Through the real draw and the real projection, so a screen test is looking at the
+ * images a student would be shown rather than at a hand-typed stand-in of them.
+ */
+export function appleCrop(
+  farm: Farm = farmSorting(),
+  seed = 4242,
+  declaration: TaskDeclaration = appleDeclaration(),
+): CropView {
+  const view = cropView(applePool(), declaration, farm, seed, dataUrlFor('pools/apple-harvest') ?? '')
+  if (!view.ok) {
+    throw new Error(
+      `the committed crop does not draw: ${view.issues.map((issue) => issue.message).join(' ')}`,
+    )
+  }
+  return view.value
+}
+
+/**
+ * A crop for a task with no pool on disk, built by hand.
+ *
+ * The geometry is nominal — a screen test cares that the right cell is asked for, not
+ * that a PNG exists — and the categories are whatever the caller's task declares.
+ */
+export function cropOf(
+  pieces: readonly { readonly imageId: string; readonly category: string }[],
+  over: { readonly size?: number; readonly unsorted?: number } = {},
+): CropView {
+  return {
+    size: over.size ?? pieces.length,
+    unsorted: over.unsorted ?? 0,
+    presented: pieces.map((piece, index) => ({
+      imageId: piece.imageId,
+      atlasUrl: 'data/pools/none/atlas.png',
+      atlasWidth: 512,
+      atlasHeight: 512,
+      x: (index % 4) * 128,
+      y: Math.floor(index / 4) * 128,
+      cellSize: 128,
+    })),
+    truth: Object.fromEntries(pieces.map((piece) => [piece.imageId, piece.category])),
+  }
+}
+
+/** A `load` for the sorting screen, standing in for the fetch. */
+export function loadsCrop(view: CropView) {
+  return (): Promise<Loaded<CropView>> => Promise.resolve({ ok: true as const, value: view })
+}
+
+/** A `load` for the sorting screen that refuses, with the cause a caller names. */
+export function refusesCrop(code: string, message: string, field?: string) {
+  return (): Promise<Loaded<CropView>> =>
+    Promise.resolve({
+      ok: false as const,
+      issues: [field === undefined ? { code, message } : { code, message, field }],
+    })
 }

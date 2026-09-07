@@ -12,7 +12,8 @@ import { fileURLToPath } from 'node:url'
 
 import { Resvg } from '@resvg/resvg-js'
 
-import { planAtlases, renderAtlas } from './atlas.js'
+import { cellPixels, planAtlases, rasterizeAtlas } from './atlas.js'
+import { measureCell, type FeatureVector } from './features.js'
 import { atlasFile, buildManifest, declarationDisagreement } from './manifest.js'
 import { CELL_PX, OUTPUT_DIR, POOL_ID, SEED } from './params.js'
 import { samplePool } from './sample.js'
@@ -57,16 +58,24 @@ async function main(): Promise<void> {
   await mkdir(outputDir, { recursive: true })
 
   let bytes = 0
+  // Measurement sits between rasterizing and assembling the manifest, and reads the very
+  // pixels that are written out. PNG is lossless, so measuring here and measuring a
+  // decode of the delivered file are the same measurement — and the generator needs no
+  // decoder to prove it.
+  const features: Record<string, FeatureVector> = {}
   for (const plan of plans) {
-    const png = renderAtlas(plan)
-    bytes += png.byteLength
-    await writeFile(join(outputDir, atlasFile(plan.id)), png)
+    const atlas = rasterizeAtlas(plan)
+    bytes += atlas.png.byteLength
+    await writeFile(join(outputDir, atlasFile(plan.id)), atlas.png)
+    plan.images.forEach((image, cell) => {
+      features[image.id] = measureCell(cellPixels(atlas, cell), CELL_PX)
+    })
     process.stdout.write(
-      `${atlasFile(plan.id)}  ${plan.images.length} cells  ${(png.byteLength / 1024).toFixed(0)} KB\n`,
+      `${atlasFile(plan.id)}  ${plan.images.length} cells  ${(atlas.png.byteLength / 1024).toFixed(0)} KB  measured\n`,
     )
   }
 
-  const manifest = buildManifest(plans, schemaVersion)
+  const manifest = buildManifest(plans, schemaVersion, features)
   // Two-space JSON with a trailing newline: readable in a diff, and stable, because
   // `design.md` keeps this file hand-inspectable rather than compact.
   await writeFile(join(outputDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)

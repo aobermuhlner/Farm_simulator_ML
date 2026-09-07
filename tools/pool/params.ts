@@ -198,6 +198,205 @@ export const CELL_PX = 128
 export const ATLAS_PX = 2048
 export const CELLS_PER_ATLAS = (ATLAS_PX / CELL_PX) ** 2
 
+/**
+ * Where the two overlays sit inside a cell.
+ *
+ * `openspec/changes/measured-features/design.md` — the drawing code and the measurement
+ * code both need these ellipses: one to paint them, the other to leave them out of the
+ * spot features. Two copies of the same ellipse is the failure this extraction exists to
+ * prevent, so both read these constants and `test/pool-overlays.test.ts` asserts that
+ * they do.
+ *
+ * Deliberately *not* part of `RENDER_PARAMETERS`. The fingerprint below digests the
+ * values it is given, so folding these in would move `SEED` and resample a pool whose
+ * pixels did not change — see `specs/image-pool/spec.md`, which distinguishes a pool
+ * whose pixels moved from one whose recording did. These numbers were hard-coded in
+ * `draw.ts` before this change and are byte-for-byte the same numbers now.
+ */
+export interface OverlayEllipse {
+  readonly cx: number
+  readonly cy: number
+  readonly rx: number
+  readonly ry: number
+  /** Degrees, clockwise, about the ellipse's own centre. */
+  readonly rotation: number
+}
+
+/**
+ * The shadow: a flat disc pushed down and right, so only its edge crosses the apple.
+ *
+ * Position and radii are constant; `lighting` moves only its opacity, which is why one
+ * declared ellipse describes the shadow for every image in the pool.
+ */
+export const SHADE_ELLIPSE: OverlayEllipse = {
+  cx: CELL_PX / 2 + 42,
+  cy: CELL_PX * 0.86,
+  rx: 62,
+  ry: 56,
+  rotation: 0,
+}
+
+/** Where the highlight sits. Only its radii move, and `gloss` is what moves them. */
+export const GLOSS_ELLIPSE_CENTRE = {
+  cx: CELL_PX / 2 - 10,
+  cy: CELL_PX * 0.41,
+  rotation: -24,
+} as const
+
+/**
+ * The largest gloss an apple can be drawn with.
+ *
+ * Measurement asks for the highlight at this value and nowhere else, so the region a
+ * feature excludes is the same for every image and reads nothing about this one.
+ */
+export const MAX_GLOSS = 1
+
+/** The highlight ellipse at one gloss value. */
+export function glossEllipse(gloss: number): OverlayEllipse {
+  return {
+    cx: GLOSS_ELLIPSE_CENTRE.cx,
+    cy: GLOSS_ELLIPSE_CENTRE.cy,
+    rx: GLOSS_COEFFICIENTS.rxBase + GLOSS_COEFFICIENTS.rxPerGloss * gloss,
+    ry: GLOSS_COEFFICIENTS.ryBase + GLOSS_COEFFICIENTS.ryPerGloss * gloss,
+    rotation: GLOSS_ELLIPSE_CENTRE.rotation,
+  }
+}
+
+/** True when a point in cell coordinates falls inside a declared overlay ellipse. */
+export function insideOverlay(ellipse: OverlayEllipse, x: number, y: number): boolean {
+  const radians = (ellipse.rotation * Math.PI) / 180
+  const dx = x - ellipse.cx
+  const dy = y - ellipse.cy
+  // The point is rotated into the ellipse's frame rather than the ellipse into the
+  // cell's: one pair of multiplications per pixel instead of a shape to re-derive.
+  const u = dx * Math.cos(radians) + dy * Math.sin(radians)
+  const v = -dx * Math.sin(radians) + dy * Math.cos(radians)
+  return (u / ellipse.rx) ** 2 + (v / ellipse.ry) ** 2 <= 1
+}
+
+
+/**
+ * The two decorations every apple carries, whatever it was drawn from.
+ *
+ * Stem and leaf are painted *under* the body, so only the parts outside the silhouette
+ * survive. They are the same colour and in the same place in all 1 200 cells, which is
+ * what lets the measurement pass leave them out without learning anything about the
+ * apple it is looking at — the same argument the overlay ellipses above rest on.
+ */
+export const STEM_FILL = '#6b4a2b'
+export const LEAF_FILL = '#4c8a3f'
+
+/** The features the pool records per image, in the order the manifest writes them. */
+export const FEATURE_IDS = [
+  'redness',
+  'roundness',
+  'darkSpotArea',
+  'spotCount',
+  'textureVar',
+] as const
+export type FeatureId = (typeof FEATURE_IDS)[number]
+
+/** The overlays a feature may exclude before measuring. */
+export const OVERLAY_IDS = ['shade', 'gloss'] as const
+export type OverlayId = (typeof OVERLAY_IDS)[number]
+
+/**
+ * Which overlays each feature leaves out, and why the answer differs per feature.
+ *
+ * `openspec/changes/measured-features/design.md` — masking is declared per feature
+ * because the two spot features and the two colour features want opposite things from
+ * the same two ellipses.
+ *
+ * `redness` and `textureVar` mask nothing: a red apple in shadow measuring less red is
+ * the lesson, and a `redness` with the shadow taken out would be a clean read of `hue`,
+ * which the spec refuses as an attribute under another name.
+ *
+ * `darkSpotArea` and `spotCount` mask both. Unmasked they measure whether a shadow edge
+ * crosses a light-coloured body, which makes green apples register more dark spots than
+ * wormy ones — a worm feature in name only.
+ *
+ * `roundness` measures the silhouette, which neither overlay touches, so it has nothing
+ * to mask.
+ */
+export const FEATURE_MASKS: Readonly<Record<FeatureId, readonly OverlayId[]>> = {
+  redness: [],
+  roundness: [],
+  darkSpotArea: ['shade', 'gloss'],
+  spotCount: ['shade', 'gloss'],
+  textureVar: [],
+}
+
+/** The channels a per-pixel comparison can be made on. */
+export const COMPARISON_CHANNELS = ['luminance', 'rgb-sum'] as const
+export type ComparisonChannel = (typeof COMPARISON_CHANNELS)[number]
+
+/** A measurement parameter: the value, and the reason a reviewer disagrees with. */
+export interface DeclaredParameter<T> {
+  readonly value: T
+  readonly reason: string
+}
+
+/**
+ * Every number that decides what the measurement pass can and cannot see.
+ *
+ * `specs/measured-features/spec.md` — the difficulty of a feature set is authored
+ * whether or not anyone admits it, so each threshold is declared here with the reason
+ * for its value rather than buried in `features.ts` as a literal. Two defensible spot
+ * detectors over these same pixels differ by more than a factor of two in how many worms
+ * they find; the sensitivity *is* the teaching decision.
+ */
+export const MEASUREMENT_PARAMETERS: {
+  readonly bodyAlpha: DeclaredParameter<number>
+  readonly decorationColourCut: DeclaredParameter<number>
+  readonly darkSpotLuminanceCut: DeclaredParameter<number>
+  readonly darkSpotChannel: DeclaredParameter<ComparisonChannel>
+  readonly spotColourCut: DeclaredParameter<number>
+  readonly spotChannel: DeclaredParameter<ComparisonChannel>
+  readonly minimumBlobPixels: DeclaredParameter<number>
+  readonly featureDecimals: DeclaredParameter<number>
+} = {
+  bodyAlpha: {
+    value: 250,
+    reason:
+      'A cell is drawn over nothing, so the apple is exactly the opaque part of it. 250 rather than 255 keeps the interior while dropping the antialiased rim, whose colour is a blend with the empty background and belongs to no apple.',
+  },
+  decorationColourCut: {
+    value: 24,
+    reason:
+      'Sum of the absolute channel differences from the declared stem and leaf fills. 24 clears their antialiased edges and stays far below the 140 that separates the stem from the darkest body colour the palette reaches, so no apple loses skin to it.',
+  },
+  darkSpotLuminanceCut: {
+    value: 0.9,
+    reason:
+      "A dark spot is a patch at most nine tenths as bright as the apple's own modal colour. Measured over the pool, a clean apple's masked skin never falls below 0.94 of its mode, and a worm hole reaches 0.79, so the cut sits in the gap rather than on either population.",
+  },
+  darkSpotChannel: {
+    value: 'luminance',
+    reason:
+      'Darkness is a brightness question, so the comparison runs on luminance rather than on one primary. The consequence is recorded rather than avoided: a crimson body is dark to begin with, so a worm hole on a deep red apple is barely darker than the skin around it and this feature nearly misses it.',
+  },
+  spotColourCut: {
+    value: 0.55,
+    reason:
+      "Sum of the absolute channel differences from the modal skin colour, over 255. A worm's pale back reaches 1.18 and its hole 0.54, while masked skin stays under 0.12, so any cut between those separates them — 0.55 is deliberately near the top of that gap. It is the sensitivity the ladder guard is fitted against: a cut of 0.25 finds every worm in the pool and puts a two-node hand rule above every shipped network.",
+  },
+  spotChannel: {
+    value: 'rgb-sum',
+    reason:
+      'Colour distance runs on all three primaries because the thing that gives a worm away is that it is the wrong colour, not that it is dark. A luminance-only comparison misses a pale worm on a crimson apple entirely.',
+  },
+  minimumBlobPixels: {
+    value: 8,
+    reason:
+      'Connected runs shorter than this are the two- to four-pixel blends where the stem tip meets the body, measured across the whole pool. Eight drops every one of them and keeps the smallest worm the pool draws, which covers 63 pixels.',
+  },
+  featureDecimals: {
+    value: 4,
+    reason:
+      'Feature values are rounded before they reach the manifest so that the file is byte-stable and diffable, at a step finer than any threshold a student can pick.',
+  },
+}
+
 /** Everything a pixel is drawn from, gathered so the seed below can cover all of it. */
 export interface RenderParameters {
   readonly tone: readonly TonePoint[]

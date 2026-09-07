@@ -84,10 +84,34 @@ export function unrelatedDeclaration(): TaskDeclaration {
         help: 'How readily the screen calls a patch diseased.',
       },
     ],
+    // Its own features, on its own scales, named after nothing an apple has: a screen
+    // that renders these is rendering the declaration.
+    features: [
+      {
+        id: 'patchArea',
+        label: 'Patch area',
+        unit: 'square millimetres, as measured on the photograph',
+        range: { min: 0.5, max: 40 },
+        contaminatedBy: ['cameraDistance'],
+        help: 'How large the patch is in the photograph. Measured from the picture, so a close-up shot makes the same patch measure larger.',
+      },
+      {
+        id: 'edgeRoughness',
+        label: 'Edge roughness',
+        unit: 'perimeter over the perimeter of a circle of equal area; 1 is smooth',
+        range: { min: 1, max: 3.4 },
+        contaminatedBy: ['focus'],
+        help: 'How ragged the patch outline is. A blurred photograph smooths a ragged edge, so this reads low on a soft picture whatever the patch looks like.',
+      },
+    ],
+    ruleBudget: { maxNodes: 2 },
     payoffs: {
       healthy: { flag: -1, pass: 0 },
       diseased: { flag: 0, pass: -20 },
     },
+    // Deliberately unlike the apple task's figures: a screen that had kept either of
+    // those numbers would render this task with the wrong one.
+    handSorting: { perHarvest: 7, secondsPerImage: 45 },
     teaching: {
       summary: 'Missing a diseased animal costs far more than a needless vet visit.',
       theory: 'When one error is dearer than the other, the best guess is not the best decision.',
@@ -131,6 +155,101 @@ export function unrelatedArtifact(): PredictionArtifact {
 /** Ground truth for {@link unrelatedArtifact}'s pool split. */
 export function unrelatedTruth(): Readonly<Record<string, CategoryId>> {
   return { 'a-1': 'healthy', 'a-2': 'diseased', 'a-3': 'diseased' }
+}
+
+/**
+ * A task whose categories do not map one-to-one onto its actions.
+ *
+ * It exists to hold one distinction open, and it is named for that distinction rather than
+ * for its domain. Every declaration that ships maps each category to an action of its own,
+ * so "the cell this category calls for" and "the cell on the diagonal" pick out the same
+ * nine cells everywhere else in this repository — and an implementation that marked the
+ * diagonal would pass every other test in the suite while being wrong about what it is
+ * marking.
+ *
+ * Two properties are deliberate and are asserted rather than left to be noticed. Two
+ * categories share one action, so a column carries more than one declared cell. And no
+ * declared cell lands on the diagonal at all, so a diagonal implementation marks nothing
+ * this task calls for rather than merely getting it partly wrong.
+ *
+ * The third action is the answer to no category, which `decision-policy` permits on purpose:
+ * a task may offer a treatment that is never right for a certain image and is reached only
+ * when nothing is certain.
+ */
+export function sharedActionDeclaration(): TaskDeclaration {
+  const declaration = {
+    id: 'parcel-routing',
+    title: 'Parcel Routing',
+    schemaVersion: '1.0.0',
+    categories: [
+      { id: 'local', label: 'Local parcel' },
+      { id: 'national', label: 'National parcel' },
+      { id: 'overseas', label: 'Overseas parcel' },
+    ],
+    actions: [
+      { id: 'depot', label: 'Send to the depot' },
+      { id: 'van', label: 'Load the local van' },
+      { id: 'airport', label: 'Drive it to the airport' },
+    ],
+    // Neither of these three sits on the diagonal, and two of them share a column.
+    categoryActions: { local: 'van', national: 'depot', overseas: 'depot' },
+    policy: { kind: 'highest-probability' },
+    pool: 'pools/parcel-routing',
+    predictions: 'artifacts/parcel-routing.json',
+    knobs: [
+      {
+        kind: 'choice',
+        id: 'care',
+        label: 'Care taken',
+        values: ['quick', 'careful'],
+        default: 'quick',
+        help: 'How long the sorter looks at a label before deciding.',
+      },
+    ],
+    // Different again, and a different budget: nothing may assume the apple task's.
+    features: [
+      {
+        id: 'labelWidth',
+        label: 'Label width',
+        unit: 'millimetres across the printed label',
+        range: { min: 40, max: 210 },
+        contaminatedBy: ['scannerAngle'],
+        help: 'How wide the address label reads on the scan. A parcel that went through at an angle measures narrower than it is.',
+      },
+      {
+        id: 'inkDarkness',
+        label: 'Ink darkness',
+        unit: 'how dark the print is against the paper; 0 to 1',
+        range: { min: 0.1, max: 0.95 },
+        contaminatedBy: ['scannerAngle', 'paperStock'],
+        help: 'How dark the printing is against the paper. Measured from the scan, so brown paper makes clear print read faint.',
+      },
+    ],
+    ruleBudget: { maxNodes: 4 },
+    // Every row pays most for the action its category is declared to call for, which the
+    // validator requires; the airport is close behind on overseas without ever catching it.
+    payoffs: {
+      local: { depot: 0.2, van: 0.6, airport: -0.5 },
+      national: { depot: 0.5, van: -0.1, airport: 0.1 },
+      overseas: { depot: 0.3, van: -0.8, airport: 0.25 },
+    },
+    handSorting: { perHarvest: 9, secondsPerImage: 30 },
+    teaching: {
+      summary: 'Two of these three parcels take the same road out of the yard.',
+      theory: 'A category and a treatment are different things, and nothing says a task must have one of each.',
+    },
+    available: true,
+  }
+
+  const validated = validateDeclaration(declaration)
+  if (!validated.ok) {
+    throw new Error(
+      `The shared-action test declaration does not validate: ${validated.issues
+        .map((issue) => issue.message)
+        .join(' ')}`,
+    )
+  }
+  return validated.declaration
 }
 
 /**

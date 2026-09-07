@@ -9,7 +9,16 @@
 
 import { describe, expect, it } from 'vitest'
 import type { Farm, FarmDeclaration } from '../src/economy/index.js'
-import { credit, debit, openFarm, recordHarvest, toUnits } from '../src/economy/index.js'
+import {
+  bringIn,
+  closeYear,
+  credit,
+  debit,
+  openFarm,
+  openYear,
+  recordHarvest,
+  toUnits,
+} from '../src/economy/index.js'
 
 const declaration: FarmDeclaration = {
   name: 'Test Farm',
@@ -17,6 +26,8 @@ const declaration: FarmDeclaration = {
   precision: 2,
   openingBalance: 0,
   openingYear: 1,
+  openingCrop: 10,
+  cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
 function farmIn(year: number, amount: number): Farm {
@@ -57,14 +68,45 @@ describe('only a harvest closes a year', () => {
     expect(recordHarvest(worked, chf(250)).movements).toEqual([])
   })
 
-  it('offers no way to advance the year on its own', async () => {
+  it('offers nothing that advances the year but the two ways of recording a harvest', async () => {
+    // A name-shaped guard over a behavioural rule: nothing may exist that moves the year
+    // on its own. `closeYear` is the multi-card path and is allowed here only because the
+    // test below proves it cannot advance a year without recording one.
     const economy = (await import('../src/economy/index.js')) as Record<string, unknown>
     const advancing = Object.keys(economy).filter((name) =>
       /(advance|next|close|end|tick|increment).*year|year.*(advance|next|close|end|tick|increment)/i.test(
         name,
       ),
     )
-    expect(advancing).toEqual([])
+    expect(advancing).toEqual(['closeYear'])
+  })
+
+  it('cannot close a year without settling its total and appending its record', () => {
+    const before = farmIn(3, 1000)
+    const { farm } = closeYear(before, bringIn(openYear(before), {
+      taskId: 'a-card',
+      paidUnits: chf(250),
+      evaluated: 4,
+      counts: {},
+    }))
+
+    expect(farm.year).toBe(4)
+    expect(farm.ledger).toHaveLength(1)
+    expect(farm.ledger[0]?.year).toBe(3)
+    expect(farm.ledger[0]?.harvest).toBe(chf(250))
+    expect(farm.balance).toBe(chf(1250))
+  })
+
+  it('advances nothing while a year is in progress, however many cards come in', () => {
+    const before = farmIn(3, 1000)
+    let year = openYear(before)
+    for (const taskId of ['a-card', 'another-card']) {
+      year = bringIn(year, { taskId, paidUnits: chf(500), evaluated: 1, counts: {} })
+    }
+
+    expect(before.year).toBe(3)
+    expect(before.ledger).toEqual([])
+    expect(before.balance).toBe(chf(1000))
   })
 })
 
@@ -163,5 +205,21 @@ describe('a bad year is a bad year, never a failure', () => {
   it('refuses a harvest settlement that never crossed the unit boundary', () => {
     expect(() => recordHarvest(farmIn(1, 200), 40.5)).toThrow(/whole number/)
     expect(() => recordHarvest(farmIn(1, 200), Number.NaN)).toThrow(/whole number/)
+  })
+})
+
+describe('the crop the farm bears is state, not a constant', () => {
+  it('opens at the declared crop', () => {
+    expect(openFarm(declaration).cropSize).toBe(declaration.openingCrop)
+  })
+
+  it('opens at whatever the declaration says, so a bigger holding starts bigger', () => {
+    const larger = openFarm({ ...declaration, openingCrop: declaration.openingCrop * 4 })
+    expect(larger.cropSize).toBeGreaterThan(openFarm(declaration).cropSize)
+  })
+
+  it('survives a harvest, because a crop does not shrink by being brought in', () => {
+    const grown = { ...openFarm(declaration), cropSize: 400 }
+    expect(recordHarvest(grown, toUnits(12, 2)).cropSize).toBe(400)
   })
 })

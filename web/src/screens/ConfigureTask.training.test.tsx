@@ -30,7 +30,6 @@ function renderApple(load: () => Promise<Loaded<TrainingSplitView>> = () =>
     <ConfigureTask
       declaration={apple}
       loadEntry={entryLoader(appleArtifact())}
-      truth={appleTruth()}
       loadSplit={load}
       replayMs={0}
       onBack={() => {}}
@@ -81,7 +80,6 @@ describe('reaching the training data', () => {
       <ConfigureTask
         declaration={apple}
         loadEntry={entryLoader(appleArtifact())}
-        truth={appleTruth()}
         replayMs={0}
         onBack={() => {}}
       />,

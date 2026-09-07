@@ -124,7 +124,10 @@ describe('loading a task', () => {
     expect(loaded.ok).toBe(false)
     if (loaded.ok) return
     const message = loaded.issues.map((issue) => issue.message).join(' ')
-    expect(message).toContain('1.0.0')
+    // The declared version, read from the declaration rather than written out here: it
+    // moves whenever the manifest gains a field, and the refusal has to name whatever it
+    // currently is alongside the artifact's.
+    expect(message).toContain(String(APPLE.schemaVersion))
     expect(message).toContain('9.9.9')
   })
 

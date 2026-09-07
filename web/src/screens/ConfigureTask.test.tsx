@@ -1,15 +1,12 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runHarvest } from '../../../src/scoring/index.js'
 import {
   appleArtifact,
   appleDeclaration,
-  appleTruth,
   entryLoader,
   unrelatedArtifact,
   unrelatedDeclaration,
-  unrelatedTruth,
 } from '../test-support/declarations.js'
 import { ConfigureTask } from './ConfigureTask.js'
 
@@ -22,9 +19,9 @@ function renderApple() {
     <ConfigureTask
       declaration={apple}
       loadEntry={entryLoader(appleArtifact())}
-      truth={appleTruth()}
       replayMs={0}
       onBack={() => {}}
+      onPutToWork={() => {}}
     />,
   )
 }
@@ -34,28 +31,10 @@ function knobSelect(label: string): HTMLSelectElement {
   return screen.getByLabelText(label) as HTMLSelectElement
 }
 
-/**
- * Trains the configuration in the knobs and then runs a month over it.
- *
- * Two presses, because they are two phases: training fetches the configuration's
- * predictions and plays its run back, and only a trained model can be harvested. The
- * replay is collapsed to nothing here, so the second button is there as soon as the
- * fetch settles.
- */
-async function run(): Promise<void> {
-  await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
-  await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
-}
-
-/** Trains only — for the cases where a month must not have been run. */
+/** Makes the model for the configuration in the knobs. The replay is collapsed to nothing. */
 async function train(): Promise<void> {
   await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
   await waitFor(() => screen.getByRole('button', { name: 'Train model' }))
-}
-
-/** The report region, so queries do not also match the form above it. */
-function report(): HTMLElement {
-  return screen.getByRole('region', { name: 'Run report' })
 }
 
 describe('arriving at a task', () => {
@@ -126,7 +105,6 @@ describe('the configuration screen renders from knob declarations', () => {
       <ConfigureTask
         declaration={other}
         loadEntry={entryLoader(unrelatedArtifact())}
-        truth={unrelatedTruth()}
         replayMs={0}
         onBack={() => {}}
       />,
@@ -175,73 +153,126 @@ describe('configuration identity', () => {
   })
 })
 
-describe('running a harvest', () => {
-  it('reports the earnings the engine computed, not its own', async () => {
+describe('the year cannot be run from the workshop', () => {
+  it('offers nothing that runs the year or brings a crop in, before or after a model is made', async () => {
     renderApple()
-    await run()
+    for (const name of [/run a month/i, /run the year/i, /bring .* in/i, /harvest/i]) {
+      expect(screen.queryByRole('button', { name }), `the workshop offers ${name}`).toBeNull()
+    }
 
-    const expected = runHarvest(
-      apple,
-      Object.fromEntries(apple.knobs.map((knob) => [knob.id, knob.default])),
-      appleArtifact(),
-      'pool',
-      appleTruth(),
-    )
-    if (!expected.ok) throw new Error('the default configuration should run')
-
-    expect(screen.getByText(/Total earnings/).textContent).toContain(
-      expected.outcome.earnings.toFixed(2),
-    )
+    await train()
+    for (const name of [/run a month/i, /run the year/i, /bring .* in/i, /harvest/i]) {
+      expect(screen.queryByRole('button', { name }), `the workshop offers ${name}`).toBeNull()
+    }
   })
 
-  it('derives no outcome of its own when the engine refuses', async () => {
+  it('shows no earnings figure and no report of a harvest', async () => {
     renderApple()
-    await userEvent.selectOptions(knobSelect('Patterns per block'), '2')
     await train()
 
     expect(screen.queryByText(/Total earnings/)).toBeNull()
-    expect(screen.getByRole('alert')).toBeDefined()
+    expect(screen.queryByRole('region', { name: 'Run report' })).toBeNull()
   })
 })
 
-describe('the report and the configuration it came from', () => {
-  it('names the configuration the report was produced from', async () => {
+describe('putting a model to work', () => {
+  it('offers nothing to put to work until a model has been made', () => {
     renderApple()
-    await run()
 
-    expect(within(report()).getByText(/blocks2-channels16-regularization1-dropout0/)).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Put this model to work' })).toBeNull()
   })
 
-  it('stops presenting a report as current once a knob moves', async () => {
-    renderApple()
-    await run()
-    expect(within(report()).getByText(/images evaluated/)).toBeDefined()
+  it('offers it once the replay has finished, naming the configuration it made', async () => {
+    const onPutToWork = vi.fn()
+    render(
+      <ConfigureTask
+        declaration={apple}
+        loadEntry={entryLoader(appleArtifact())}
+        replayMs={0}
+        onBack={() => {}}
+        onPutToWork={onPutToWork}
+      />,
+    )
+    await train()
 
-    // Option 1, not 0: the declaration now opens on the first option, and selecting the
-    // value that is already set would move no knob at all.
+    await userEvent.click(screen.getByRole('button', { name: 'Put this model to work' }))
+
+    expect(onPutToWork).toHaveBeenCalledOnce()
+    expect(onPutToWork.mock.calls[0]?.[0]).toBe('blocks2-channels16-regularization1-dropout0')
+  })
+
+  it('withdraws the offer as soon as a knob moves, because that model is no longer made', async () => {
+    renderApple()
+    await train()
+    expect(screen.getByRole('button', { name: 'Put this model to work' })).toBeDefined()
+
     await userEvent.selectOptions(knobSelect('Convolutional blocks'), '1')
 
-    expect(within(report()).queryByText(/images evaluated/)).toBeNull()
-    expect(within(report()).getByRole('status').textContent).toContain('changed the knobs since')
+    expect(screen.queryByRole('button', { name: 'Put this model to work' })).toBeNull()
   })
 
-  it('reports the new configuration after running again', async () => {
+  it('costs nothing and leaves the knobs exactly where they were', async () => {
     renderApple()
-    await run()
+    await train()
+    const before = screen.getByTestId('current-configuration').textContent
+
+    await userEvent.click(screen.getByRole('button', { name: 'Put this model to work' }))
+
+    expect(screen.getByTestId('current-configuration').textContent).toBe(before)
+  })
+})
+
+describe('a task already at work', () => {
+  function renderAtWork(onHandBack = vi.fn()) {
+    render(
+      <ConfigureTask
+        declaration={apple}
+        loadEntry={entryLoader(appleArtifact())}
+        replayMs={0}
+        onBack={() => {}}
+        atWork="blocks3-channels32-regularization1-dropout0"
+        onPutToWork={() => {}}
+        onHandBack={onHandBack}
+      />,
+    )
+    return onHandBack
+  }
+
+  it('says which configuration is at work, whatever the knobs currently say', () => {
+    renderAtWork()
+
+    expect(screen.getByTestId('at-work').textContent).toBe(
+      'blocks3-channels32-regularization1-dropout0',
+    )
+    expect(screen.getByTestId('current-configuration').textContent).toBe(
+      'blocks2-channels16-regularization1-dropout0',
+    )
+  })
+
+  it('offers to hand the job back', async () => {
+    const onHandBack = renderAtWork()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hand this job back' }))
+
+    expect(onHandBack).toHaveBeenCalledOnce()
+  })
+
+  it('offers nothing to hand back for a task the hands already work', () => {
+    renderApple()
+
+    expect(screen.queryByRole('button', { name: 'Hand this job back' })).toBeNull()
+    expect(screen.queryByTestId('at-work')).toBeNull()
+  })
+
+  it('leaves what is at work alone while a different model is made', async () => {
+    renderAtWork()
     await userEvent.selectOptions(knobSelect('Convolutional blocks'), '1')
-    await run()
+    await train()
 
-    expect(within(report()).getByText(/blocks3-channels16-regularization1-dropout0/)).toBeDefined()
-  })
-
-  it('claims nothing about where the predictions came from', async () => {
-    // The disclosure it used to carry said the numbers were hand-written stand-ins.
-    // They are trained, over the pool the student can browse, so the note is gone
-    // rather than reworded into something else that is not checked.
-    renderApple()
-    await run()
-
-    expect(screen.queryByRole('note')).toBeNull()
+    // Tinkering is a scratchpad; the slot is a commitment. Only putting to work moves it.
+    expect(screen.getByTestId('at-work').textContent).toBe(
+      'blocks3-channels32-regularization1-dropout0',
+    )
   })
 })
 
@@ -275,7 +306,6 @@ describe('refusals', () => {
             ],
           })
         }
-        truth={appleTruth()}
         replayMs={0}
         onBack={() => {}}
       />,
@@ -296,7 +326,6 @@ describe('leaving the task', () => {
       <ConfigureTask
         declaration={apple}
         loadEntry={entryLoader(appleArtifact())}
-        truth={appleTruth()}
         onBack={onBack}
       />,
     )

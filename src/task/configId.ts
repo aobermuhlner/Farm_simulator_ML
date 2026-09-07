@@ -17,6 +17,17 @@
 
 import type { ResolvedConfiguration } from './configuration.js'
 
+/**
+ * The character an identifier joins its parts with.
+ *
+ * Named here rather than written inline because the composer and the declaration
+ * validator have to agree about it: `task-contract` forbids this character in a knob id
+ * and in the written form of any value a knob permits, which is what makes an identifier
+ * readable back to exactly one configuration. Two literals could drift apart and turn
+ * that guarantee into a silently unresolvable slot.
+ */
+export const ID_SEPARATOR = '-'
+
 function formatValue(value: string | number): string {
   return typeof value === 'number' ? String(value) : value
 }
@@ -27,5 +38,7 @@ function formatValue(value: string | number): string {
  * student set them in, the session, or the machine.
  */
 export function configurationId(configuration: ResolvedConfiguration): string {
-  return configuration.values.map(([id, value]) => `${id}${formatValue(value)}`).join('-')
+  return configuration.values
+    .map(([id, value]) => `${id}${formatValue(value)}`)
+    .join(ID_SEPARATOR)
 }

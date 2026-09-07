@@ -178,6 +178,31 @@ feel like the job; growth keeps paying for a few more; then the crop passes sixt
 extra tree stops paying until a robot arrives. If the plateau bites before a robot is
 affordable, the robot's price is wrong — a data change, not a change.
 
+### What the first-pass numbers actually came to
+
+Played through the app rather than calculated — `web/src/App.sorting.figures.test.tsx`
+clicks through each harvest and reads the figures off the summary. At the shipped 55/35/10
+crop, the shipped payoff table, and a plausible 2.5 s an image:
+
+| Crop | Presented | Sorted faultlessly | Left unsorted | Whole crop at that rate |
+| ---: | --------: | -----------------: | ------------: | ----------------------: |
+|   10 |        10 |          CHF  3.00 |             0 |                    25 s |
+|   40 |        40 |          CHF 11.60 |             0 |                 1.7 min |
+|  400 |        60 |          CHF 17.40 |           340 |                16.7 min |
+| 4000 |        60 |          CHF 17.40 |         3 940 |                   2.8 h |
+
+The shape is the one the table above asked for: the first harvests are the whole job, growth
+keeps paying until the crop passes sixty, and past that every extra tree is time on the
+projection and nothing in the pocket. **A hand-sorted year is worth at most CHF 17.40.**
+
+That last figure is the one a robot's price has to be set against, and this change declares no
+robot to set it on — the summary shows a price only when the farm declares such a purchase, and
+the shipped farm declares none. It is left here rather than guessed at: whoever declares that
+purchase inherits "the plateau pays 17.40 a year against an opening balance of 2 000", and
+§4.5's 2 800 CHF robot would take some 46 plateau years to save for. Either the price or the
+table moves — both are declared data, and this design's own rule is that if the plateau bites
+before a robot is affordable, *the robot's price is wrong*.
+
 ### Gestures follow the declared order, and only where they fit
 
 Three declared actions map to left, down and right in declared order. Beyond three, pointer and

@@ -357,3 +357,20 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
     expect(declaration.available).toBeTypeOf('boolean')
   })
 })
+
+describe('apple-harvest declaration: what one person can sort by hand', () => {
+  const handSorting = declaration.handSorting as { perHarvest: number; secondsPerImage: number }
+  const declared = declaration.categories as { id: string }[]
+
+  it('declares how many apples one person gets through in a harvest', () => {
+    expect(handSorting.perHarvest).toBe(60)
+  })
+
+  it('declares the most seconds one apple may contribute to the measured rate', () => {
+    expect(handSorting.secondsPerImage).toBe(60)
+  })
+
+  it('can show one apple of every declared category in a single harvest', () => {
+    expect(handSorting.perHarvest).toBeGreaterThanOrEqual(declared.length)
+  })
+})

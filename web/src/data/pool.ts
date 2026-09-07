@@ -16,8 +16,10 @@
  * `src/pool/` where the refusals already live.
  */
 
+import type { Farm } from '../../../src/economy/index.js'
 import type { LoadedPool } from '../../../src/pool/index.js'
 import { readPool, regionFor } from '../../../src/pool/index.js'
+import { drawCrop } from '../../../src/sorting/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import { dataUrl, fetchJson, type Loaded } from './load.js'
@@ -131,4 +133,112 @@ export async function loadTrainingSplit(
   if (!read.ok) return { ok: false, issues: read.issues }
 
   return trainingSplitView(read.pool, declaration, paths.atlases)
+}
+
+/**
+ * One image of a crop: what it takes to draw it, and deliberately nothing else.
+ *
+ * No category and no label, unlike the split view above. A student sorting a crop is
+ * being measured, so what an image is must not be on the screen they are measured on —
+ * and the surest way to keep it off is to keep it out of what the screen is handed.
+ */
+export interface CropImageView {
+  readonly imageId: string
+  readonly atlasUrl: string
+  readonly atlasWidth: number
+  readonly atlasHeight: number
+  /** Top-left of this image's cell within its atlas, in atlas pixels. */
+  readonly x: number
+  readonly y: number
+  readonly cellSize: number
+}
+
+export interface CropView {
+  /** How many pieces the year's crop holds, whether or not anyone reaches them. */
+  readonly size: number
+  readonly unsorted: number
+  readonly presented: readonly CropImageView[]
+  /**
+   * What each presented image really is, for scoring the sort once it is over.
+   *
+   * Kept apart from the images rather than carried on them: joining the two is what the
+   * summary does, and it cannot be done by accident while a decision is still open.
+   */
+  readonly truth: Readonly<Record<string, CategoryId>>
+}
+
+/**
+ * Projects a drawn crop onto the atlas regions that draw it.
+ *
+ * Refuses rather than skipping an image it cannot place, for the reason the split view
+ * does: a crop quietly one image short would be sorted, scored and paid as a whole one.
+ */
+export function cropView(
+  pool: LoadedPool,
+  declaration: TaskDeclaration,
+  farm: Farm,
+  seed: number,
+  atlases: string,
+): Loaded<CropView> {
+  const draw = drawCrop(declaration, farm, pool, seed)
+  if (!draw.ok) return { ok: false, issues: draw.issues }
+
+  const presented: CropImageView[] = []
+  const truth: Record<string, CategoryId> = {}
+
+  for (const piece of draw.crop.presented) {
+    const image = pool.images[piece.imageId]
+    const region = regionFor(pool, piece.imageId)
+    const atlas = image === undefined ? undefined : pool.atlases[image.atlas]
+
+    if (image === undefined || region === undefined || atlas === undefined) {
+      return {
+        ok: false,
+        issues: [
+          issue(
+            'image-unplaceable',
+            `Image "${piece.imageId}" cannot be placed in an atlas this pool declares.`,
+            piece.imageId,
+          ),
+        ],
+      }
+    }
+
+    presented.push({
+      imageId: piece.imageId,
+      atlasUrl: dataUrl(`${atlases}/${atlas.file}`),
+      atlasWidth: atlas.width,
+      atlasHeight: atlas.height,
+      x: region.x,
+      y: region.y,
+      cellSize: region.size,
+    })
+    truth[piece.imageId] = piece.category
+  }
+
+  return {
+    ok: true,
+    value: { size: draw.crop.size, unsorted: draw.crop.unsorted, presented, truth },
+  }
+}
+
+/**
+ * Fetches a task's pool manifest and draws this year's crop from it.
+ *
+ * The same fetch and the same reader the browsable split uses, so a pool that will not
+ * load refuses here with the cause it refuses with there.
+ */
+export async function loadCrop(
+  paths: PoolPaths,
+  declaration: TaskDeclaration,
+  farm: Farm,
+  seed: number,
+): Promise<Loaded<CropView>> {
+  const raw = await fetchJson(paths.manifest)
+  if (!raw.ok) return raw
+
+  const read = readPool(raw.value, declaration)
+  if (!read.ok) return { ok: false, issues: read.issues }
+
+  return cropView(read.pool, declaration, farm, seed, paths.atlases)
 }

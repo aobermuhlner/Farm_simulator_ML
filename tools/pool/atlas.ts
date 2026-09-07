@@ -83,3 +83,39 @@ export function atlasSvg(plan: AtlasPlan): string {
 export function renderAtlas(plan: AtlasPlan): Buffer {
   return Buffer.from(new Resvg(atlasSvg(plan)).render().asPng())
 }
+
+/** One atlas rasterized once, as both the delivered PNG and the pixels behind it. */
+export interface RasterizedAtlas {
+  readonly png: Buffer
+  /** RGBA, row-major, `ATLAS_PX * ATLAS_PX * 4` bytes. */
+  readonly pixels: Buffer
+  readonly width: number
+}
+
+/**
+ * Rasterizes one atlas and keeps the pixels.
+ *
+ * PNG is lossless, so these are the delivered pixels — measuring them and measuring a
+ * decode of the written file give the same numbers, and this way the generator needs no
+ * PNG decoder. Rendering once and using the result twice also keeps the measurement pass
+ * from doubling the generator's cost.
+ */
+export function rasterizeAtlas(plan: AtlasPlan): RasterizedAtlas {
+  const rendered = new Resvg(atlasSvg(plan)).render()
+  return {
+    png: Buffer.from(rendered.asPng()),
+    pixels: rendered.pixels,
+    width: rendered.width,
+  }
+}
+
+/** One cell cut out of a rasterized atlas, as its own RGBA buffer. */
+export function cellPixels(atlas: RasterizedAtlas, cell: number): Uint8Array {
+  const { x, y } = cellOrigin(cell)
+  const out = new Uint8Array(CELL_PX * CELL_PX * 4)
+  for (let row = 0; row < CELL_PX; row += 1) {
+    const from = ((y + row) * atlas.width + x) * 4
+    out.set(atlas.pixels.subarray(from, from + CELL_PX * 4), row * CELL_PX * 4)
+  }
+  return out
+}

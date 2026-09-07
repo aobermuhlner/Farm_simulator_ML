@@ -44,7 +44,6 @@ function render_(declaration: TaskDeclaration) {
     <ConfigureTask
       declaration={declaration}
       loadEntry={entryLoader(appleArtifact())}
-      truth={appleTruth()}
       replayMs={0}
       onBack={() => {}}
     />,
@@ -57,9 +56,9 @@ function renderOther(declaration: TaskDeclaration) {
     <ConfigureTask
       declaration={declaration}
       loadEntry={entryLoader(unrelatedArtifact())}
-      truth={unrelatedTruth()}
       replayMs={0}
       onBack={() => {}}
+      onPutToWork={() => {}}
     />,
   )
 }
@@ -217,14 +216,13 @@ describe('a task that declares no diagram', () => {
     expect(screen.getByRole('heading', { name: other.title })).toBeDefined()
   })
 
-  it('still runs', async () => {
+  it('still makes a model', async () => {
     const other = unrelatedDeclaration()
     renderOther(other)
 
     await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
+    await screen.findByRole('button', { name: 'Put this model to work' })
 
-    expect(screen.getByRole('region', { name: 'Run report' })).toBeDefined()
     // The replay draws curves, which are images too — so this asks specifically whether
     // an architecture was drawn. None is declared, so none should be.
     expect(document.querySelector('.network-drawing, .cnn-drawing')).toBeNull()

@@ -8,13 +8,13 @@
  * engine change with a spec behind it, not arithmetic in a component.
  */
 
-import type { ConfigurationEntry, PredictionArtifact } from '../../../src/task/artifact.js'
+import type { ConfigurationEntry } from '../../../src/task/artifact.js'
 import { configurationId } from '../../../src/task/configId.js'
 import { defaultConfiguration } from '../../../src/task/configuration.js'
 import type { TaskAvailability } from '../../../src/progression/index.js'
 import { resolveSelectable } from '../../../src/progression/index.js'
 import type { RunResult } from '../../../src/scoring/index.js'
-import { runHarvest } from '../../../src/scoring/index.js'
+import { scoreEntry } from '../../../src/scoring/index.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 
 /** Issue code the engine uses for a configuration the artifact has no entry for. */
@@ -48,32 +48,21 @@ export function identifyConfiguration(
 }
 
 /**
- * Runs one harvest over the evaluation pool, from one configuration's own entry.
+ * Brings one card's crop in, from the configuration at work for it and its own entry.
  *
- * The entry arrives already fetched, because predictions are transferred per
- * configuration rather than all at once. It is wrapped under the identifier the knob
- * values resolve to, so the engine's own lookup still decides whether the entry belongs
- * to the configuration being run — a mismatch refuses instead of scoring one
- * configuration's predictions under another's name.
+ * Driven by the identifier rather than by knob values, because that is what a labour slot
+ * holds — see `workshop-harvest-split/design.md`, decision 3. The knobs are a scratchpad
+ * a student may have moved on since; the slot is the commitment the year reads.
  *
- * The training split is deliberately not run here: showing training-versus-
- * harvest performance is `training-simulation`'s work, and designing that
- * comparison twice is how the two end up disagreeing.
+ * The training split is deliberately not run here: showing training-versus-harvest
+ * performance is `training-simulation`'s work, and designing that comparison twice is how
+ * the two end up disagreeing.
  */
-export function runPool(
+export function runFielded(
   declaration: TaskDeclaration,
-  values: KnobValues,
+  identifier: string,
   entry: ConfigurationEntry,
   truth: Readonly<Record<string, CategoryId>>,
 ): RunResult {
-  const identified = identifyConfiguration(declaration, values)
-  if (!identified.ok) return { ok: false, issues: identified.issues }
-
-  const artifact: PredictionArtifact = {
-    schemaVersion: declaration.schemaVersion,
-    taskId: declaration.id,
-    categories: declaration.categories.map((category) => category.id),
-    configurations: { [identified.id]: entry },
-  }
-  return runHarvest(declaration, values, artifact, 'pool', truth)
+  return scoreEntry(declaration, identifier, entry, 'pool', truth)
 }

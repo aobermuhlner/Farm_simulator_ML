@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { credit, formatUnits, openFarm, recordHarvest, toUnits } from '../../src/economy/index.js'
-import { serializeSave, type GameState } from '../../src/save/index.js'
+import { SAVE_SCHEMA_VERSION, serializeSave, type GameState } from '../../src/save/index.js'
 import { App } from './App.js'
 import { SAVE_KEY, STORAGE_UNAVAILABLE, type SaveStorage } from './data/save.js'
 import { farmDeclaration, loadsFarm } from './test-support/farm.js'
@@ -126,6 +126,7 @@ describe('returning opens the farm that was left', () => {
       seed: 99,
       owned: ['starter-plot'],
       knobs: {},
+      slots: {},
     }
     const storage = memoryStorage({ [SAVE_KEY]: serializeSave(played) })
     renderApp(storage)
@@ -182,7 +183,7 @@ describe('a save that could not be read is disclosed, never migrated', () => {
       await screen.findByRole('button', { name: `Open ${appleTask.declaration.title}` }),
     )
     await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
-    expect(await screen.findByRole('button', { name: 'Run a month' })).toBeDefined()
+    expect(await screen.findByRole('button', { name: 'Put this model to work' })).toBeDefined()
   })
 
   it('says progress is not being kept when the browser will not store', async () => {
@@ -278,7 +279,7 @@ describe('nothing defends the save', () => {
 
   it('opens a save written by hand that fits the schema', async () => {
     const written = JSON.stringify({
-      schemaVersion: '1.0.0',
+      schemaVersion: SAVE_SCHEMA_VERSION,
       seed: 3,
       year: 9,
       balance: 42,
@@ -286,6 +287,7 @@ describe('nothing defends the save', () => {
       ledger: [],
       owned: ['second-row'],
       knobs: {},
+      slots: {},
     })
     renderApp(memoryStorage({ [SAVE_KEY]: written }))
     await screen.findByRole('region', { name: 'Farm status' })

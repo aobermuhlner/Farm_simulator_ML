@@ -10,6 +10,7 @@
  */
 
 import { blockSizes } from './cnn.js'
+import { ID_SEPARATOR } from './configId.js'
 import { DIAGRAM_KINDS } from './types.js'
 import type { KnobDeclaration, TaskDeclaration } from './types.js'
 
@@ -36,7 +37,10 @@ export const REQUIRED_FIELDS = [
   'pool',
   'predictions',
   'knobs',
+  'features',
+  'ruleBudget',
   'payoffs',
+  'handSorting',
   'teaching',
   'available',
 ] as const
@@ -173,7 +177,51 @@ function checkKnob(knob: unknown, index: number, issues: ValidationIssue[]): str
     })
   }
 
+  checkSeparator(knob, id, index, issues)
+
   return id
+}
+
+/**
+ * Refuses a knob that would compose an identifier nobody can read back.
+ *
+ * `configurationId` joins knob ids and written values with `ID_SEPARATOR`, and a slot
+ * naming a configuration reads that identifier back against the declaration. The
+ * separator appearing inside either part makes the read bind the wrong value and fail —
+ * and a slot that fails to resolve is dropped on restore, so an author adding a
+ * well-formed-looking value would silently take every student's model off the task.
+ *
+ * The values are the ones the knob actually permits rather than the fields it declares,
+ * so a slider whose range crosses zero is caught by the negative number it walks to
+ * rather than having to be recognised from its bounds. A knob whose own declaration is
+ * malformed contributes no values; its issues are already reported.
+ */
+function checkSeparator(
+  knob: Record<string, unknown>,
+  id: string | undefined,
+  index: number,
+  issues: ValidationIssue[],
+): void {
+  const where = `knobs[${index}]`
+
+  if (id !== undefined && id.includes(ID_SEPARATOR)) {
+    issues.push({
+      code: 'separator-in-identifier',
+      field: `${where}.id`,
+      message: `Knob id "${id}" contains "${ID_SEPARATOR}", which joins the parts of a configuration identifier and so cannot appear inside one.`,
+    })
+  }
+
+  const offending = (permittedValues(knob) ?? []).find((value) =>
+    String(value).includes(ID_SEPARATOR),
+  )
+  if (offending !== undefined) {
+    issues.push({
+      code: 'separator-in-identifier',
+      field: knob.kind === 'choice' ? `${where}.values` : where,
+      message: `Knob ${id ?? index} permits value ${JSON.stringify(offending)}, whose written form "${String(offending)}" contains "${ID_SEPARATOR}" — the character that joins the parts of a configuration identifier, so it cannot appear inside one.`,
+    })
+  }
 }
 
 function checkPayoffs(
@@ -467,7 +515,7 @@ function permittedValues(knob: Record<string, unknown>): (string | number)[] | u
   return undefined
 }
 
-function isPositiveInteger(value: unknown): boolean {
+function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
@@ -740,6 +788,218 @@ function referrableKnobs(knobs: unknown): readonly Record<string, unknown>[] | u
   return usable
 }
 
+/**
+ * Validates what one person can get through doing this task's job by hand.
+ *
+ * Two values that cannot work are refused by name rather than clamped. A limit below the
+ * number of declared categories cannot present one image of every category, which is the
+ * one thing a first harvest has to do; and a time cap of zero or less would make the
+ * measured rate either infinite or negative, which is worse than no rate at all.
+ */
+function checkHandSorting(
+  handSorting: unknown,
+  categoryIds: readonly string[],
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(handSorting)) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'handSorting',
+      message: 'Field "handSorting" must be an object.',
+    })
+    return
+  }
+
+  const perHarvest = handSorting.perHarvest
+  if (!isPositiveInteger(perHarvest)) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'handSorting.perHarvest',
+      message: `Field "handSorting.perHarvest" must be a whole number of images, one or more; found ${JSON.stringify(perHarvest)}.`,
+    })
+  } else if (categoryIds.length > 0 && perHarvest < categoryIds.length) {
+    issues.push({
+      code: 'sorting-limit-too-small',
+      field: 'handSorting.perHarvest',
+      message: `Field "handSorting.perHarvest" is ${perHarvest}, fewer than the ${categoryIds.length} categories this task declares, so a harvest could not show one image of every category.`,
+    })
+  }
+
+  const secondsPerImage = handSorting.secondsPerImage
+  if (
+    typeof secondsPerImage !== 'number' ||
+    !Number.isFinite(secondsPerImage) ||
+    secondsPerImage <= 0
+  ) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'handSorting.secondsPerImage',
+      message: `Field "handSorting.secondsPerImage" must be a finite number of seconds greater than zero; found ${JSON.stringify(secondsPerImage)}.`,
+    })
+  }
+}
+
+/** Every field a declared feature must carry before a student can pick a threshold on it. */
+export const REQUIRED_FEATURE_FIELDS = [
+  'id',
+  'label',
+  'unit',
+  'range',
+  'contaminatedBy',
+  'help',
+] as const
+
+/**
+ * Validates the declared feature list.
+ *
+ * `specs/measured-features/spec.md` — a feature missing any of its fields is refused
+ * naming it and the field, because a screen renders the list from this and a student
+ * sets a threshold by hand on what it says. The contamination list is required and
+ * required to be non-empty: a feature that names no contaminating attribute is claiming
+ * to be a clean read of one, which is an attribute under another name.
+ *
+ * Which attributes exist, and whether the named ones actually move the feature, are both
+ * questions about the pool rather than about this file. The names are checked against the
+ * manifest in `src/pool`, and the movement against the measured values in
+ * `test/features-pool.test.ts`. This function refuses what can be seen from the
+ * declaration alone.
+ */
+function checkFeatures(features: unknown, issues: ValidationIssue[]): void {
+  if (!Array.isArray(features)) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'features',
+      message: 'Field "features" must be a list.',
+    })
+    return
+  }
+  if (features.length === 0) {
+    issues.push({
+      code: 'empty-field',
+      field: 'features',
+      message: 'Field "features" declares no features, so nothing can be measured or shown.',
+    })
+    return
+  }
+
+  const seen = new Set<string>()
+  features.forEach((feature, index) => {
+    const where = `features[${index}]`
+    if (!isRecord(feature)) {
+      issues.push({ code: 'malformed-entry', field: where, message: `${where} must be an object.` })
+      return
+    }
+    const name = isNonEmptyString(feature.id) ? `"${feature.id}"` : where
+
+    for (const field of REQUIRED_FEATURE_FIELDS) {
+      if (feature[field] === undefined || feature[field] === null) {
+        issues.push({
+          code: 'missing-field',
+          field: `${where}.${field}`,
+          message: `Feature ${name} declares no ${field}.`,
+        })
+      }
+    }
+
+    for (const field of ['id', 'label', 'unit', 'help'] as const) {
+      if (feature[field] !== undefined && !isNonEmptyString(feature[field])) {
+        issues.push({
+          code: 'malformed-field',
+          field: `${where}.${field}`,
+          message: `Feature ${name} declares a ${field} that is not a non-empty string.`,
+        })
+      }
+    }
+
+    if (isNonEmptyString(feature.id)) {
+      if (seen.has(feature.id)) {
+        issues.push({
+          code: 'duplicate-id',
+          field: `${where}.id`,
+          message: `Feature "${feature.id}" is declared more than once.`,
+        })
+      }
+      seen.add(feature.id)
+    }
+
+    if (feature.range !== undefined) {
+      const range = feature.range
+      if (
+        !isRecord(range) ||
+        typeof range.min !== 'number' ||
+        typeof range.max !== 'number' ||
+        !Number.isFinite(range.min) ||
+        !Number.isFinite(range.max)
+      ) {
+        issues.push({
+          code: 'malformed-field',
+          field: `${where}.range`,
+          message: `Feature ${name} declares a range that is not two finite numbers.`,
+        })
+      } else if (range.min >= range.max) {
+        // A range that does not span anything would let a constant feature ship with a
+        // declared range that happened to contain it.
+        issues.push({
+          code: 'empty-range',
+          field: `${where}.range`,
+          message: `Feature ${name} declares the range ${range.min}..${range.max}, which spans nothing.`,
+        })
+      }
+    }
+
+    if (feature.contaminatedBy !== undefined) {
+      const contaminants = feature.contaminatedBy
+      if (!Array.isArray(contaminants)) {
+        issues.push({
+          code: 'malformed-field',
+          field: `${where}.contaminatedBy`,
+          message: `Feature ${name} declares a contaminatedBy that is not a list.`,
+        })
+      } else if (contaminants.length === 0) {
+        issues.push({
+          code: 'no-contamination-declared',
+          field: `${where}.contaminatedBy`,
+          message: `Feature ${name} names no contaminating attribute. A feature that recovers one attribute cleanly is that attribute under a different name.`,
+        })
+      } else {
+        for (const attribute of contaminants) {
+          if (!isNonEmptyString(attribute)) {
+            issues.push({
+              code: 'malformed-field',
+              field: `${where}.contaminatedBy`,
+              message: `Feature ${name} names a contaminant that is not a non-empty string.`,
+            })
+          }
+        }
+      }
+    }
+  })
+}
+
+/**
+ * Validates the declared ceiling on hand-written rules.
+ *
+ * Required rather than optional: the ladder guard is checked at this number, and a task
+ * that declares none has no budget for the guard to be meaningful at.
+ */
+function checkRuleBudget(ruleBudget: unknown, issues: ValidationIssue[]): void {
+  if (!isRecord(ruleBudget)) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'ruleBudget',
+      message: 'Field "ruleBudget" must be an object.',
+    })
+    return
+  }
+  if (!isPositiveInteger(ruleBudget.maxNodes)) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'ruleBudget.maxNodes',
+      message: `Field "ruleBudget.maxNodes" must be a whole number of decision nodes, one or more; found ${JSON.stringify(ruleBudget.maxNodes)}.`,
+    })
+  }
+}
+
 function checkTeaching(teaching: unknown, issues: ValidationIssue[]): void {
   if (!isRecord(teaching)) {
     issues.push({
@@ -811,9 +1071,14 @@ export function validateDeclaration(input: unknown): DeclarationValidation {
     checkCategoryActions(input.categoryActions, categoryIds, actionIds, issues)
   }
   if (input.knobs !== undefined) checkKnobs(input.knobs, issues)
+  if (input.features !== undefined) checkFeatures(input.features, issues)
+  if (input.ruleBudget !== undefined) checkRuleBudget(input.ruleBudget, issues)
   if (input.payoffs !== undefined) {
     checkPayoffs(input.payoffs, categoryIds, actionIds, issues)
     checkPayoffAgreement(input.payoffs, input.categoryActions, categoryIds, actionIds, issues)
+  }
+  if (input.handSorting !== undefined) {
+    checkHandSorting(input.handSorting, categoryIds, issues)
   }
   if (input.policy !== undefined) checkPolicy(input.policy, categoryIds, actionIds, issues)
   if (input.teaching !== undefined) checkTeaching(input.teaching, issues)

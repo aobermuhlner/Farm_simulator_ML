@@ -18,7 +18,16 @@
  */
 
 import type { ImageAttributes } from './bands.js'
-import { CELL_PX, GLOSS_COEFFICIENTS, SHADE_COEFFICIENTS, bodyTone } from './params.js'
+import {
+  CELL_PX,
+  GLOSS_COEFFICIENTS,
+  GLOSS_ELLIPSE_CENTRE,
+  LEAF_FILL,
+  SHADE_COEFFICIENTS,
+  SHADE_ELLIPSE,
+  STEM_FILL,
+  bodyTone,
+} from './params.js'
 
 /** Rounds to two decimals so the emitted SVG is byte-stable and readable. */
 function n(value: number): number {
@@ -180,14 +189,16 @@ export function appleMarkup(attributes: ImageAttributes, clipId: string): string
     `<g>`,
     `<clipPath id="${clipId}"><path d="${parts.body.d}"/></clipPath>`,
     // Stem and leaf are constant: nothing in the lesson depends on them.
-    `<path d="M ${cx} ${n(CELL_PX * 0.26)} C ${n(cx + 1)} ${n(CELL_PX * 0.18)} ${n(cx + 3)} ${n(CELL_PX * 0.14)} ${n(cx + 6)} ${n(CELL_PX * 0.11)}" fill="none" stroke="#6b4a2b" stroke-width="4.5" stroke-linecap="round"/>`,
-    `<path d="M ${n(cx + 5)} ${n(CELL_PX * 0.15)} C ${n(cx + 16)} ${n(CELL_PX * 0.08)} ${n(cx + 26)} ${n(CELL_PX * 0.14)} ${n(cx + 22)} ${n(CELL_PX * 0.22)} C ${n(cx + 16)} ${n(CELL_PX * 0.27)} ${n(cx + 8)} ${n(CELL_PX * 0.22)} ${n(cx + 5)} ${n(CELL_PX * 0.15)} Z" fill="#4c8a3f"/>`,
+    `<path d="M ${cx} ${n(CELL_PX * 0.26)} C ${n(cx + 1)} ${n(CELL_PX * 0.18)} ${n(cx + 3)} ${n(CELL_PX * 0.14)} ${n(cx + 6)} ${n(CELL_PX * 0.11)}" fill="none" stroke="${STEM_FILL}" stroke-width="4.5" stroke-linecap="round"/>`,
+    `<path d="M ${n(cx + 5)} ${n(CELL_PX * 0.15)} C ${n(cx + 16)} ${n(CELL_PX * 0.08)} ${n(cx + 26)} ${n(CELL_PX * 0.14)} ${n(cx + 22)} ${n(CELL_PX * 0.22)} C ${n(cx + 16)} ${n(CELL_PX * 0.27)} ${n(cx + 8)} ${n(CELL_PX * 0.22)} ${n(cx + 5)} ${n(CELL_PX * 0.15)} Z" fill="${LEAF_FILL}"/>`,
     `<path d="${parts.body.d}" fill="${parts.body.fill}"/>`,
     `<g clip-path="url(#${clipId})">`,
     // Shadow: a flat disc pushed down and right, so only its edge crosses the apple.
-    `<ellipse cx="${n(cx + 42)}" cy="${n(CELL_PX * 0.86)}" rx="62" ry="56" fill="#000" opacity="${parts.shade.opacity}"/>`,
+    // Placed by `SHADE_ELLIPSE`, which the feature measurement masks with — one ellipse,
+    // not two copies of it.
+    `<ellipse cx="${n(SHADE_ELLIPSE.cx)}" cy="${n(SHADE_ELLIPSE.cy)}" rx="${n(SHADE_ELLIPSE.rx)}" ry="${n(SHADE_ELLIPSE.ry)}" fill="#000" opacity="${parts.shade.opacity}"/>`,
     // Highlight: a flat tilted ellipse up and left, sized by gloss.
-    `<ellipse cx="${n(cx - 10)}" cy="${n(CELL_PX * 0.41)}" rx="${parts.gloss.rx}" ry="${parts.gloss.ry}" fill="#fff" opacity="${parts.gloss.opacity}" transform="rotate(-24 ${n(cx - 10)} ${n(CELL_PX * 0.41)})"/>`,
+    `<ellipse cx="${n(GLOSS_ELLIPSE_CENTRE.cx)}" cy="${n(GLOSS_ELLIPSE_CENTRE.cy)}" rx="${parts.gloss.rx}" ry="${parts.gloss.ry}" fill="#fff" opacity="${parts.gloss.opacity}" transform="rotate(${GLOSS_ELLIPSE_CENTRE.rotation} ${n(GLOSS_ELLIPSE_CENTRE.cx)} ${n(GLOSS_ELLIPSE_CENTRE.cy)})"/>`,
     '</g>',
     worm,
     '</g>',

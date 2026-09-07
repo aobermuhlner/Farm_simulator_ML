@@ -52,6 +52,14 @@ export interface Farm {
   readonly declaration: FarmDeclaration
   readonly balance: number
   readonly year: number
+  /**
+   * How many pieces this year's crop holds.
+   *
+   * State rather than a declared constant, because the crop grows as the land does. It
+   * opens at the declared figure and whatever comes to sell more land moves it; nothing
+   * here knows what such a purchase looks like, only that the number can change.
+   */
+  readonly cropSize: number
   readonly movements: readonly Movement[]
   readonly ledger: readonly YearRecord[]
 }
@@ -72,6 +80,7 @@ export function openFarm(declaration: FarmDeclaration): Farm {
     declaration,
     balance: toUnits(declaration.openingBalance, declaration.precision),
     year: declaration.openingYear,
+    cropSize: declaration.openingCrop,
     movements: [],
     ledger: [],
   }
@@ -186,6 +195,7 @@ export function recordHarvest(farm: Farm, paid: number): Farm {
     declaration: farm.declaration,
     balance,
     year: farm.year + 1,
+    cropSize: farm.cropSize,
     movements: [],
     ledger: [
       ...farm.ledger,

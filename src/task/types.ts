@@ -161,6 +161,77 @@ export interface CnnDiagram {
 
 export type DiagramDeclaration = FeedforwardDiagram | CnnDiagram
 
+/**
+ * What one person can get through when they do the task's job by hand.
+ *
+ * Declared by the task rather than by the farm because it is a property of the lesson:
+ * how many pictures a student can judge in one sitting, and how long a single one may be
+ * allowed to count for. The farm declares how large the crop is; this declares how much
+ * of it one pair of hands reaches.
+ *
+ * Both numbers are required of every task. A task with no figure for either cannot be
+ * done by hand at all, and a screen is a worse place to discover that than a validator.
+ */
+export interface HandSortingDeclaration {
+  /** How many images one person is presented with in a single harvest. */
+  readonly perHarvest: number
+  /**
+   * The most seconds any one image may contribute to the measured rate.
+   *
+   * A screen left standing over lunch would otherwise make the throughput figure absurd,
+   * and the throughput figure is the argument for automating the job.
+   */
+  readonly secondsPerImage: number
+}
+
+export type FeatureId = string
+
+/** The span a feature's values cover across the pool, inclusive at both ends. */
+export interface FeatureRange {
+  readonly min: number
+  readonly max: number
+}
+
+/**
+ * One number measured from an image's pixels, declared so a student can pick a threshold
+ * on it.
+ *
+ * `specs/measured-features/spec.md` — a bare id is not enough, because 0.06 has to mean
+ * something before it can be chosen. Every field here is required: the unit says what
+ * scale the number lives on, the range says where the pool's values actually fall, and
+ * the help says what the number means and how it can be wrong.
+ *
+ * `contaminatedBy` is the field that keeps a feature honest. It names the generation
+ * attributes that move the value without being the thing the feature is nominally about
+ * — a red apple in shadow measuring less red. A feature naming none is refused, because
+ * a feature that recovers one attribute cleanly is that attribute under another name and
+ * teaches nothing a measured feature exists to teach. What it names is checked against
+ * the pool rather than taken on trust.
+ */
+export interface FeatureDeclaration {
+  readonly id: FeatureId
+  readonly label: string
+  /** The unit or scale the values are expressed on, in words a student reads. */
+  readonly unit: string
+  readonly range: FeatureRange
+  /** Generation attributes that measurably move this feature without being its subject. */
+  readonly contaminatedBy: readonly string[]
+  readonly help: string
+}
+
+/**
+ * How large a rule a student may ever write by hand for this task.
+ *
+ * Declared here, at the maximum, rather than by whichever screen offers the rule builder:
+ * the ladder guard checks that no rule within this budget out-scores the weakest shipped
+ * model, and a guard checked at a smaller budget would prove nothing about the budget a
+ * student eventually buys. Raising this number re-runs the guard by construction.
+ */
+export interface RuleBudgetDeclaration {
+  /** Decision nodes, not leaves. Three nodes is a rule with three questions in it. */
+  readonly maxNodes: number
+}
+
 /** Task-level explanatory copy. Knob-level copy lives on each knob's `help`. */
 export interface TeachingCopy {
   readonly summary: string
@@ -183,7 +254,13 @@ export interface TaskDeclaration {
   /** Reference to the precomputed prediction artifact. */
   readonly predictions: string
   readonly knobs: readonly KnobDeclaration[]
+  /** The numbers measured from each image's pixels, as a student is shown them. */
+  readonly features: readonly FeatureDeclaration[]
+  /** The largest hand-written rule this task will ever offer. */
+  readonly ruleBudget: RuleBudgetDeclaration
   readonly payoffs: PayoffTable
+  /** What one person can get through doing this task's job by hand. */
+  readonly handSorting: HandSortingDeclaration
   readonly teaching: TeachingCopy
   /**
    * How to draw the architecture the knobs describe. Optional: a task declaring none is

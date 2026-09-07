@@ -1,7 +1,7 @@
 {
   "id": "apple-harvest",
   "title": "Apple Harvest",
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "pool": "pools/apple-harvest",
   "predictions": "artifacts/apple-harvest/predictions",
   "categories": [
@@ -85,25 +85,104 @@
       "help": "The fraction of the pattern detectors switched off at random during each training step, so the decision cannot lean on any single one. Another way of asking the robot to generalise rather than memorise."
     }
   ],
+  "features": [
+    {
+      "id": "redness",
+      "label": "Redness",
+      "unit": "red minus green, averaged over the apple; -1 to 1",
+      "range": {
+        "min": -0.46,
+        "max": 0.57
+      },
+      "contaminatedBy": [
+        "lighting",
+        "gloss"
+      ],
+      "help": "How much more red than green the apple's skin is, averaged over every pixel of it. This is a measurement of the photograph, not of the apple: the same apple in shadow measures less red, and a shiny one measures washed out, so a deep red apple in poor light can measure below a bright one that is barely ripe."
+    },
+    {
+      "id": "roundness",
+      "label": "Outline width to height",
+      "unit": "how wide the outline is for its height; 1 means square",
+      "range": {
+        "min": 0.86,
+        "max": 1.09
+      },
+      "contaminatedBy": [
+        "wormVisibility"
+      ],
+      "help": "The width of the apple's outline divided by its height. Squat apples measure above one and tall ones below. It is traced from the picture, so anything sticking out of the apple counts as part of it — a worm poking through the skin makes the outline taller and drops this number, whatever shape the apple actually is."
+    },
+    {
+      "id": "darkSpotArea",
+      "label": "Dark patch area",
+      "unit": "share of the apple's skin that is darker than the rest of it; 0 to 1",
+      "range": {
+        "min": 0,
+        "max": 0.07
+      },
+      "contaminatedBy": [
+        "roundness",
+        "gloss"
+      ],
+      "help": "How much of the skin is noticeably darker than the apple's own colour, as a share of the whole. The shadow and the shine are left out before measuring, because otherwise the shadow's edge counts as the biggest dark patch on every apple. It is a share rather than a count of pixels, so the same hole on a bigger apple measures smaller."
+    },
+    {
+      "id": "spotCount",
+      "label": "Off-colour patches",
+      "unit": "how many separate patches, counted whole",
+      "range": {
+        "min": 0,
+        "max": 2
+      },
+      "contaminatedBy": [
+        "roundness",
+        "gloss"
+      ],
+      "help": "How many separate patches of the skin are the wrong colour for this apple — counted, not measured. Patches smaller than a few pixels are ignored, so a faint mark can be there and not be counted, and a worm that is the same colour as the apple around it is not counted either."
+    },
+    {
+      "id": "textureVar",
+      "label": "Surface unevenness",
+      "unit": "spread of brightness across the apple; 0 means perfectly flat",
+      "range": {
+        "min": 0.03,
+        "max": 0.24
+      },
+      "contaminatedBy": [
+        "gloss",
+        "lighting",
+        "hue"
+      ],
+      "help": "How much the brightness varies across the apple. A matte apple in even light measures near zero. This is mostly a measurement of the lighting rather than of the skin: a hard shine or a deep shadow raises it far more than anything on the apple itself does."
+    }
+  ],
+  "ruleBudget": {
+    "maxNodes": 3
+  },
   "payoffs": {
     "red": {
       "crate-red": 0.4,
       "crate-green": 0.2,
-      "discard": 0.0
+      "discard": 0
     },
     "green": {
       "crate-red": -0.3,
       "crate-green": 0.2,
-      "discard": 0.0
+      "discard": 0
     },
     "wormy": {
       "crate-red": -1.5,
       "crate-green": -1.5,
-      "discard": 0.0
+      "discard": 0
     }
   },
   "policy": {
     "kind": "highest-probability"
+  },
+  "handSorting": {
+    "perHarvest": 60,
+    "secondsPerImage": 60
   },
   "teaching": {
     "summary": "Your sorting robot looks at each apple and does one of three things with it: into the red crate, into the green crate, or onto the reject heap. A ripe red in the red crate is worth the most; put that same apple in the green crate and nobody complains, you simply earn half as much. Send a green one to the red buyer and they open the crate and fine you more than the apple was ever worth. A worm in either crate is the expensive mistake, and it costs the same whichever crate it turns up in — the complaint is about the worm, not the label. Rejecting an apple earns nothing, and never costs you anything either.",

@@ -47,6 +47,12 @@ no summary fact's label SHALL appear in screen code, and no screen SHALL branch 
 The persistent bar SHALL be produced from the farm declaration and the facts it is
 supplied, and SHALL name nothing of its own.
 
+The same rule SHALL hold over what the catalog declares: no item id, item label, group id,
+group label or shop copy SHALL appear in screen code, and no screen SHALL branch on one.
+No screen SHALL name an unlock condition — which item opens which thing SHALL be read from
+the catalog, never written into a screen, so that a market for an entirely different farm
+renders through the same screens.
+
 #### Scenario: An unrelated task renders without screen changes
 - **WHEN** a second task declaring unrelated categories and actions is added as a declaration
 - **THEN** it renders its overview entry, configuration screen and report through the same screens
@@ -56,4 +62,9 @@ supplied, and SHALL name nothing of its own.
 #### Scenario: A farm declaring a different currency renders without screen changes
 - **WHEN** the farm declares a different name and a different currency label
 - **THEN** the bar shows both of them
+- **AND** no screen code is added or changed for it
+
+#### Scenario: An unrelated catalog renders without screen changes
+- **WHEN** a catalog declaring different groups, items and prices is loaded
+- **THEN** the market renders it, and locked things name the items that open them
 - **AND** no screen code is added or changed for it

@@ -78,6 +78,51 @@ button[type='submit'] {
 
 .announced { color: var(--line); font-style: italic; }
 
+/*
+ * The labour slot: who brings this card's crop in.
+ *
+ * Set apart from the card's copy because it is state rather than description — the one
+ * line on the overview that changes when a student puts a model to work.
+ */
+.labour-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  font-size: 0.92rem;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.labour-slot .slot-icon { font-size: 1.15rem; line-height: 1; }
+.labour-slot .slot-label { overflow-wrap: anywhere; }
+
+/*
+ * Running the year, and what is left of one in progress.
+ *
+ * The confirmation replaces the control in place rather than opening over it: it is the
+ * same commitment being asked about twice, and a dialog would make it feel like two.
+ */
+.run-year {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+}
+
+.run-year p { margin-top: 0; }
+.run-year button + button { margin-left: 0.5rem; }
+
+.year-in-progress {
+  margin: 1rem 0;
+  padding: 0.6rem 1rem;
+  border-left: 3px solid var(--line);
+  font-size: 0.95rem;
+}
+
 fieldset {
   border: 1px solid var(--line);
   border-radius: 0.6rem;
@@ -112,7 +157,19 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 .issues ul { padding-left: 1.1rem; }
 .explanation { font-size: 0.92rem; }
 
-.report.stale { opacity: 0.65; }
+/*
+ * The cell each row is aiming at — the action that category is declared to call for.
+ *
+ * Drawn as a ring and a weight rather than a tint, because colour-vision-safety forbids
+ * carrying a distinction by colour alone and this is the report's only such distinction.
+ * Both cues survive the colours being removed, and the ring is what still reads when the
+ * cell holds a zero, which is the state worth seeing.
+ */
+.report td[data-called-for] {
+  outline: 2px solid var(--ink);
+  outline-offset: -4px;
+  font-weight: 700;
+}
 .provenance, .staleness { font-size: 0.9rem; border-top: 1px dashed var(--line); padding-top: 0.6rem; }
 
 .training > h2 { margin-bottom: 0.25rem; }
@@ -414,3 +471,55 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 }
 
 .start-again { margin-top: 2rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+
+/* Sorting a crop by hand. Thumb-first: the picture is large, the controls sit under it
+ * in a row a thumb reaches, and the picture itself takes the swipe. */
+.hand-sort .sorting { display: grid; justify-items: center; gap: 0.9rem; margin-top: 1rem; }
+
+.hand-sort .sort-image {
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background-repeat: no-repeat;
+  max-inline-size: 100%;
+  /* The gesture is the screen's, not the browser's: without this a swipe scrolls. */
+  touch-action: none;
+  user-select: none;
+}
+
+.hand-sort .sort-actions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.hand-sort .sort-actions button {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: center;
+  min-inline-size: 9rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.hand-sort .action-key {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+  padding: 0 0.35rem;
+}
+
+.hand-sort .action-gesture { font-size: 0.78rem; color: color-mix(in srgb, var(--ink) 65%, transparent); }
+
+.hand-sort .sort-tallies, .hand-sort .sort-figures { border-collapse: collapse; }
+.hand-sort .sort-tallies th, .hand-sort .sort-figures th { text-align: start; font-weight: 500; padding-inline-end: 1rem; }
+.hand-sort .sort-tallies td, .hand-sort .sort-figures td { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.hand-sort .sort-summary { margin-top: 1.2rem; }
+.hand-sort .breakdown { border-collapse: collapse; margin-bottom: 1rem; }
+.hand-sort .breakdown th, .hand-sort .breakdown td { border: 1px solid var(--line); padding: 0.35rem 0.6rem; }
+.hand-sort .breakdown td { text-align: end; font-variant-numeric: tabular-nums; }

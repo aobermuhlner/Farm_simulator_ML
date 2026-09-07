@@ -13,6 +13,7 @@
  */
 
 import type { ImageAttributes } from './bands.js'
+import type { FeatureVector } from './features.js'
 import { ATLAS_GRID, cellOrigin, type AtlasPlan } from './atlas.js'
 import {
   ATLAS_PX,
@@ -49,6 +50,16 @@ export interface ManifestImage {
   readonly split: SplitName
   readonly category: PoolCategory
   readonly attributes: ImageAttributes
+  /**
+   * What the delivered pixels turn out to look like when somebody measures them.
+   *
+   * `specs/image-pool/spec.md` — the manifest now carries three kinds of number per
+   * image and they are not interchangeable. The category is ground truth, the attributes
+   * are what produced the pixels, and these are an observation of the result. Recorded
+   * here so the observation is made once and made identically for everything that
+   * consumes the pool, rather than in a browser where two devices could disagree.
+   */
+  readonly features: FeatureVector
   readonly atlas: string
   readonly cell: number
   readonly role?: TrainingRole
@@ -119,6 +130,7 @@ export function declarationDisagreement(
 export function buildManifest(
   plans: readonly AtlasPlan[],
   schemaVersion: string,
+  features: Readonly<Record<string, FeatureVector>>,
 ): PoolManifestFile {
   const atlases: Record<string, AtlasDescriptor> = {}
   const images: Record<string, ManifestImage> = {}
@@ -144,10 +156,18 @@ export function buildManifest(
     }
     plan.images.forEach((image, cell) => {
       const role: TrainingRole | undefined = roles[image.id]
+      // A manifest missing one image's feature vector is refused at load, so the
+      // generator refuses to write one at all: the cause is legible here and would look
+      // like a runtime bug there.
+      const measured = features[image.id]
+      if (measured === undefined) {
+        throw new Error(`no feature vector was measured for image "${image.id}"`)
+      }
       images[image.id] = {
         split: image.split,
         category: image.category,
         attributes: image.attributes,
+        features: measured,
         atlas: plan.id,
         cell,
         ...(role === undefined ? {} : { role }),

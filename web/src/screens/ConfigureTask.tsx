@@ -1,9 +1,15 @@
 /**
- * Configure a task and run it.
+ * The workshop: where a model is made, and where one is put to work.
  *
  * Every control on this screen comes from the task's knob declarations, and
  * every word of explanation comes from its teaching copy. Adding a knob, or a
  * whole lesson, changes nothing in this file.
+ *
+ * Nothing here runs the year and nothing here moves money. That is the split
+ * `workshop-harvest-split` exists for: hypotheses have to be cheap or they will not be
+ * formed, so a student may enter, browse, and make a model as often as they like at no
+ * cost. The year is one deliberate act belonging to the whole farm, and it is run from
+ * the overview.
  */
 
 import { useState } from 'react'
@@ -11,8 +17,7 @@ import type { ConfigurationEntry } from '../../../src/task/artifact.js'
 import type { TaskAvailability } from '../../../src/progression/index.js'
 import { knobAvailability } from '../../../src/progression/index.js'
 import { resolveArchitecture } from '../../../src/task/diagram.js'
-import type { RunOutcome } from '../../../src/scoring/index.js'
-import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
+import type { TaskDeclaration } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import type { Loaded } from '../data/load.js'
 import type { TrainingSplitView } from '../data/pool.js'
@@ -20,8 +25,7 @@ import { HelpDisclosure } from '../components/HelpDisclosure.js'
 import { Issues } from '../components/Issues.js'
 import { KnobControl } from '../components/KnobControl.js'
 import { ArchitectureDiagram } from '../components/architecture/ArchitectureDiagram.js'
-import { defaultKnobValues, identifyConfiguration, runPool, type KnobValues } from '../model/run.js'
-import { Report } from './Report.js'
+import { defaultKnobValues, identifyConfiguration, type KnobValues } from '../model/run.js'
 import { TrainingBrowser } from './TrainingBrowser.js'
 import { TrainingRun } from './TrainingRun.js'
 
@@ -35,7 +39,6 @@ export interface ConfigureTaskProps {
    * configuration alone.
    */
   readonly loadEntry: (configurationId: string) => Promise<Loaded<ConfigurationEntry>>
-  readonly truth: Readonly<Record<string, CategoryId>>
   readonly onBack: () => void
   /**
    * Fetches this task's training split, when the task ships one to browse.
@@ -64,21 +67,28 @@ export interface ConfigureTaskProps {
   readonly initialValues?: KnobValues
   /** Reports every change, so the shell can keep them between visits. */
   readonly onValuesChange?: (values: KnobValues) => void
-}
-
-/** A finished run, remembered with the configuration that produced it. */
-interface Finished {
-  readonly configurationId: string
-  readonly outcome: RunOutcome
+  /**
+   * The configuration already at work for this task, where one is.
+   *
+   * What is *at work* and what is in the knobs are deliberately different state. The
+   * knobs are a scratchpad a student may move freely; the slot is a commitment the year
+   * reads. Tinkering with one must not silently change the other — `design.md`,
+   * decision 2.
+   */
+  readonly atWork?: string
+  /** Puts the model just made to work for this task. Offered only once it is made. */
+  readonly onPutToWork?: (configurationId: string) => void
+  /** Hands this task's job back to the farm's manual labour. */
+  readonly onHandBack?: () => void
 }
 
 /**
  * How far the student has got with the configuration in the knobs.
  *
- * Two phases, deliberately separated: a model is trained first and read on its curves,
- * and only then can a month be run over it. Pressing one button and reading earnings
- * conflates "is this model any good" with "did the farm make money", which is the
- * question the curves are there to answer first.
+ * A model is made first and read on its curves, and only then may it be put to work.
+ * Gating the commitment on the replay having played is what makes the diagnostic
+ * unskippable at the moment it matters; being *at work* is not gated the same way, or a
+ * slot would empty itself on every reload.
  */
 type Stage =
   | { readonly kind: 'untrained' }
@@ -93,7 +103,6 @@ type Stage =
 export function ConfigureTask({
   declaration,
   loadEntry,
-  truth,
   onBack,
   loadSplit,
   replayMs,
@@ -101,11 +110,13 @@ export function ConfigureTask({
   formatPrice,
   initialValues,
   onValuesChange,
+  atWork,
+  onPutToWork,
+  onHandBack,
 }: ConfigureTaskProps) {
   const [values, setValues] = useState<KnobValues>(
     () => initialValues ?? defaultKnobValues(declaration),
   )
-  const [finished, setFinished] = useState<Finished | undefined>(undefined)
   const [refusal, setRefusal] = useState<readonly ValidationIssue[] | undefined>(undefined)
   const [browsing, setBrowsing] = useState(false)
   const [stage, setStage] = useState<Stage>({ kind: 'untrained' })
@@ -123,8 +134,7 @@ export function ConfigureTask({
     // Reported from the handler rather than from inside the updater: a state updater must
     // stay a pure function of what it is given, and React may call one twice.
     onValuesChange?.(next)
-    // A report belongs to the configuration that produced it. Clearing the
-    // refusal too, so a stale explanation never sits under new knob values.
+    // Clearing the refusal, so a stale explanation never sits under new knob values.
     setRefusal(undefined)
     // A trained model belongs to its configuration even more strictly than a report
     // does: there is no honest way to show one configuration's curves under another's
@@ -138,13 +148,11 @@ export function ConfigureTask({
       // Not repeated as a second refusal: the settings block below already carries these
       // issues for as long as the values that caused them are the ones in the knobs.
       setRefusal(undefined)
-      setFinished(undefined)
       setStage({ kind: 'untrained' })
       return
     }
 
     setStage({ kind: 'fetching' })
-    setFinished(undefined)
     // Fetched per run rather than held: a student who never chooses a configuration
     // never transfers it, and one they return to is served from the browser's cache.
     const loaded = await loadEntry(identified.id)
@@ -156,20 +164,6 @@ export function ConfigureTask({
 
     setRefusal(undefined)
     setStage({ kind: 'training', configurationId: identified.id, entry: loaded.value })
-  }
-
-  /** Runs the month over the model just trained — the entry is already in hand. */
-  function harvest(): void {
-    if (stage.kind !== 'trained') return
-
-    const result = runPool(declaration, values, stage.entry, truth)
-    if (!result.ok) {
-      setRefusal(result.issues)
-      setFinished(undefined)
-      return
-    }
-    setRefusal(undefined)
-    setFinished({ configurationId: result.configurationId, outcome: result.outcome })
   }
 
   // This screen stays mounted while the browser is open, so the knob values, the run
@@ -254,7 +248,7 @@ export function ConfigureTask({
       )}
 
       {refusal === undefined ? null : (
-        <Issues title="This run did not happen" issues={refusal} />
+        <Issues title="This model could not be made" issues={refusal} />
       )}
 
       {stage.kind === 'training' || stage.kind === 'trained' ? (
@@ -271,21 +265,31 @@ export function ConfigureTask({
         />
       ) : null}
 
-      {stage.kind === 'trained' ? (
+      {stage.kind === 'trained' && onPutToWork !== undefined ? (
         <p>
-          <button type="button" onClick={harvest}>
-            Run a month
+          <button
+            type="button"
+            onClick={() => {
+              if (stage.kind !== 'trained') return
+              onPutToWork(stage.configurationId)
+            }}
+          >
+            Put this model to work
           </button>
         </p>
       ) : null}
 
-      {finished === undefined ? null : (
-        <Report
-          declaration={declaration}
-          configurationId={finished.configurationId}
-          outcome={finished.outcome}
-          stale={finished.configurationId !== currentId}
-        />
+      {atWork === undefined ? null : (
+        <p className="at-work">
+          <span>
+            Configuration <code data-testid="at-work">{atWork}</code> is at work here.
+          </span>
+          {onHandBack === undefined ? null : (
+            <button type="button" onClick={onHandBack}>
+              Hand this job back
+            </button>
+          )}
+        </p>
       )}
     </section>
   )

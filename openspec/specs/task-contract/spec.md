@@ -12,9 +12,14 @@ A task SHALL declare all of: a stable id, a display title, its ground-truth cate
 the actions available to the automated system, a mapping from each declared category to
 the action that category calls for, its decision policy, a reference to its image pool,
 the hyperparameter knobs exposed to the student, a reference to its precomputed
-prediction artifact, a payoff table, its teaching copy, and whether it is available to
-play. The system SHALL refuse to present a task whose declaration is missing any of
-these.
+prediction artifact, a payoff table, how much of its job one person can do by hand, its
+teaching copy, and whether it is available to play. The system SHALL refuse to present a
+task whose declaration is missing any of these.
+
+How much of its job one person can do by hand is two figures: how many images a student
+is presented with in a single harvest, and the longest a single image may count towards a
+measured rate. Every task carries them, so a task that cannot be done by hand is refused
+where its author can see it rather than in front of a student.
 
 #### Scenario: Complete declaration is playable
 - **WHEN** a task declaration provides every required field
@@ -77,9 +82,36 @@ An ordered set of knob values SHALL map to a deterministic configuration identif
 The same knob values SHALL always produce the same identifier, independent of the order
 in which the student set them, the session, or the machine.
 
+An identifier SHALL also be readable back: it SHALL name exactly one ordered set of knob
+values for the task that composed it. To that end, the character an identifier joins its
+parts with SHALL NOT appear in any knob id, nor in the written form of any value a knob
+permits — which excludes a string value containing it and a numeric value whose written form
+does, such as a negative number. A declaration carrying that character in either place SHALL
+be refused at load, naming the knob and the offending id or value, rather than loaded into a
+task whose identifiers cannot be read back.
+
 #### Scenario: Same selection yields the same identifier
 - **WHEN** two students independently select identical knob values for the same task
 - **THEN** both configurations resolve to the same configuration identifier
+
+#### Scenario: An identifier names the values it was composed from
+- **WHEN** an identifier composed from a task's knob values is read back against that task
+- **THEN** it yields exactly the knob values it was composed from
+
+#### Scenario: A separator inside a knob id is refused
+- **WHEN** a task declares a knob whose id contains the identifier's separator
+- **THEN** the declaration is refused naming that knob and its id
+- **AND** the task is not loaded
+
+#### Scenario: A separator inside a declared string value is refused
+- **WHEN** a task declares a choice knob one of whose string values contains the identifier's separator
+- **THEN** the declaration is refused naming that knob and that value
+- **AND** the task is not loaded
+
+#### Scenario: A knob permitting a negative value is refused
+- **WHEN** a task declares a knob permitting a negative number, whose written form carries the identifier's separator
+- **THEN** the declaration is refused naming that knob and that value
+- **AND** the task is not loaded
 
 A configuration identifier the prediction artifact has no entry for, and an artifact
 declaring a different task than the one being resolved, SHALL be refused rather than

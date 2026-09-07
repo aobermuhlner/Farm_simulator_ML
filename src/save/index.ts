@@ -32,7 +32,17 @@
  * openspec/changes/progression-catalog/specs/game-save/spec.md.
  */
 
-import type { Farm, FarmDeclaration, Movement, YearRecord } from '../economy/index.js'
+import type {
+  ClosedYear,
+  CropBroughtIn,
+  Farm,
+  FarmDeclaration,
+  Movement,
+  YearInProgress,
+  YearRecord,
+} from '../economy/index.js'
+import type { FieldedModel, LabourSlots } from '../labour/index.js'
+import { configurationResolves } from '../labour/index.js'
 import { openFarm, toAmount, toUnits } from '../economy/index.js'
 import type { Catalog } from '../progression/catalog.js'
 import { itemById } from '../progression/catalog.js'
@@ -46,7 +56,7 @@ import { knobPermits } from '../task/validate.js'
  * The schema this build reads. Bumped deliberately and never silently: every bump resets
  * every student's farm, which is the cost of never migrating one wrongly.
  */
-export const SAVE_SCHEMA_VERSION = '1.0.0'
+export const SAVE_SCHEMA_VERSION = '2.0.0'
 
 /** A save discarded whole, with the cause the student is told. */
 export const SAVE_RESET = 'save-reset'
@@ -69,6 +79,30 @@ export interface GameState {
   readonly seed: number
   readonly owned: readonly string[]
   readonly knobs: SavedKnobs
+  /**
+   * Who brings each task's crop in, for every task a model has been put to work for.
+   *
+   * A task with no entry is worked by the farm's hands — `src/labour/` is where that
+   * reading lives, and the absence is the default rather than a sentinel this has to
+   * write at farm creation. See workshop-harvest-split/design.md, decision 1.
+   */
+  readonly slots: LabourSlots
+  /**
+   * The year that has been run and not yet closed, where there is one.
+   *
+   * Nothing in it is money: the balance, the ledger and the year all stand where they
+   * stood before it was run, and stay there until every playable card has been brought
+   * in. Absent for a farm whose year has not been run.
+   */
+  readonly pending?: YearInProgress
+  /**
+   * The most recently closed year, per card, and nothing older.
+   *
+   * It is what each card's report offers, and it cannot be recomputed: a hand-sorted
+   * card's decisions are the student's own and are never persisted. The money history is
+   * the ledger's job, which is why only one year of this is kept.
+   */
+  readonly lastYear?: ClosedYear
 }
 
 /** One movement, as the save writes it: a decimal amount and its reason. */
@@ -85,15 +119,50 @@ export interface SavedYear {
   readonly closingBalance: number
 }
 
+/** One model at work, as the save writes it. */
+export interface SavedSlot {
+  readonly configuration: string
+  readonly family?: string
+}
+
+/** What one card brought in, as the save writes it. Amounts are decimal, not whole units. */
+export interface SavedCrop {
+  readonly task: string
+  readonly configuration?: string
+  readonly paid: number
+  readonly evaluated: number
+  readonly counts: Readonly<Record<string, Readonly<Record<string, number>>>>
+}
+
+/** A year, in progress or closed, as the save writes it. */
+export interface SavedYearOfCrops {
+  readonly year: number
+  readonly brought: readonly SavedCrop[]
+}
+
 export interface SavedFarm {
   readonly schemaVersion: string
   readonly seed: number
   readonly year: number
+  /**
+   * How many pieces this year's crop holds.
+   *
+   * Progress rather than a declaration: it opens at the declared figure and grows with
+   * the land. A save written before the crop was state carries none, and reads back at
+   * the declared opening — the value such a farm was playing at anyway.
+   */
+  readonly cropSize: number
   readonly balance: number
   readonly movements: readonly SavedMovement[]
   readonly ledger: readonly SavedYear[]
   readonly owned: readonly string[]
   readonly knobs: SavedKnobs
+  /** Task id to the model at work for it. A task with no entry is worked by hand. */
+  readonly slots: Readonly<Record<string, SavedSlot>>
+  /** The year run and not yet closed, where there is one. */
+  readonly pending?: SavedYearOfCrops
+  /** The most recently closed year, per card. */
+  readonly lastYear?: SavedYearOfCrops
 }
 
 export type SaveRestore =
@@ -154,6 +223,7 @@ export function newGame(
     seed: draw(),
     owned: [...catalog.ownedAtStart],
     knobs: {},
+    slots: {},
   }
 }
 
@@ -164,6 +234,7 @@ export function encodeSave(state: GameState): SavedFarm {
     schemaVersion: SAVE_SCHEMA_VERSION,
     seed: state.seed,
     year: state.farm.year,
+    cropSize: state.farm.cropSize,
     balance: toAmount(state.farm.balance, precision),
     movements: state.farm.movements.map((movement) => ({
       amount: toAmount(movement.units, precision),
@@ -177,6 +248,33 @@ export function encodeSave(state: GameState): SavedFarm {
     })),
     owned: [...state.owned],
     knobs: state.knobs,
+    slots: Object.fromEntries(
+      Object.entries(state.slots).map(([taskId, model]) => [
+        taskId,
+        model.family === undefined
+          ? { configuration: model.configurationId }
+          : { configuration: model.configurationId, family: model.family },
+      ]),
+    ),
+    ...(state.pending === undefined ? {} : { pending: encodeCrops(state.pending, precision) }),
+    ...(state.lastYear === undefined ? {} : { lastYear: encodeCrops(state.lastYear, precision) }),
+  }
+}
+
+/** A year of crops as the save writes it: decimal amounts, and no per-image decision. */
+function encodeCrops(
+  year: YearInProgress | ClosedYear,
+  precision: number,
+): SavedYearOfCrops {
+  return {
+    year: year.year,
+    brought: year.brought.map((crop) => ({
+      task: crop.taskId,
+      ...(crop.configurationId === undefined ? {} : { configuration: crop.configurationId }),
+      paid: toAmount(crop.paidUnits, precision),
+      evaluated: crop.evaluated,
+      counts: crop.counts,
+    })),
   }
 }
 
@@ -281,6 +379,109 @@ function readKnobs(
 }
 
 /**
+ * Reads the counts of one card's crop, or undefined when the shape is wrong.
+ *
+ * A count per declared category and action and nothing finer: the aggregate a report
+ * renders. Nothing here reads or writes a per-image decision, which `manual-sorting`
+ * forbids persisting at all.
+ */
+function readCounts(
+  raw: unknown,
+): Readonly<Record<string, Readonly<Record<string, number>>>> | undefined {
+  if (!isRecord(raw)) return undefined
+  const counts: Record<string, Record<string, number>> = {}
+  for (const [category, row] of Object.entries(raw)) {
+    if (!isRecord(row)) return undefined
+    const actions: Record<string, number> = {}
+    for (const [action, count] of Object.entries(row)) {
+      if (!Number.isInteger(count) || (count as number) < 0) return undefined
+      actions[action] = count as number
+    }
+    counts[category] = actions
+  }
+  return counts
+}
+
+/** Reads a year of crops — in progress or closed — or undefined when the shape is wrong. */
+function readCrops(raw: unknown, precision: number): YearInProgress | undefined {
+  if (!isRecord(raw) || !Number.isInteger(raw.year)) return undefined
+  if (!Array.isArray(raw.brought)) return undefined
+
+  const brought: CropBroughtIn[] = []
+  for (const entry of raw.brought) {
+    if (!isRecord(entry) || typeof entry.task !== 'string' || entry.task.length === 0) {
+      return undefined
+    }
+    if (entry.configuration !== undefined && typeof entry.configuration !== 'string') {
+      return undefined
+    }
+    if (!isFiniteNumber(entry.paid)) return undefined
+    if (!Number.isInteger(entry.evaluated) || (entry.evaluated as number) < 0) return undefined
+
+    const counts = readCounts(entry.counts)
+    if (counts === undefined) return undefined
+
+    brought.push({
+      taskId: entry.task,
+      ...(entry.configuration === undefined ? {} : { configurationId: entry.configuration }),
+      paidUnits: toUnits(entry.paid, precision),
+      evaluated: entry.evaluated as number,
+      counts,
+    })
+  }
+  return { year: raw.year as number, brought }
+}
+
+/**
+ * Reads the labour slots, dropping every one naming something this build cannot make.
+ *
+ * A slot for a task the declarations no longer carry, or naming a configuration the task
+ * can no longer produce, is a stale reference: the card reverts to the farm's hands and
+ * the student is told, rather than the whole farm being refused over a model they can
+ * simply train again. `Game_design.md` §4.4 rule 3 — never hard-fail.
+ */
+function readSlots(
+  raw: unknown,
+  tasks: readonly TaskDeclaration[],
+  issues: ValidationIssue[],
+): LabourSlots | undefined {
+  if (raw === undefined) return {}
+  if (!isRecord(raw)) return undefined
+
+  const slots: Record<string, FieldedModel> = {}
+  for (const [taskId, slot] of Object.entries(raw)) {
+    if (!isRecord(slot) || typeof slot.configuration !== 'string') return undefined
+    if (slot.family !== undefined && typeof slot.family !== 'string') return undefined
+
+    const task = tasks.find((candidate) => candidate.id === taskId)
+    if (task === undefined) {
+      issues.push(
+        dropped(
+          `The save has a model at work for task "${taskId}", which this build does not declare; that task is gone and so is the model.`,
+          taskId,
+        ),
+      )
+      continue
+    }
+    if (!configurationResolves(task, slot.configuration)) {
+      issues.push(
+        dropped(
+          `The save has configuration "${slot.configuration}" at work for "${taskId}", which this build can no longer make; that job goes back to hand work until you put another model to it.`,
+          taskId,
+        ),
+      )
+      continue
+    }
+
+    slots[taskId] = {
+      configurationId: slot.configuration,
+      ...(slot.family === undefined ? {} : { family: slot.family }),
+    }
+  }
+  return slots
+}
+
+/**
  * Restores a farm from a saved object.
  *
  * Every check that can fail the *shape* discards the whole save; every check that can
@@ -299,6 +500,9 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
 
   if (!isFiniteNumber(raw.seed)) return reset('it records no usable farm seed.')
   if (!Number.isInteger(raw.year)) return reset('it records no usable year.')
+  if (raw.cropSize !== undefined && (!Number.isInteger(raw.cropSize) || (raw.cropSize as number) < 1)) {
+    return reset('it records no usable crop size.')
+  }
   if (!isFiniteNumber(raw.balance) || raw.balance < 0) return reset('it records no usable balance.')
 
   const movements = readMovements(raw.movements, precision)
@@ -314,6 +518,38 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
   const issues: ValidationIssue[] = []
   const knobs = readKnobs(raw.knobs, context.tasks, issues)
   if (knobs === undefined) return reset('its record of the knob values is not of the shape a save has.')
+
+  const slots = readSlots(raw.slots, context.tasks, issues)
+  if (slots === undefined) return reset('its record of what is at work is not of the shape a save has.')
+
+  let pending: YearInProgress | undefined
+  if (raw.pending !== undefined) {
+    const read = readCrops(raw.pending, precision)
+    if (read === undefined) {
+      return reset('its record of the year in progress is not of the shape a save has.')
+    }
+    // A year in progress that is not the farm's current year cannot be resumed: nothing
+    // in it was ever credited, so the year simply re-opens and nothing is lost.
+    if (read.year !== (raw.year as number)) {
+      issues.push(
+        dropped(
+          `The save was part way through year ${read.year} while the farm stands at year ${String(raw.year)}; that year has been re-opened. Nothing had been paid out for it.`,
+          'pending',
+        ),
+      )
+    } else {
+      pending = read
+    }
+  }
+
+  let lastYear: ClosedYear | undefined
+  if (raw.lastYear !== undefined) {
+    const read = readCrops(raw.lastYear, precision)
+    if (read === undefined) {
+      return reset('its record of the last closed year is not of the shape a save has.')
+    }
+    lastYear = read
+  }
 
   const owned: string[] = []
   for (const id of raw.owned as readonly string[]) {
@@ -333,12 +569,16 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
         declaration: context.declaration,
         balance: toUnits(raw.balance, precision),
         year: raw.year as number,
+        cropSize: (raw.cropSize as number | undefined) ?? context.declaration.openingCrop,
         movements,
         ledger,
       },
       seed: raw.seed,
       owned,
       knobs,
+      slots,
+      ...(pending === undefined ? {} : { pending }),
+      ...(lastYear === undefined ? {} : { lastYear }),
     },
     dropped: issues,
   }

@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { cleanup, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { formatUnits } from '../../src/economy/index.js'
@@ -9,8 +9,11 @@ import {
   taskAvailability,
 } from '../../src/progression/index.js'
 import { KnobControl } from './components/KnobControl.js'
+import { HandSort } from './screens/HandSort.js'
+import { measureSort } from '../../src/sorting/index.js'
 import { appleDeclaration, unrelatedDeclaration } from './test-support/declarations.js'
 import { farmDeclaration } from './test-support/farm.js'
+import { cropOf, loadsCrop } from './test-support/pool.js'
 import { shippedCatalog, soundCatalog } from './test-support/progression.js'
 import type { SummaryFact } from './components/FarmBar.js'
 
@@ -61,9 +64,21 @@ const farm = farmDeclaration()
  */
 const SUPPLIED_FACTS: readonly SummaryFact[] = []
 
+/**
+ * The farm's own labour, as its declaration presents it.
+ *
+ * Under the same rule as the currency: a labour slot is handed an icon and a label and
+ * presents them, so a farm calling its hands something else renders through the same
+ * screen. A screen that wrote either out would fail here.
+ */
+const DECLARED_LABOUR_WORDS = [farm.manualLabour?.icon, farm.manualLabour?.label].filter(
+  (word): word is string => word !== undefined,
+)
+
 const DECLARED_FARM_WORDS = [
   farm.name,
   farm.currency,
+  ...DECLARED_LABOUR_WORDS,
   ...SUPPLIED_FACTS.map((fact) => fact.label),
 ]
 
@@ -128,7 +143,18 @@ const DECLARED_IDS = [
   ...apple.categories.map((category) => category.id),
   ...apple.actions.map((action) => action.id),
   ...apple.knobs.map((knob) => knob.id),
+  ...apple.features.map((feature) => feature.id),
 ]
+
+/**
+ * Every feature label the task declares.
+ *
+ * Under the same rule as a category label: a screen presenting features renders them from
+ * the declaration, so adding, removing or renaming one is a data change. Matched whole,
+ * the way the catalog labels are — the individual words of "Dark patch area" are not the
+ * task's to reserve.
+ */
+const DECLARED_FEATURE_LABELS = apple.features.map((feature) => feature.label)
 
 describe('the shell contains no task-specific code paths', () => {
   it('has screens to check', () => {
@@ -160,6 +186,21 @@ describe('the shell contains no task-specific code paths', () => {
       }
     }
 
+    expect(offences).toEqual([])
+  })
+
+  it('names no declared feature of the apple task, by id or by label', () => {
+    // A screen presenting features renders them from the declaration, so dropping one or
+    // renaming it is a data change. The ids are already covered by DECLARED_IDS above;
+    // this adds the labels, which are what a screen would be tempted to write out.
+    expect(DECLARED_FEATURE_LABELS.length).toBeGreaterThan(4)
+
+    const offences: string[] = []
+    for (const file of screenSources()) {
+      for (const label of labelLeaks(readFileSync(file, 'utf8'), DECLARED_FEATURE_LABELS)) {
+        offences.push(`${relative(repoRoot, file)} names "${label}"`)
+      }
+    }
     expect(offences).toEqual([])
   })
 
@@ -209,6 +250,28 @@ describe('the shell contains no farm-specific code paths', () => {
 }
 `
     expect(leaks(pasted, DECLARED_FARM_WORDS)).toEqual([farm.currency])
+  })
+
+  it('has the farm’s own labour in its vocabulary, icon and label alike', () => {
+    // The slot is the one place a screen would be tempted to write "by hand" and a glyph.
+    expect(DECLARED_LABOUR_WORDS.length).toBe(2)
+    for (const word of DECLARED_LABOUR_WORDS) expect(DECLARED_FARM_WORDS).toContain(word)
+  })
+
+  it('catches the labour’s declared label pasted into a slot', () => {
+    const pasted = `export function Slot() {
+  return <p className="labour-slot">${farm.manualLabour?.label ?? ''}</p>
+}
+`
+    expect(leaks(pasted, DECLARED_FARM_WORDS)).toEqual([farm.manualLabour?.label])
+  })
+
+  it('catches the labour’s declared icon pasted into a slot', () => {
+    const pasted = `export function Slot() {
+  return <span aria-hidden="true">${farm.manualLabour?.icon ?? ''}</span>
+}
+`
+    expect(leaks(pasted, DECLARED_FARM_WORDS)).toEqual([farm.manualLabour?.icon])
   })
 
   it('catches the farm’s name pasted into a screen', () => {
@@ -377,6 +440,88 @@ describe('no screen names an unlock condition', () => {
     const note = screen.getByText(/Brass callipers/)
     expect(note.textContent).toContain('Brass callipers')
     expect(note.textContent).toContain(formatUnits(500, farm))
+    cleanup()
+  })
+})
+
+describe('a farm stage renders a task it has never heard of', () => {
+  const other = unrelatedDeclaration()
+  const categories = other.categories.map((category) => category.id)
+
+  /** A crop of that task's own categories, two of each, with no pool on disk. */
+  const crop = cropOf(
+    categories.flatMap((category) => [
+      { imageId: `${category}-1`, category },
+      { imageId: `${category}-2`, category },
+    ]),
+  )
+
+  it('is a screen the source rules already cover', () => {
+    const covered = screenSources().map((file) => relative(webSrc, file).split(sep).join('/'))
+    expect(covered).toContain('screens/HandSort.tsx')
+  })
+
+  it('offers that task’s own actions, in its own order, with a key each', async () => {
+    render(
+      <HandSort
+        declaration={other}
+        load={loadsCrop(crop)}
+        onSettle={() => undefined}
+        formatAmount={(amount) => String(amount)}
+        onBack={() => undefined}
+      />,
+    )
+    await screen.findByRole('img', { name: 'The piece you are deciding about' })
+
+    const controls = screen
+      .getAllByRole('button')
+      .filter((button) => button.hasAttribute('data-action'))
+    expect(controls.map((button) => button.getAttribute('data-action'))).toEqual(
+      other.actions.map((action) => action.id),
+    )
+    for (const action of other.actions) {
+      expect(screen.getByRole('button', { name: new RegExp(action.label) })).toBeTruthy()
+    }
+    // Two actions here against the shipped task's three, so a screen that had learned
+    // either count would fail against the other.
+    expect(other.actions).toHaveLength(2)
+    cleanup()
+  })
+
+  it('breaks its summary down by that task’s own categories and actions', () => {
+    const outcome = measureSort(
+      other,
+      crop,
+      crop.truth,
+      crop.presented.map((piece) => ({
+        imageId: piece.imageId,
+        action: other.actions[0]?.id ?? '',
+        elapsedMs: 1000,
+      })),
+    )
+
+    render(
+      <HandSort
+        declaration={other}
+        load={loadsCrop(crop)}
+        outcome={outcome}
+        onSettle={() => undefined}
+        formatAmount={(amount) => String(amount)}
+        onBack={() => undefined}
+      />,
+    )
+
+    for (const category of other.categories) {
+      for (const action of other.actions) {
+        expect(
+          document.querySelector(`[data-cell="${category.id}:${action.id}"]`),
+          `${category.id} × ${action.id} is missing`,
+        ).not.toBeNull()
+      }
+    }
+    // And nothing of the shipped lesson's vocabulary is on the screen it renders.
+    const text = document.body.textContent ?? ''
+    for (const category of apple.categories) expect(text).not.toContain(category.label)
     cleanup()
   })
 })

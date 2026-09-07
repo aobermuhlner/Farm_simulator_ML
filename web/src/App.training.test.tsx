@@ -127,7 +127,7 @@ describe('the training browser through the shell', () => {
     expect(served.calls()).toBe(1)
   })
 
-  it('goes back to the settings, trains, and on to a run', async () => {
+  it('goes back to the settings and makes a model there', async () => {
     serveManifest()
     render(
       <App
@@ -142,8 +142,7 @@ describe('the training browser through the shell', () => {
     await screen.findByRole('table')
     await userEvent.click(screen.getByRole('button', { name: 'Back to the settings' }))
     await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
 
-    expect(await screen.findByRole('region', { name: 'Run report' })).toBeDefined()
+    expect(await screen.findByRole('button', { name: 'Put this model to work' })).toBeDefined()
   })
 })

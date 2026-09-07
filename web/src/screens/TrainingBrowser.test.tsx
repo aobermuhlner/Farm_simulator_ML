@@ -272,6 +272,69 @@ describe('what is deliberately absent', () => {
     expect(view).not.toContain('attributes')
   })
 
+  it('summarises no measured feature per split, any more than it summarises an attribute', () => {
+    // A measured feature recovers the attribute it is nominally about closely enough that
+    // a per-split average would hand over the authored gap exactly as the attribute's
+    // would. Per-image values do not have that problem — one apple's redness reveals one
+    // apple — so what is forbidden here is the summary, not the number.
+    const features = apple.features.map((feature) => feature.id)
+    expect(features.length).toBeGreaterThan(4)
+
+    for (const file of ['web/src/screens/TrainingBrowser.tsx', 'web/src/data/pool.ts']) {
+      const text = readFileSync(join(repoRoot, file), 'utf8')
+      const code = text
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('*') && !line.trimStart().startsWith('//'))
+        .join('\n')
+      for (const feature of features) {
+        expect(code, `${file} names the feature ${feature}`).not.toMatch(
+          new RegExp(`\\b${feature}\\b`),
+        )
+      }
+      for (const word of ['average', 'mean(', 'distribution', 'histogram', 'median']) {
+        expect(code, `${file} computes a ${word}`).not.toContain(word)
+      }
+    }
+  })
+
+  it('declares no measured feature on the view the screen receives', () => {
+    const text = readFileSync(join(repoRoot, 'web/src/data/pool.ts'), 'utf8')
+    const view = /export interface SplitImageView \{([\s\S]*?)\n\}/.exec(text)?.[1]
+    if (view === undefined) throw new Error('SplitImageView should be declared in pool.ts')
+    expect(view).not.toContain('features')
+    for (const feature of apple.features) {
+      expect(view, `SplitImageView carries ${feature.id}`).not.toContain(feature.id)
+    }
+  })
+
+  it('renders no per-split count of a measured feature', async () => {
+    const { container } = render(
+      <TrainingBrowser
+        load={() => Promise.resolve({ ok: true, value: split })}
+        onBack={() => {}}
+      />,
+    )
+    await screen.findByRole('table')
+    const text = container.textContent ?? ''
+
+    // Whole distinct values of a measured feature over the training split. Any of them on
+    // screen beside a count would be a summary of that feature.
+    const values = new Set<string>()
+    const images = (manifest as { images: Record<string, { split: string; features: Record<string, number> }> })
+      .images
+    for (const entry of Object.values(images)) {
+      if (entry.split !== 'training') continue
+      for (const feature of apple.features) {
+        const value = entry.features[feature.id]
+        if (value !== undefined && !Number.isInteger(value)) values.add(String(value))
+      }
+    }
+    expect(values.size).toBeGreaterThan(100)
+    for (const value of values) {
+      expect(text, `the measured value ${value} reached the screen`).not.toContain(value)
+    }
+  })
+
   it('displays no distribution, range or average of anything', async () => {
     const { container } = render(
       <TrainingBrowser

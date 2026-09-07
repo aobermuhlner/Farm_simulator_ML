@@ -15,6 +15,8 @@ const cents: FarmDeclaration = {
   precision: 2,
   openingBalance: 0,
   openingYear: 1,
+  openingCrop: 10,
+  cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
 /** A second currency, counted whole and labelled differently. Not a code change. */
@@ -24,6 +26,8 @@ const coins: FarmDeclaration = {
   precision: 0,
   openingBalance: 0,
   openingYear: 1,
+  openingCrop: 10,
+  cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
 describe('an amount crossing into whole units', () => {

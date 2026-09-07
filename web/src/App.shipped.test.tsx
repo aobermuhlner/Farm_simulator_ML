@@ -8,17 +8,18 @@
  * shipped task rather than against a stand-in.
  */
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { App } from './App.js'
-import { loadsFarm } from './test-support/farm.js'
+import { farmDeclaration, loadsFarm } from './test-support/farm.js'
 import { appleTask as committedAppleTask, loadEntryFor } from './test-support/pool.js'
 import { loadsCatalog, memoryStorage, savesTo, shippedCatalog } from './test-support/progression.js'
 
 afterEach(cleanup)
 
 const appleTask = committedAppleTask()
+const shipped = farmDeclaration()
 
 function renderApp() {
   return render(
@@ -49,7 +50,7 @@ function optionsOf(label: string): { readonly text: string; readonly enabled: bo
 }
 
 describe('a student who has bought nothing', () => {
-  it('still walks the same four stages', async () => {
+  it('still walks the whole loop: workshop, model at work, year run, report', async () => {
     renderApp()
     expect(await screen.findByRole('heading', { name: 'The farm' })).toBeDefined()
 
@@ -59,7 +60,20 @@ describe('a student who has bought nothing', () => {
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Run a month' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Put this model to work' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
+
+    const name = `Run year ${String(shipped.openingYear)}`
+    await userEvent.click(await screen.findByRole('button', { name }))
+    await userEvent.click(
+      within(screen.getByRole('region', { name: 'Run the year' })).getByRole('button', { name }),
+    )
+
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: `See year ${String(shipped.openingYear)} for ${appleTask.declaration.title}`,
+      }),
+    )
     expect(await screen.findByRole('region', { name: 'Run report' })).toBeDefined()
   })
 
@@ -80,7 +94,7 @@ describe('a student who has bought nothing', () => {
       await userEvent.selectOptions(screen.getByLabelText('Patterns per block'), String(index))
       expect(screen.getByTestId('current-configuration').textContent).toBe(id)
       await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
-      expect(await screen.findByRole('button', { name: 'Run a month' })).toBeDefined()
+      expect(await screen.findByRole('button', { name: 'Put this model to work' })).toBeDefined()
     }
   })
 
@@ -124,7 +138,7 @@ describe('a student who has bought nothing', () => {
     for (const index of ['0', '1', '2']) {
       await userEvent.selectOptions(screen.getByLabelText('Patterns per block'), index)
       await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
-      expect(await screen.findByRole('button', { name: 'Run a month' })).toBeDefined()
+      expect(await screen.findByRole('button', { name: 'Put this model to work' })).toBeDefined()
       expect(screen.queryByText(/No model was trained/)).toBeNull()
     }
   })

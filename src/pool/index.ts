@@ -66,6 +66,14 @@ export interface PoolImage {
   readonly split: PoolSplit
   readonly category: CategoryId
   readonly attributes: Readonly<Record<(typeof REQUIRED_ATTRIBUTES)[number], number>>
+  /**
+   * What the pixels were measured to look like — one value per feature the task declares.
+   *
+   * Neither ground truth nor a generation parameter, and not interchangeable with either.
+   * The measurement was made once, where the pool was produced, so every model evaluated
+   * against this pool sees the same numbers.
+   */
+  readonly features: Readonly<Record<string, number>>
   readonly atlas: string
   readonly cell: number
   /** Training images only. An evaluation-pool image carrying one is refused. */
@@ -173,11 +181,61 @@ function readAtlases(
   return atlases
 }
 
+/**
+ * Checks one image's recorded features against the features the task declares.
+ *
+ * Both directions are refused, and for the same reason: the manifest and the declaration
+ * have to agree about what was measured or nothing downstream can say what a number
+ * means. A missing feature leaves a screen with a threshold to draw and no value to draw
+ * it against; a recorded feature the task does not declare came from a measurement pass
+ * that is no longer the one this task is describing.
+ */
+function checkFeatures(
+  id: string,
+  recorded: unknown,
+  declared: readonly string[],
+  issues: ValidationIssue[],
+): boolean {
+  if (!isRecord(recorded)) {
+    issues.push(issue('malformed-field', `Image "${id}" records no measured features.`, id))
+    return false
+  }
+
+  let ok = true
+  for (const feature of declared) {
+    const value = recorded[feature]
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      issues.push(
+        issue(
+          'missing-feature',
+          `Image "${id}" records no usable value for the declared feature "${feature}".`,
+          id,
+        ),
+      )
+      ok = false
+    }
+  }
+  for (const feature of Object.keys(recorded)) {
+    if (!declared.includes(feature)) {
+      issues.push(
+        issue(
+          'undeclared-feature',
+          `Image "${id}" records feature "${feature}", which the task does not declare.`,
+          id,
+        ),
+      )
+      ok = false
+    }
+  }
+  return ok
+}
+
 function readImage(
   id: string,
   value: unknown,
   atlases: Readonly<Record<string, PoolAtlas>>,
   categories: readonly CategoryId[],
+  features: readonly string[],
   issues: ValidationIssue[],
 ): PoolImage | undefined {
   if (!isRecord(value)) {
@@ -186,7 +244,7 @@ function readImage(
   }
 
   let complete = true
-  for (const field of ['split', 'category', 'attributes', 'atlas', 'cell'] as const) {
+  for (const field of ['split', 'category', 'attributes', 'features', 'atlas', 'cell'] as const) {
     if (value[field] === undefined) {
       issues.push(issue('missing-field', `Image "${id}" declares no ${field}.`, id))
       complete = false
@@ -232,6 +290,8 @@ function readImage(
       return undefined
     }
   }
+
+  if (!checkFeatures(id, value.features, features, issues)) return undefined
 
   const atlas = atlases[String(value.atlas)]
   if (atlas === undefined) {
@@ -338,6 +398,33 @@ function checkInputResolution(
  * the alternative — counting the images and calling that the truth — would make the
  * mistake invisible.
  */
+/**
+ * Checks that every contaminant a feature names is an attribute the pool records.
+ *
+ * The task declares which attributes contaminate each feature, but only the manifest
+ * knows what attributes exist, so this is where a typo or a leftover name is caught. A
+ * contaminant nothing records could never be checked against the pool, which would leave
+ * the contamination requirement satisfied on paper and nowhere else.
+ */
+function checkContaminants(
+  declaration: TaskDeclaration,
+  issues: ValidationIssue[],
+): void {
+  for (const feature of declaration.features) {
+    for (const attribute of feature.contaminatedBy) {
+      if (!REQUIRED_ATTRIBUTES.includes(attribute as (typeof REQUIRED_ATTRIBUTES)[number])) {
+        issues.push(
+          issue(
+            'unknown-attribute',
+            `Feature "${feature.id}" names "${attribute}" as a contaminant, which is not a generation attribute this pool records.`,
+            `features.${feature.id}.contaminatedBy`,
+          ),
+        )
+      }
+    }
+  }
+}
+
 function checkRoles(
   declaredTraining: unknown,
   roles: Readonly<Record<TrainingRole, readonly string[]>>,
@@ -456,6 +543,7 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
 
   const atlases = readAtlases(raw.atlases, issues)
   checkInputResolution(declaration, atlases, issues)
+  checkContaminants(declaration, issues)
 
   if (!isRecord(raw.images)) {
     issues.push(issue('malformed-field', 'The pool manifest declares no images.', 'images'))
@@ -463,13 +551,14 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
   }
 
   const categories = declaration.categories.map((category) => category.id)
+  const featureIds = declaration.features.map((feature) => feature.id)
   const images: Record<string, PoolImage> = {}
   const truth: Record<string, CategoryId> = {}
   const order: Record<PoolSplit, string[]> = { training: [], pool: [] }
   const roles: Record<TrainingRole, string[]> = { fitted: [], heldOut: [] }
 
   for (const [id, value] of Object.entries(raw.images)) {
-    const image = readImage(id, value, atlases, categories, issues)
+    const image = readImage(id, value, atlases, categories, featureIds, issues)
     if (image === undefined) continue
     images[id] = image
     truth[id] = image.category

@@ -1,10 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { planAtlases } from '../tools/pool/atlas.js'
 import { buildManifest } from '../tools/pool/manifest.js'
-import { HELD_OUT_COUNTS, SPLIT_SIZES, type PoolCategory } from '../tools/pool/params.js'
+import { FEATURE_IDS, HELD_OUT_COUNTS, SPLIT_SIZES, type PoolCategory } from '../tools/pool/params.js'
 import { samplePool } from '../tools/pool/sample.js'
 
-const manifest = buildManifest(planAtlases(samplePool()), '1.0.0')
+const plans = planAtlases(samplePool())
+
+/**
+ * Stand-in feature vectors, because this file is about roles.
+ *
+ * `buildManifest` refuses an image it was given no vector for, and measuring 1 200 real
+ * ones means rasterizing five atlases — which `pool-measurement.test.ts` does, over the
+ * real pixels, where the numbers are the point. Here they only have to be present.
+ */
+const placeholderFeatures = Object.fromEntries(
+  plans.flatMap((plan) =>
+    plan.images.map((image) => [
+      image.id,
+      Object.fromEntries(FEATURE_IDS.map((id) => [id, 0])) as Record<
+        (typeof FEATURE_IDS)[number],
+        number
+      >,
+    ]),
+  ),
+)
+
+const manifest = buildManifest(plans, '1.0.0', placeholderFeatures)
 const entries = Object.entries(manifest.images)
 
 const trainingEntries = entries.filter(([, image]) => image.split === 'training')
