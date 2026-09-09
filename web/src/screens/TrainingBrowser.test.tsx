@@ -545,3 +545,102 @@ describe('the tier the browser is showing', () => {
     expect(screen.queryAllByText('7')).toHaveLength(0)
   })
 })
+
+describe('moving up a tier adds photographs and removes none', () => {
+  /**
+   * The committed pool split into two authored tiers over the same 200 images.
+   *
+   * The shipped pool authors one tier, so this is the only way to exercise the property
+   * before the regeneration: half the images enter at the smaller tier and the rest at
+   * the larger, which holds all of them. Sized down from the declaration's 200 and 1 000,
+   * because what is under test is the nesting rather than the numbers.
+   */
+  function twoTiers(): {
+    readonly smaller: TrainingSplitView
+    readonly larger: TrainingSplitView
+  } {
+    const raw = JSON.parse(JSON.stringify(appleManifest())) as {
+      images: Record<string, { split: string; tier?: string; tierLabels?: Record<string, string> }>
+    }
+    const training = Object.entries(raw.images).filter(([, image]) => image.split === 'training')
+    const half = training.slice(0, 100).map(([id]) => id)
+
+    let redsBelow = 0
+    let greensBelow = 0
+    let wormsBelow = 0
+    for (const [id, image] of training) {
+      const filed = image.tierLabels?.[smallest.id]
+      if (filed === undefined) continue
+      const inSmaller = half.includes(id)
+      if (inSmaller) {
+        if (filed === 'red') redsBelow += 1
+        else if (filed === 'green') greensBelow += 1
+        else wormsBelow += 1
+      }
+      // The smaller tier is where an image of `half` enters; everything else enters at
+      // the larger one. Both file it, because membership nests.
+      image.tier = inSmaller ? 'half' : 'whole'
+      image.tierLabels = inSmaller ? { half: filed, whole: filed } : { whole: filed }
+    }
+
+    const declared = {
+      ...apple,
+      datasets: [
+        {
+          id: 'half',
+          label: 'The first hundred',
+          size: 100,
+          composition: { red: redsBelow, green: greensBelow, wormy: wormsBelow },
+          labelQuality: 'checked' as const,
+          disclosure: 'Checked one at a time.',
+        },
+        {
+          id: 'whole',
+          label: 'All two hundred',
+          size: 200,
+          composition: apple.datasets[0]?.composition ?? {},
+          labelQuality: 'checked' as const,
+          disclosure: 'Checked one at a time, all two hundred of them.',
+        },
+      ],
+      families: apple.families.map((declaredFamily) => ({
+        ...declaredFamily,
+        knobs: declaredFamily.knobs.map((knob) =>
+          knob.id !== declaredFamily.datasetKnob || knob.kind !== 'choice'
+            ? knob
+            : { ...knob, values: ['half', 'whole'], default: 'half' },
+        ),
+      })),
+    }
+
+    const read = readPool(raw, declared)
+    if (!read.ok) throw new Error(`the two-tier pool must read: ${read.issues[0]?.message}`)
+    const project = (tier: string): TrainingSplitView => {
+      const view = trainingSplitView(read.pool, declared, POOL_PATHS.atlases, tier)
+      if (!view.ok) throw new Error(`${tier} must project: ${view.issues[0]?.message}`)
+      return view.value
+    }
+    return { smaller: project('half'), larger: project('whole') }
+  }
+
+  it('shows only the smaller tier’s photographs while it is selected', async () => {
+    const { smaller } = twoTiers()
+    await renderSplit(smaller)
+
+    expect(cells()).toHaveLength(100)
+    expect(screen.getByText('The first hundred', { exact: false })).toBeDefined()
+  })
+
+  it('still shows every one of them once the larger tier is selected', async () => {
+    const { smaller, larger } = twoTiers()
+    const before = smaller.images.map((image) => image.imageId)
+
+    await renderSplit(larger)
+
+    const shown = cells().map((cell) => cell.getAttribute('data-image'))
+    expect(shown).toHaveLength(200)
+    for (const id of before) expect(shown, id).toContain(id)
+    // And it adds the rest rather than replacing what was there.
+    expect(shown.filter((id) => id !== null && !before.includes(id))).toHaveLength(100)
+  })
+})

@@ -11,12 +11,17 @@
  * and a larger, checked tier may correct what a hurried one filed wrongly — which is why
  * a label is per tier and the manifest's `category` stays the only ground truth.
  *
- * Assignment is stratified over (category, role) rather than a flat shuffle. A flat draw
- * would leave whether a tier holds a held-out green apple to the seed, and
- * `specs/image-pool/spec.md` requires every tier to have both roles in every category
- * structurally. Dealing each group across the tiers in proportion to what they hold makes
- * that a property of the arithmetic, and `assertTiersAreFittedAndValidated` refuses the
- * cases the arithmetic cannot reach — a tier too small to receive one image of some group.
+ * Assignment is one stratified order over the training split, with each tier taking a
+ * prefix of it. A prefix is what makes nesting and the declared sizes structural rather
+ * than arithmetic a rounding rule could get wrong: a tier holds exactly its declared
+ * count, and every smaller tier holds a prefix of that prefix.
+ *
+ * The order interleaves the (category, role) groups by relative position rather than
+ * concatenating them, so any prefix carries each group in roughly its share of the split.
+ * A flat shuffle would leave whether a small tier holds a held-out green apple to the
+ * seed, and `specs/image-pool/spec.md` requires every tier to have both roles in every
+ * category structurally. `assertTiersAreFittedAndValidated` then refuses the case the
+ * interleaving cannot reach — a tier too small to receive one image of some group.
  */
 
 import {
