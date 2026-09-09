@@ -264,7 +264,7 @@ describe('the report is the payoff table filled with counts', () => {
       <Report
         declaration={narrower}
         year={YEAR}
-        configurationId="sensitivitylow"
+        configurationId="sensitivitylow-photographsclinic"
         evaluated={0}
         earnings="0.00"
         counts={{}}
@@ -616,7 +616,7 @@ describe('a report is the record of a year, not a readout of the knobs', () => {
       <Report
         declaration={apple}
         year={YEAR}
-        configurationId="blocks2-channels16-regularization1-dropout0"
+        configurationId="blocks2-channels16-regularization1-dropout0-datasetstarter"
         family={family.label}
         evaluated={10}
         earnings="12.50"
@@ -630,7 +630,7 @@ describe('a report is the record of a year, not a readout of the knobs', () => {
     const configuration = document.querySelector('.configuration') as HTMLElement
     expect(configuration.textContent).toContain(family.label)
     expect(configuration.querySelector('code')?.textContent).toBe(
-      'blocks2-channels16-regularization1-dropout0',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
     )
     expect(configuration.textContent).toContain(`Year ${String(YEAR)}`)
   })
@@ -817,7 +817,7 @@ describe('the delivery line', () => {
       <Report
         declaration={other.declaration}
         year={YEAR}
-        configurationId="sensitivitylow"
+        configurationId="sensitivitylow-photographsclinic"
         evaluated={0}
         earnings="0.00"
         counts={{}}

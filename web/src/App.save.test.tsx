@@ -172,6 +172,73 @@ describe('returning opens the farm that was left', () => {
   })
 })
 
+describe('a farm saved before the datasets were declared', () => {
+  const family = firstFamily(appleTask.declaration)
+
+  /** A save written when the workshop had four knobs and no dataset among them. */
+  function beforeTiers(over: Partial<GameState> = {}): string {
+    return serializeSave({
+      farm: credit(openFarm(declaration), toUnits(500, 2), 'sales'),
+      seed: 99,
+      owned: ['starter-plot'],
+      knobs: { [appleTask.declaration.id]: { [family.id]: { blocks: 2, channels: 32 } } },
+      families: {},
+      tutorials: [],
+      slots: {},
+      ...over,
+    })
+  }
+
+  it('opens with its money and its purchases intact', async () => {
+    const storage = memoryStorage({ [SAVE_KEY]: beforeTiers() })
+    renderApp(storage)
+    await screen.findByRole('region', { name: 'Farm status' })
+
+    expect(shown('Balance')).toBe(
+      formatUnits(credit(openFarm(declaration), toUnits(500, 2), 'sales').balance, declaration),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Go to the market' }))
+    expect(screen.getByTestId('state-starter-plot').textContent).toBe('Owned')
+  })
+
+  it('opens its workshop with the dataset knob at the set the robot came with', async () => {
+    const storage = memoryStorage({ [SAVE_KEY]: beforeTiers() })
+    renderApp(storage)
+    await userEvent.click(
+      await screen.findByRole('button', { name: `Open ${appleTask.declaration.title}` }),
+    )
+
+    const knob = family.knobs.find((candidate) => candidate.id === family.datasetKnob)
+    if (knob === undefined) throw new Error('the shipped family must declare its dataset knob')
+    const control = screen.getByLabelText(knob.label) as HTMLSelectElement
+    expect(control.selectedIndex).toBe(0)
+    // And the knob the save did carry is still where the student left it.
+    expect((screen.getByLabelText('Patterns per block') as HTMLSelectElement).selectedIndex).toBe(2)
+  })
+
+  it('opens playable when a model was at work under the old identifier', async () => {
+    // The old spelling carried no tier, so the knobs can no longer compose it. The farm
+    // opens with the slot dropped rather than refusing to load — `game-save`.
+    const storage = memoryStorage({
+      [SAVE_KEY]: beforeTiers({
+        slots: {
+          [appleTask.declaration.id]: {
+            configurationId: 'blocks2-channels32-regularization1-dropout0',
+            family: family.id,
+          },
+        },
+      }),
+    })
+    renderApp(storage)
+    await screen.findByRole('region', { name: 'Farm status' })
+
+    expect(
+      await screen.findByRole('button', { name: `Open ${appleTask.declaration.title}` }),
+    ).toBeDefined()
+    expect(screen.queryByText(/could not be read/i)).toBeNull()
+  })
+})
+
 describe('a save that could not be read is disclosed, never migrated', () => {
   it('warns and opens a new farm when the save is of another schema', async () => {
     const storage = memoryStorage({ [SAVE_KEY]: '{"schemaVersion":"0.0.1","balance":99999}' })

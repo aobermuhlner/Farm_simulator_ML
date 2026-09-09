@@ -189,7 +189,8 @@ export function unrelatedArtifact(): PredictionArtifact {
     familyId: 'screen-net',
     categories: ['healthy', 'diseased'],
     configurations: {
-      sensitivitylow: {
+      // The tier the family's dataset knob names, appended as every identifier carries it.
+      'sensitivitylow-photographsclinic': {
         history: [
           { epoch: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
           { epoch: 2, trainLoss: 0.6, valLoss: 0.68, trainAccuracy: 0.7, valAccuracy: 0.62 },
@@ -249,7 +250,7 @@ export function sharedActionDeclaration(): TaskDeclaration {
     pool: 'pools/parcel-routing',
     datasets: [
       {
-        id: 'depot-scans',
+        id: 'depotscans',
         label: 'Last month’s depot scans',
         size: 60,
         composition: { local: 30, national: 20, overseas: 10 },
@@ -281,8 +282,8 @@ export function sharedActionDeclaration(): TaskDeclaration {
             kind: 'choice',
             id: 'scans',
             label: 'Scans to learn from',
-            values: ['depot-scans'],
-            default: 'depot-scans',
+            values: ['depotscans'],
+            default: 'depotscans',
             help: 'Which set of scans the sorter was fitted on.',
           },
         ],

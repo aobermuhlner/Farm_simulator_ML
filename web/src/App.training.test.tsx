@@ -128,6 +128,61 @@ describe('the training browser through the shell', () => {
     expect(served.calls()).toBe(1)
   })
 
+  it('shows the tier the knob names, in the words the declaration carries', async () => {
+    serveManifest()
+    render(
+      <App
+        load={() => Promise.resolve({ ok: true as const, value: [task] })}
+        {...savesTo(memoryStorage())}
+        replayMs={0}
+      />,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
+    await userEvent.click(screen.getByRole('button', { name: 'See the training data' }))
+    await screen.findByRole('table')
+
+    const tier = task.declaration.datasets[0]
+    if (tier === undefined) throw new Error('the shipped task must declare a tier')
+    // The set the model being configured will be fitted on — named and explained in the
+    // declaration's own words, so the screen names no tier of its own.
+    expect(screen.getByText(tier.label, { exact: false })).toBeDefined()
+    expect(screen.getByText(tier.disclosure)).toBeDefined()
+    expect(screen.queryAllByRole('img')).toHaveLength(tier.size)
+  })
+
+  it('shows what the knob names rather than what the farm owns', async () => {
+    serveManifest()
+    render(
+      <App
+        load={() => Promise.resolve({ ok: true as const, value: [task] })}
+        {...savesTo(memoryStorage())}
+        replayMs={0}
+      />,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Open Apple Harvest' }))
+
+    // The larger tiers are on screen, so a student can see what there is to earn, and
+    // cannot be selected until something opens them.
+    const family = firstFamily(task.declaration)
+    const knob = family.knobs.find((candidate) => candidate.id === family.datasetKnob)
+    if (knob === undefined) throw new Error('the shipped family must declare its dataset knob')
+    const tier = task.declaration.datasets[0]
+    if (tier === undefined) throw new Error('the shipped task must declare a tier')
+    const control = screen.getByLabelText(knob.label) as HTMLSelectElement
+    expect([...control.options].map((option) => option.textContent)).toEqual(
+      task.declaration.datasets.map((tier) => tier.id),
+    )
+    expect(control.selectedIndex).toBe(0)
+    for (const option of [...control.options].slice(1)) expect(option.disabled).toBe(true)
+
+    await userEvent.click(screen.getByRole('button', { name: 'See the training data' }))
+    await screen.findByRole('table')
+
+    expect(screen.queryAllByRole('img')).toHaveLength(tier.size)
+  })
+
   it('goes back to the settings and makes a model there', async () => {
     serveManifest()
     render(

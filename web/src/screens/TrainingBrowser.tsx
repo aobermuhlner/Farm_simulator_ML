@@ -7,11 +7,15 @@
  * within the atlas is scaled by the same factor and applied as a negative background
  * position. The region comes from the pool reader, so this screen resolves no geometry.
  *
- * Labels and counts come from the task declaration joined to the pool's ground truth.
- * There is nothing about an image on screen beyond its category's declared label — the
- * generation attributes are not in the data this screen is handed, and the composition
- * counts are counts of what was actually rendered rather than a number copied out of the
- * manifest.
+ * Labels and counts come from the task declaration joined to what the *selected dataset
+ * tier* files each image under, which is not always its true category. That is deliberate
+ * — `specs/training-browser/spec.md`: the data a student bought is the data their model
+ * will be fitted on, wrong labels and all. Nothing here marks an image as mislabelled or
+ * counts how many are, because a student handed the list has learned nothing.
+ *
+ * There is nothing about an image on screen beyond that label — the generation attributes
+ * are not in the data this screen is handed, and the composition counts are counts of what
+ * was actually rendered rather than a number copied out of the manifest.
  *
  * Loading and refusal are states of this view, not of the app: the manifest is fetched
  * when a student opens the browser, so this is the only screen that can be waiting on it.
@@ -81,13 +85,19 @@ export function TrainingBrowser({ load, onBack }: TrainingBrowserProps) {
 
       {split === undefined ? null : (
         <>
-          <p>
-            Every one of the {split.images.length} images the models for this task were
-            trained on, in the order the pool records them.
+          <p data-tier={split.tier.id}>
+            Every one of the {split.images.length} photographs in{' '}
+            <strong>{split.tier.label}</strong>, the set this model will be fitted on, in
+            the order the pool records them.
+          </p>
+
+          {/* The tier's own words about how well it was labelled, wherever it is shown. */}
+          <p className="disclosure" data-disclosure={split.tier.id}>
+            {split.tier.disclosure}
           </p>
 
           <table className="composition">
-            <caption>What the training set is made of</caption>
+            <caption>What this set is made of</caption>
             <tbody>
               {split.categories.map((category) => (
                 <tr key={category.id}>

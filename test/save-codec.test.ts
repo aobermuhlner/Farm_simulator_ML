@@ -1006,3 +1006,80 @@ describe('the schema version this build reads', () => {
     expect(SAVE_SCHEMA_VERSION).toBe('4.0.0')
   })
 })
+
+/**
+ * A save written before dataset tiers existed, reopened after them.
+ *
+ * The one migration this change had to answer for. `game-save` already decides both
+ * halves — a knob the save says nothing about falls to its declared default, and a model
+ * at work whose configuration the knobs can no longer compose is dropped and reported —
+ * so what is checked here is that the answers are the ones the design predicted, against
+ * a save built the way the old codec built one.
+ */
+describe('a farm saved before the datasets were declared', () => {
+  /** A played farm whose knob values name every knob but the dataset one. */
+  function beforeTiers(): GameState {
+    const played_ = played()
+    const values = { ...played_.knobs[apple.id]?.[FAMILY] }
+    delete (values as Record<string, unknown>)[family.datasetKnob]
+    return { ...played_, knobs: { [apple.id]: { [FAMILY]: values } } }
+  }
+
+  it('reopens with its money, its year and its purchases exactly as they were', () => {
+    const state = beforeTiers()
+    const back = restored(state)
+
+    expect(back.farm.balance).toBe(state.farm.balance)
+    expect(back.farm.year).toBe(state.farm.year)
+    expect(back.farm.ledger).toEqual(state.farm.ledger)
+    expect(back.owned).toEqual(state.owned)
+    expect(back.seed).toBe(state.seed)
+  })
+
+  it('opens its dataset knob at the smallest tier, which is the set it was fitted on', () => {
+    const values = knobValuesFor(restored(beforeTiers()), apple, family)
+
+    expect(values[family.datasetKnob]).toBe(apple.datasets[0]?.id)
+    // Everything the save did record is still where the student left it.
+    expect(values.channels).toBe(32)
+  })
+
+  it('reports nothing as dropped for the knob it never carried', () => {
+    const outcome = parseSave(serializeSave(beforeTiers()), context)
+
+    expect(outcome.kind).toBe('restored')
+    if (outcome.kind !== 'restored') return
+    expect(outcome.dropped).toEqual([])
+  })
+
+  it('drops a model at work under the old identifier, naming it rather than crashing', () => {
+    // The old spelling carried no tier, so the knobs can no longer compose it. `game-save`
+    // drops such a slot and says so; the farm opens, and the student makes the model again.
+    const stale = configurationId(defaultConfiguration(apple, family)).replace(
+      `-${family.datasetKnob}${apple.datasets[0]?.id ?? ''}`,
+      '',
+    )
+    const outcome = parseSave(
+      serializeSave({ ...beforeTiers(), slots: { [apple.id]: { configurationId: stale, family: FAMILY } } }),
+      context,
+    )
+
+    expect(outcome.kind).toBe('restored')
+    if (outcome.kind !== 'restored') return
+    expect(outcome.state.slots).toEqual({})
+    expect(outcome.dropped.map((issue) => issue.code)).toContain(SAVE_REFERENCE_DROPPED)
+    expect(outcome.dropped.map((issue) => issue.message).join(' ')).toContain(stale)
+  })
+
+  it('keeps a model at work whose identifier already carries the tier', () => {
+    const outcome = parseSave(
+      serializeSave({ ...beforeTiers(), slots: { [apple.id]: { configurationId: AT_WORK, family: FAMILY } } }),
+      context,
+    )
+
+    expect(outcome.kind).toBe('restored')
+    if (outcome.kind !== 'restored') return
+    expect(outcome.state.slots[apple.id]).toEqual({ configurationId: AT_WORK, family: FAMILY })
+    expect(outcome.dropped).toEqual([])
+  })
+})

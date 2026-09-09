@@ -56,7 +56,7 @@ describe('a student who has bought nothing', () => {
 
     await openTask()
     expect(screen.getByTestId('current-configuration').textContent).toBe(
-      'blocks2-channels16-regularization1-dropout0',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
@@ -88,8 +88,8 @@ describe('a student who has bought nothing', () => {
     ])
 
     for (const [index, id] of [
-      [0, 'blocks2-channels8-regularization1-dropout0'],
-      [2, 'blocks2-channels32-regularization1-dropout0'],
+      [0, 'blocks2-channels8-regularization1-dropout0-datasetstarter'],
+      [2, 'blocks2-channels32-regularization1-dropout0-datasetstarter'],
     ] as const) {
       await userEvent.selectOptions(screen.getByLabelText('Patterns per block'), String(index))
       expect(screen.getByTestId('current-configuration').textContent).toBe(id)
@@ -150,9 +150,14 @@ describe('a student who has bought nothing', () => {
     // The orchard is the one thing a broke farmer can spend on: the robot, the datasets
     // and the model families are all still unpriced, and each says so in its own words.
     expect(screen.getAllByRole('button', { name: /^Buy / })).toHaveLength(1)
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(4)
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(6)
     for (const testId of ['state-deeper-stacks', 'state-stronger-regularization', 'state-dropout-layers']) {
       expect(screen.getByTestId(testId).textContent).toContain('trained')
+    }
+    // The two larger datasets: shown, explained, and honest about why they cannot be
+    // bought — no model has been fitted on photographs that do not exist yet.
+    for (const testId of ['state-bulk-photos', 'state-checked-photos']) {
+      expect(screen.getByTestId(testId).textContent).toContain('fitted')
     }
   })
 

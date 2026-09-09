@@ -60,6 +60,27 @@ grid cost more than the earlier depth-only measurements suggested. The first run
 to three configurations for reviewability regardless: someone has to look at each curve
 and decide it teaches what it should.
 
+## Which photographs the figures are of
+
+Every figure in this file is a `starter`-tier measurement, fitted against `starter`'s own
+labels — `dataset-tiers`. `starter` is the 200 photographs that come with the robot, it is
+the whole of the training split the pool currently holds, and it files every apple under
+its true category, so the fitted and held-out figures below are what a checked dataset of
+that size buys.
+
+Recorded here rather than left implicit, because the larger tiers exist to be *compared*
+against it. `bulk` and `checked` are declared and unreachable until the pool regeneration
+gives them photographs; when it does, their curves are read against the table below, and a
+figure that moved has to be attributable to the dataset rather than to a run whose fitting
+set nobody wrote down.
+
+Two consequences worth stating once. A tier's held-out set is the declared held-out role
+restricted to that tier, so the yardstick grows with the tier and the figures are
+comparable in expectation rather than to the last decimal. And a history's losses are
+measured against the labels of the tier the run was fitted on, never against the manifest's
+categories — for `starter` the two coincide, and for a tier that files some apples wrongly
+they will not, which is the whole of what that tier teaches.
+
 ## What the three runs show
 
 Reviewed 2026-09-04, against the committed artifact, on pool seed 855711213 — the pool

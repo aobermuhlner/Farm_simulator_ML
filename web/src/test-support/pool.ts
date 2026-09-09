@@ -49,9 +49,20 @@ export function applePool(): LoadedPool {
   return read.pool
 }
 
-/** The committed apple pool's training split, as the browser receives it. */
-export function appleTrainingSplit(): TrainingSplitView {
-  const view = trainingSplitView(applePool(), appleDeclaration(), dataUrlFor('pools/apple-harvest') ?? '')
+/**
+ * The committed apple pool's training split, as the browser receives it.
+ *
+ * Defaults to the task's smallest tier, which is what a farm that has bought nothing has
+ * selected and the only one the pool holds photographs for.
+ */
+export function appleTrainingSplit(tier?: string): TrainingSplitView {
+  const declaration = appleDeclaration()
+  const view = trainingSplitView(
+    applePool(),
+    declaration,
+    dataUrlFor('pools/apple-harvest') ?? '',
+    tier ?? (declaration.datasets[0]?.id ?? ''),
+  )
   if (!view.ok) {
     throw new Error(
       `The committed apple split does not project: ${view.issues.map((issue) => issue.message).join(' ')}`,

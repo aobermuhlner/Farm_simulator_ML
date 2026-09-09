@@ -40,15 +40,15 @@ describe('the shipped prediction index is untouched by the widening', () => {
   it('still resolves the shipped defaults to the configuration it was trained for', () => {
     const id = configurationId(defaultConfiguration(apple, family))
 
-    expect(id).toBe('blocks2-channels16-regularization1-dropout0')
+    expect(id).toBe('blocks2-channels16-regularization1-dropout0-datasetstarter')
     expect(Object.keys(shippedIndex().configurations)).toContain(id)
   })
 
   it('covers exactly the configurations it covered before', () => {
     expect(Object.keys(shippedIndex().configurations)).toEqual([
-      'blocks2-channels8-regularization1-dropout0',
-      'blocks2-channels16-regularization1-dropout0',
-      'blocks2-channels32-regularization1-dropout0',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
+      'blocks2-channels32-regularization1-dropout0-datasetstarter',
     ])
   })
 

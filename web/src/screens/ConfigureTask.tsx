@@ -12,7 +12,7 @@
  * the overview.
  */
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FamilyEntry } from '../../../src/families/index.js'
 import type { TaskAvailability } from '../../../src/progression/index.js'
 import { knobAvailability } from '../../../src/progression/index.js'
@@ -58,7 +58,7 @@ export interface ConfigureTaskProps {
    * pool should be fetched twice, and what crosses this boundary has already had the
    * generation attributes and the measured values dropped from it.
    */
-  readonly loadSplit?: () => Promise<Loaded<TrainingSplitView>>
+  readonly loadSplit?: (tier: string) => Promise<Loaded<TrainingSplitView>>
   /**
    * How long the training replay takes. Injected by tests, which have no reason to
    * sit through it; the screen otherwise uses the pacing the replay declares.
@@ -184,6 +184,24 @@ export function ConfigureTask({
   // declaring no diagram, and beside a configuration the engine will not resolve.
   const architecture = resolveArchitecture(declaration, family, values)
 
+  /**
+   * The photographs of the tier the dataset knob currently names.
+   *
+   * The knob rather than what is owned: a student owning the largest set and having
+   * selected the smallest is shown the smallest, because that is the set the model in
+   * front of them will be fitted on — `specs/training-browser/spec.md`. Memoised on the
+   * selected value, so changing the tier refetches and changing anything else does not.
+   *
+   * Sits above every early return below, because a hook has to run on every render.
+   */
+  const selectedTier = String(values[family.datasetKnob] ?? '')
+  /** The declared tier that value names, for the copy shown beside the knobs. */
+  const browsedTier = declaration.datasets.find((tier) => tier.id === selectedTier)
+  const browseSelectedTier = useMemo(
+    () => (loadSplit === undefined ? undefined : () => loadSplit(selectedTier)),
+    [loadSplit, selectedTier],
+  )
+
   function setKnob(id: string, value: string | number): void {
     const next = { ...values, [id]: value }
     setValues(next)
@@ -255,7 +273,7 @@ export function ConfigureTask({
         <h1 id="task-heading">{declaration.title}</h1>
         <Tutorial
           tutorial={tutorial}
-          loadSplit={loadSplit}
+          loadSplit={browseSelectedTier}
           complete={tutorialDone}
           onComplete={() => onTutorialComplete?.(tutorial.id)}
           onClose={() => setSitting(false)}
@@ -268,12 +286,12 @@ export function ConfigureTask({
 
   // This screen stays mounted while the browser is open, so the knob values, the run
   // and its refusal are all still here when the student comes back.
-  if (browsing && loadSplit !== undefined) {
+  if (browsing && browseSelectedTier !== undefined) {
     return (
       <section aria-labelledby="task-heading">
         <h1 id="task-heading">{declaration.title}</h1>
         <TrainingBrowser
-          load={loadSplit}
+          load={browseSelectedTier}
           onBack={() => setBrowsing(false)}
         />
       </section>
@@ -350,6 +368,17 @@ export function ConfigureTask({
                 formatPrice={formatPrice}
               />
             ))}
+            {/*
+              The set the dataset knob currently names, said in its own declared words.
+              `specs/dataset-tiers/spec.md` — a tier's label quality is stated wherever the
+              tier is offered for selection, not only where its images are browsed, so a
+              student is told before they fit rather than after the harvest disagrees.
+            */}
+            {browsedTier === undefined ? null : (
+              <p className="disclosure" data-disclosure={browsedTier.id}>
+                <strong>{browsedTier.label}.</strong> {browsedTier.disclosure}
+              </p>
+            )}
           </fieldset>
 
           {architecture === undefined ? null : <ArchitectureDiagram architecture={architecture} />}

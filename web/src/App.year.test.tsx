@@ -361,7 +361,7 @@ describe('a task offers the report of the year it closed', () => {
 
     const configuration = document.querySelector('.configuration') as HTMLElement
     expect(configuration.textContent).toContain(`Year ${String(FIRST_YEAR)}`)
-    expect(configuration.textContent).toContain('blocks2-channels16-regularization1-dropout0')
+    expect(configuration.textContent).toContain('blocks2-channels16-regularization1-dropout0-datasetstarter')
   })
 
   it('runs nothing and changes no labour slot on the way in', async () => {
@@ -407,7 +407,7 @@ describe('a task offers the report of the year it closed', () => {
     expect(slotText(apple)).toContain(declaration.manualLabour?.label ?? '')
     await openReport(apple, FIRST_YEAR)
     expect((document.querySelector('.configuration') as HTMLElement).textContent).toContain(
-      'blocks2-channels16-regularization1-dropout0',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
     )
   })
 
@@ -534,7 +534,7 @@ describe('the whole loop, end to end', () => {
     expect(record.year).toBe(FIRST_YEAR + 2)
     expect(record.balance).not.toBe(afterHand)
     expect(record.lastYear?.brought[0]?.configuration).toBe(
-      'blocks2-channels16-regularization1-dropout0',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
     )
 
     vi.unstubAllGlobals()

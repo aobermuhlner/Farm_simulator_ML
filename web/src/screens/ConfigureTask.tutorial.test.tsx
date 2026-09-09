@@ -171,7 +171,11 @@ describe('the pictures the workshop already loads', () => {
 
     await openTutorial()
 
-    expect(seen.current).toBe(loadSplit)
+    // The workshop narrows the loader to the tier its dataset knob names before handing
+    // it on, so what the puzzle receives asks for that tier rather than for the split.
+    expect(seen.current).toBeTypeOf('function')
+    const asked = await (seen.current as () => Promise<unknown>)()
+    expect(asked).toEqual({ ok: true, value: split })
   })
 
   it('are not forwarded when the task ships none to browse', async () => {
@@ -297,7 +301,7 @@ describe('what an unfinished tutorial withholds', () => {
   it('never withholds handing the job back', async () => {
     const onHandBack = vi.fn()
     renderWorkshop({
-      atWork: { family: GATED.id, configurationId: 'depth1' },
+      atWork: { family: GATED.id, configurationId: 'depth1-photographsclinic' },
       onHandBack,
     })
 
@@ -342,7 +346,7 @@ describe('passing it while a model is already made', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /put this model to work/i }))
 
-    expect(onPutToWork).toHaveBeenCalledWith(GATED.id, 'depth1')
+    expect(onPutToWork).toHaveBeenCalledWith(GATED.id, 'depth1-photographsclinic')
   })
 })
 

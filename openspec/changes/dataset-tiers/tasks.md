@@ -36,20 +36,20 @@ the code that reads them third, and the artifacts last. Each group leaves the bu
 
 ## 5. Re-emit the shipped artifacts
 
-- [ ] 5.1 Commit the pipeline changes before producing artifacts, as `training/README.md` requires. Verify the working tree outside `artifacts/` is clean.
+- [x] 5.1 Commit the pipeline changes before producing artifacts, as `training/README.md` requires. Verify the working tree outside `artifacts/` is clean.
 - [ ] 5.2 Re-run `uv run python -m farm_training.train` for the three shipped configurations against the 1.2.0 pool. Verify each artifact's coverage key is the old identifier plus `-datasetstarter`, that its recorded tier is `starter`, and that its per-epoch losses match the previously shipped values.
 - [ ] 5.3 Update `artifacts/apple-harvest/predictions/index.json` and confirm the ship gate passes. Verify `test/artifact-shipping.test.ts` and `test/artifacts-untouched.test.ts`.
-- [ ] 5.4 Confirm the catalog cannot price untrained ground: with `bulk` and `checked` unpriced, `test/catalog-check.test.ts` accepts; adding a price to either makes it refuse naming an uncovered identifier. Verify both directions.
+- [x] 5.4 Confirm the catalog cannot price untrained ground: with `bulk` and `checked` unpriced, `test/catalog-check.test.ts` accepts; adding a price to either makes it refuse naming an uncovered identifier. Verify both directions.
 
 ## 6. The browser shows what was bought
 
-- [ ] 6.1 Show the images of the tier the selected family's dataset knob names, and name that tier by its declared label. Verify in `web/src/App.training.test.tsx` that the browsed set follows the knob and not what is owned.
-- [ ] 6.2 Label each image by the category its tier files it under, not by its true category, and count the composition by those same labels. Verify in `web/src/App.training.test.tsx` with a fixture tier whose labels differ from the truth.
-- [ ] 6.3 Display the selected tier's declared label-quality copy, and mark no image and show no count as mislabelled. Verify in `web/src/App.training.test.tsx` for both a checked and a mislabelling fixture tier.
-- [ ] 6.4 Confirm no screen names a tier, a size or a label quality. Verify `web/src/no-task-specific-code.test.tsx` passes with the new copy in place.
+- [x] 6.1 Show the images of the tier the selected family's dataset knob names, and name that tier by its declared label. Verify in `web/src/App.training.test.tsx` that the browsed set follows the knob and not what is owned.
+- [x] 6.2 Label each image by the category its tier files it under, not by its true category, and count the composition by those same labels. Verify in `web/src/App.training.test.tsx` with a fixture tier whose labels differ from the truth.
+- [x] 6.3 Display the selected tier's declared label-quality copy, and mark no image and show no count as mislabelled. Verify in `web/src/App.training.test.tsx` for both a checked and a mislabelling fixture tier.
+- [x] 6.4 Confirm no screen names a tier, a size or a label quality. Verify `web/src/no-task-specific-code.test.tsx` passes with the new copy in place.
 
 ## 7. Whole-system checks
 
-- [ ] 7.1 Verify a save written before this change reopens with its money and purchases intact and its dataset knob at `starter`, and that a model it had at work is either restored on `starter` or dropped per `game-save` rather than crashing. Cover in `test/save-codec.test.ts` and `web/src/App.save.test.tsx`.
+- [x] 7.1 Verify a save written before this change reopens with its money and purchases intact and its dataset knob at `starter`, and that a model it had at work is either restored on `starter` or dropped per `game-save` rather than crashing. Cover in `test/save-codec.test.ts` and `web/src/App.save.test.tsx`.
 - [ ] 7.2 Verify the full suite and the workshop end to end: `npm test`, and a manual pass through farm → workshop → training browser → market confirming `bulk` and `checked` appear, are explained, and cannot be bought.
-- [ ] 7.3 Record in `training/README.md` that the shipped figures are `starter`-tier measurements fitted against `starter`'s labels, so the later tiers have something to be compared against.
+- [x] 7.3 Record in `training/README.md` that the shipped figures are `starter`-tier measurements fitted against `starter`'s labels, so the later tiers have something to be compared against.

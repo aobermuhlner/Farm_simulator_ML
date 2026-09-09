@@ -50,7 +50,7 @@ function copy<T>(value: T): T {
 }
 
 const rawIndex = read<Record<string, unknown>>('index.json')
-const DEFAULT_ID = 'blocks2-channels16-regularization1-dropout0'
+const DEFAULT_ID = 'blocks2-channels16-regularization1-dropout0-datasetstarter'
 const rawFile = read<Record<string, unknown>>(`${DEFAULT_ID}.json`)
 
 function indexIssues(mutate: (draft: Record<string, any>) => void) {
@@ -219,7 +219,7 @@ describe('completeness', () => {
 
   it('refuses a file that identifies itself as another configuration', () => {
     const issues = fileIssues((draft) => {
-      draft.configurationId = 'blocks2-channels8-regularization1-dropout0'
+      draft.configurationId = 'blocks2-channels8-regularization1-dropout0-datasetstarter'
     })
     expect(issues.some((entry) => entry.code === 'artifact-configuration-mismatch')).toBe(true)
   })

@@ -167,7 +167,7 @@ describe('nothing for sale opens a configuration no model was trained for', () =
     const wider = [...shippedCoverage()]
     for (const blocks of [3, 4]) {
       for (const channels of [8, 16, 32]) {
-        wider.push(`blocks${blocks}-channels${channels}-regularization1-dropout0`)
+        wider.push(`blocks${blocks}-channels${channels}-regularization1-dropout0-datasetstarter`)
       }
     }
 
@@ -228,9 +228,9 @@ describe('the shipped catalog, task and artifact together', () => {
     // Pinned, because this change trains nothing and regenerates nothing: if these three
     // ever move, it was another change that moved them and this suite should say so.
     expect(shippedCoverage()).toEqual([
-      'blocks2-channels8-regularization1-dropout0',
-      'blocks2-channels16-regularization1-dropout0',
-      'blocks2-channels32-regularization1-dropout0',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
+      'blocks2-channels32-regularization1-dropout0-datasetstarter',
     ])
   })
 
@@ -276,5 +276,38 @@ describe('growth accumulates rather than opening a thing twice', () => {
 
     expect(twice).toEqual(once)
     expect(once).toEqual(never)
+  })
+})
+
+describe('a dataset tier no model was fitted on cannot be priced', () => {
+  const shipped = soundCatalog(shippedCatalogJson())
+  const coverage = { [apple.id]: { [family.id]: shippedCoverage() } }
+
+  /** The shipped catalog with one item given a price. */
+  function priced(itemId: string) {
+    const raw = shippedCatalogJson() as { items: Record<string, unknown>[] }
+    const items = raw.items.map((item) =>
+      item.id === itemId ? { ...item, price: 800, notForSaleReason: undefined } : item,
+    )
+    return soundCatalog({ ...raw, items })
+  }
+
+  it('accepts both of them unpriced, which is how they ship', () => {
+    expect(checkCatalogCoverage(shipped, tasks, coverage)).toEqual([])
+    for (const id of ['bulk-photos', 'checked-photos']) {
+      const item = shipped.items.find((candidate) => candidate.id === id)
+      expect(item?.priceUnits, id).toBeUndefined()
+      expect(item?.notForSaleReason, id).toContain('fitted')
+    }
+  })
+
+  it('refuses either of them priced, naming the item and an identifier no artifact covers', () => {
+    for (const id of ['bulk-photos', 'checked-photos']) {
+      const issues = checkCatalogCoverage(priced(id), tasks, coverage)
+      expect(issues.map((issue) => issue.field), id).toContain(id)
+      const named = issues.find((issue) => issue.field === id)
+      // The identifier it would open, so the author can see exactly what is missing.
+      expect(named?.message, id).toContain('dataset')
+    }
   })
 })

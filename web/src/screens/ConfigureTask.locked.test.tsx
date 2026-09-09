@@ -85,13 +85,13 @@ describe('a locked configuration never reaches an artifact', () => {
   it('goes ahead once the item that opens it is owned', async () => {
     const loadEntry = renderTask(['wider-blocks'])
     expect(screen.getByTestId('current-configuration').textContent).toBe(
-      'blocks2-channels8-regularization1-dropout0',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
     expect(loadEntry).toHaveBeenCalledWith(
       firstFamily(apple).id,
-      'blocks2-channels8-regularization1-dropout0',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
     )
   })
 })
@@ -117,7 +117,7 @@ describe('the untrained refusal is still reachable', () => {
 
     expect(loadEntry).toHaveBeenCalledWith(
       firstFamily(apple).id,
-      'blocks2-channels16-regularization3-dropout0',
+      'blocks2-channels16-regularization3-dropout0-datasetstarter',
     )
     expect(screen.getByRole('alert').textContent).toContain('No model was trained')
     expect(screen.getByRole('alert').textContent).not.toContain('not yet owned')

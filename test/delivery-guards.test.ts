@@ -127,7 +127,7 @@ describe('no year the farm can draw crosses the limit by itself', () => {
     // it by breaking this test. The highest share seen across the declared weather:
     expect({ highest: Math.round(highest * 10000) / 10000, worst }).toEqual({
       highest: 0.1057,
-      worst: 'blocks2-channels8-regularization1-dropout0',
+      worst: 'blocks2-channels8-regularization1-dropout0-datasetstarter',
     })
     expect(term.tolerance - highest).toBeGreaterThan(0.005)
   })
@@ -247,9 +247,9 @@ describe('what a year pays, measured', () => {
       CONFIGURATIONS.map(({ id, entry }) => [id, Math.round(harvest(entry, crop).paid)]),
     )
     expect(paid).toEqual({
-      'blocks2-channels8-regularization1-dropout0': 1333,
-      'blocks2-channels16-regularization1-dropout0': 1325,
-      'blocks2-channels32-regularization1-dropout0': 1360,
+      'blocks2-channels8-regularization1-dropout0-datasetstarter': 1333,
+      'blocks2-channels16-regularization1-dropout0-datasetstarter': 1325,
+      'blocks2-channels32-regularization1-dropout0-datasetstarter': 1360,
     })
   })
 
@@ -262,14 +262,14 @@ describe('what a year pays, measured', () => {
     }
 
     expect(paidAt(0)).toEqual({
-      'blocks2-channels8-regularization1-dropout0': 1476,
-      'blocks2-channels16-regularization1-dropout0': 1465,
-      'blocks2-channels32-regularization1-dropout0': 1495,
+      'blocks2-channels8-regularization1-dropout0-datasetstarter': 1476,
+      'blocks2-channels16-regularization1-dropout0-datasetstarter': 1465,
+      'blocks2-channels32-regularization1-dropout0-datasetstarter': 1495,
     })
     expect(paidAt(1)).toEqual({
-      'blocks2-channels8-regularization1-dropout0': 1215,
-      'blocks2-channels16-regularization1-dropout0': 1207,
-      'blocks2-channels32-regularization1-dropout0': 1250,
+      'blocks2-channels8-regularization1-dropout0-datasetstarter': 1215,
+      'blocks2-channels16-regularization1-dropout0-datasetstarter': 1207,
+      'blocks2-channels32-regularization1-dropout0-datasetstarter': 1250,
     })
   })
 
@@ -452,9 +452,9 @@ describe('growth multiplies the money and leaves every rate where it was', () =>
 
     expect(expansion.price).toBe(1000)
     expect(multiples).toEqual({
-      'blocks2-channels8-regularization1-dropout0': 1.21,
-      'blocks2-channels16-regularization1-dropout0': 1.2,
-      'blocks2-channels32-regularization1-dropout0': 1.24,
+      'blocks2-channels8-regularization1-dropout0-datasetstarter': 1.21,
+      'blocks2-channels16-regularization1-dropout0-datasetstarter': 1.2,
+      'blocks2-channels32-regularization1-dropout0-datasetstarter': 1.24,
     })
   })
 

@@ -20,6 +20,9 @@ function serve(body: unknown): void {
   )
 }
 
+/** The task's smallest tier: what a farm that has bought nothing has selected. */
+const STARTER = apple.datasets[0]?.id ?? ''
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })
@@ -28,7 +31,7 @@ describe('fetching a task pool', () => {
   it('loads the committed manifest into a drawable training split', async () => {
     serve(appleManifest())
 
-    const loaded = await loadTrainingSplit(POOL_PATHS, apple)
+    const loaded = await loadTrainingSplit(POOL_PATHS, apple, STARTER)
 
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
@@ -41,7 +44,7 @@ describe('fetching a task pool', () => {
   it('resolves each image to an atlas URL under the pool mount', async () => {
     serve(appleManifest())
 
-    const loaded = await loadTrainingSplit(POOL_PATHS, apple)
+    const loaded = await loadTrainingSplit(POOL_PATHS, apple, STARTER)
 
     if (!loaded.ok) throw new Error('the committed manifest should load')
     for (const image of loaded.value.images) {
@@ -53,7 +56,7 @@ describe('fetching a task pool', () => {
   it('reports an unreachable manifest rather than throwing', async () => {
     vi.stubGlobal('fetch', () => Promise.resolve({ ok: false, status: 404 } as Response))
 
-    const loaded = await loadTrainingSplit(POOL_PATHS, apple)
+    const loaded = await loadTrainingSplit(POOL_PATHS, apple, STARTER)
 
     expect(loaded.ok).toBe(false)
     if (loaded.ok) return
@@ -64,7 +67,7 @@ describe('fetching a task pool', () => {
   it('hands back the reader’s own issues when the reader refuses', async () => {
     serve({ ...appleManifest(), poolId: 'pools/elsewhere' })
 
-    const loaded = await loadTrainingSplit(POOL_PATHS, apple)
+    const loaded = await loadTrainingSplit(POOL_PATHS, apple, STARTER)
 
     expect(loaded.ok).toBe(false)
     if (loaded.ok) return
@@ -77,7 +80,7 @@ describe('fetching a task pool', () => {
   it('returns no split at all from a refusal', async () => {
     serve({ ...appleManifest(), schemaVersion: '9.9.9' })
 
-    const loaded = await loadTrainingSplit(POOL_PATHS, apple)
+    const loaded = await loadTrainingSplit(POOL_PATHS, apple, STARTER)
 
     expect(loaded).not.toHaveProperty('value')
   })
@@ -87,7 +90,7 @@ describe('what the split carries', () => {
   it('names none of the generation attributes anywhere in the data layer', async () => {
     serve(appleManifest())
 
-    const loaded = await loadTrainingSplit(POOL_PATHS, apple)
+    const loaded = await loadTrainingSplit(POOL_PATHS, apple, STARTER)
 
     if (!loaded.ok) throw new Error('the committed manifest should load')
     const fields = new Set(loaded.value.images.flatMap((image) => Object.keys(image)))

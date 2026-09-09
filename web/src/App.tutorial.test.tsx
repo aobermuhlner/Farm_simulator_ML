@@ -53,7 +53,7 @@ const task = taskFrom(
   ladder,
   [ladderPredictions()],
   unrelatedTruth(),
-  { [UNGATED.id]: { depth1: { ...ladderModelDocument() } } },
+  { [UNGATED.id]: { 'depth1-photographsclinic': { ...ladderModelDocument() } } },
   ladderFeatures(),
 )
 

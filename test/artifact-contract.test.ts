@@ -129,7 +129,7 @@ describe('changing the decision rule regenerates nothing', () => {
 
     const withPolicy = (policy: TaskDeclaration['policy']): string[] => {
       const task: TaskDeclaration = { ...apple, policy }
-      const entry = artifact.configurations['blocks2-channels8-regularization3-dropout0.5']
+      const entry = artifact.configurations['blocks2-channels8-regularization3-dropout0.5-datasetstarter']
       if (entry === undefined) throw new Error('fixture configuration missing')
       return Object.values(entry.predictions.pool).map((distribution) =>
         chooseAction(task, distribution),
@@ -164,7 +164,7 @@ describe('changing the decision rule regenerates nothing', () => {
     const resolved = resolveConfiguration(apple, family, OVER_REGULARIZED)
     if (!resolved.ok) throw new Error('expected the configuration to resolve')
 
-    const entry = artifact.configurations['blocks2-channels8-regularization3-dropout0.5']
+    const entry = artifact.configurations['blocks2-channels8-regularization3-dropout0.5-datasetstarter']
     if (entry === undefined) throw new Error('fixture configuration missing')
 
     const byPriority = (priority: string[]): { id: string; actions: string[] } => {

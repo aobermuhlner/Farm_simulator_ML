@@ -115,7 +115,7 @@ describe('the year loop', () => {
 
     expect(screen.getByRole('heading', { name: 'Apple Harvest' })).toBeDefined()
     expect(screen.getByTestId('at-work').textContent).toBe(
-      'blocks2-channels8-regularization1-dropout0',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
     )
   })
 

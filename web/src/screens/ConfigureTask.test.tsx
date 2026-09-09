@@ -135,7 +135,7 @@ describe('configuration identity', () => {
     renderApple()
 
     expect(screen.getByTestId('current-configuration').textContent).toBe(
-      'blocks2-channels16-regularization1-dropout0',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
     )
   })
 
@@ -201,7 +201,7 @@ describe('putting a model to work', () => {
 
     expect(onPutToWork).toHaveBeenCalledOnce()
     expect(onPutToWork.mock.calls[0]?.[0]).toBe(appleFamily.id)
-    expect(onPutToWork.mock.calls[0]?.[1]).toBe('blocks2-channels16-regularization1-dropout0')
+    expect(onPutToWork.mock.calls[0]?.[1]).toBe('blocks2-channels16-regularization1-dropout0-datasetstarter')
   })
 
   it('withdraws the offer as soon as a knob moves, because that model is no longer made', async () => {
@@ -251,7 +251,7 @@ describe('a task already at work', () => {
       'blocks3-channels32-regularization1-dropout0',
     )
     expect(screen.getByTestId('current-configuration').textContent).toBe(
-      'blocks2-channels16-regularization1-dropout0',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
     )
   })
 
@@ -289,7 +289,7 @@ describe('refusals', () => {
     await train()
 
     const alert = screen.getByRole('alert')
-    expect(alert.textContent).toContain('blocks2-channels32-regularization1-dropout0')
+    expect(alert.textContent).toContain('blocks2-channels32-regularization1-dropout0-datasetstarter')
     expect(alert.textContent).toContain('trained in advance')
   })
 

@@ -28,8 +28,16 @@ import type { PoolPaths } from './paths.js'
 /** One image of a split, with what it takes to draw it and nothing more. */
 export interface SplitImageView {
   readonly imageId: string
+  /**
+   * The category the selected tier files this image under — not always its true one.
+   *
+   * `specs/training-browser/spec.md` — showing the tier's label rather than the truth is
+   * the point. The data a student bought is the data their model will be fitted on, wrong
+   * labels and all, and a browser quietly correcting it would hide the only thing that
+   * distinguishes a cheap dataset from an expensive one.
+   */
   readonly category: CategoryId
-  /** The label the task declares for this image's true category. */
+  /** The label the task declares for the category that tier files this image under. */
   readonly label: string
   readonly atlasUrl: string
   readonly atlasWidth: number
@@ -46,9 +54,25 @@ export interface SplitCategoryView {
   readonly label: string
 }
 
+/** The dataset tier being browsed, in the words its declaration carries. */
+export interface SplitTierView {
+  readonly id: string
+  /** What the set is called on screen. Declared, so no screen names a tier of its own. */
+  readonly label: string
+  /**
+   * What the declaration says about how well this tier was labelled.
+   *
+   * Passed through rather than composed, and it says *that* some labels are wrong and
+   * never *which*: naming them would hand over the thing a student is meant to find by
+   * looking.
+   */
+  readonly disclosure: string
+}
+
 export interface TrainingSplitView {
   readonly categories: readonly SplitCategoryView[]
   readonly images: readonly SplitImageView[]
+  readonly tier: SplitTierView
 }
 
 function issue(code: string, message: string, field?: string): ValidationIssue {
@@ -67,23 +91,50 @@ export function trainingSplitView(
   pool: LoadedPool,
   declaration: TaskDeclaration,
   atlases: string,
+  tierId: string,
 ): Loaded<TrainingSplitView> {
   const labels = new Map(declaration.categories.map((category) => [category.id, category.label]))
   const images: SplitImageView[] = []
 
-  for (const imageId of pool.order.training) {
+  const tier = declaration.datasets.find((candidate) => candidate.id === tierId)
+  if (tier === undefined) {
+    return {
+      ok: false,
+      issues: [
+        issue(
+          'unknown-tier',
+          `The task declares no dataset tier "${tierId}", so there is no set of photographs to show.`,
+          tierId,
+        ),
+      ],
+    }
+  }
+
+  // The images of the selected tier, not of the whole split: what is shown follows the
+  // knob rather than what is owned, because it is the set the model being configured
+  // will be fitted on.
+  for (const imageId of pool.tiers[tier.id] ?? []) {
     const image = pool.images[imageId]
     const region = regionFor(pool, imageId)
     const atlas = image === undefined ? undefined : pool.atlases[image.atlas]
-    const label = image === undefined ? undefined : labels.get(image.category)
+    // The label this tier files the image under, which the reader has already held to the
+    // task's declared categories.
+    const filed = pool.tierLabels[imageId]?.[tier.id]
+    const label = filed === undefined ? undefined : labels.get(filed)
 
-    if (image === undefined || region === undefined || atlas === undefined || label === undefined) {
+    if (
+      image === undefined ||
+      region === undefined ||
+      atlas === undefined ||
+      filed === undefined ||
+      label === undefined
+    ) {
       return {
         ok: false,
         issues: [
           issue(
             'image-unplaceable',
-            `Image "${imageId}" cannot be placed in an atlas this pool declares, or carries a category this task does not.`,
+            `Image "${imageId}" cannot be placed in an atlas this pool declares, or is filed by this dataset under a category the task does not declare.`,
             imageId,
           ),
         ],
@@ -92,7 +143,7 @@ export function trainingSplitView(
 
     images.push({
       imageId,
-      category: image.category,
+      category: filed,
       label,
       atlasUrl: dataUrl(`${atlases}/${atlas.file}`),
       atlasWidth: atlas.width,
@@ -111,6 +162,7 @@ export function trainingSplitView(
         label: category.label,
       })),
       images,
+      tier: { id: tier.id, label: tier.label, disclosure: tier.disclosure },
     },
   }
 }
@@ -125,6 +177,7 @@ export function trainingSplitView(
 export async function loadTrainingSplit(
   paths: PoolPaths,
   declaration: TaskDeclaration,
+  tierId: string,
 ): Promise<Loaded<TrainingSplitView>> {
   const raw = await fetchJson(paths.manifest)
   if (!raw.ok) return raw
@@ -132,7 +185,7 @@ export async function loadTrainingSplit(
   const read = readPool(raw.value, declaration)
   if (!read.ok) return { ok: false, issues: read.issues }
 
-  return trainingSplitView(read.pool, declaration, paths.atlases)
+  return trainingSplitView(read.pool, declaration, paths.atlases, tierId)
 }
 
 /**

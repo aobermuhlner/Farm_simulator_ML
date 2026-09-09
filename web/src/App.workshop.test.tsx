@@ -32,7 +32,7 @@ const OPENING_YEAR = String(declaration.openingYear)
 /** The family the shipped apple task opens at, and the one every slot below names. */
 const FAMILY = firstFamily(appleTask.declaration).id
 
-const DEFAULT_CONFIGURATION = 'blocks2-channels16-regularization1-dropout0'
+const DEFAULT_CONFIGURATION = 'blocks2-channels16-regularization1-dropout0-datasetstarter'
 
 function renderApp(storage: SaveStorage = memoryStorage()): SaveStorage {
   render(
@@ -128,14 +128,14 @@ describe('the workshop is entered and left as often as a student likes', () => {
     await openWorkshop()
     await userEvent.selectOptions(screen.getByLabelText('Patterns per block'), '0')
     expect(screen.getByTestId('current-configuration').textContent).toBe(
-      'blocks2-channels8-regularization1-dropout0',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
     await openWorkshop()
 
     expect(screen.getByTestId('current-configuration').textContent).toBe(
-      'blocks2-channels8-regularization1-dropout0',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
     )
     // And every stage of it is reachable again with no crop having been brought in.
     await makeModel()

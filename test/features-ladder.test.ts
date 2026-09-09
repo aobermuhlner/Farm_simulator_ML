@@ -157,26 +157,26 @@ const RECORDED: Readonly<Record<string, number>> = {
   'rule.earnings.mild': 1647,
   'rule.earnings.wet': 1378,
 
-  'blocks2-channels8-regularization1-dropout0.score.overall': 0.766,
-  'blocks2-channels8-regularization1-dropout0.score.red': 0.866,
-  'blocks2-channels8-regularization1-dropout0.score.green': 1,
-  'blocks2-channels8-regularization1-dropout0.score.wormy': 0.332,
-  'blocks2-channels8-regularization1-dropout0.earnings.mild': 1476,
-  'blocks2-channels8-regularization1-dropout0.earnings.wet': 1215,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.score.overall': 0.766,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.score.red': 0.866,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.score.green': 1,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.score.wormy': 0.332,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.earnings.mild': 1476,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.earnings.wet': 1215,
 
-  'blocks2-channels16-regularization1-dropout0.score.overall': 0.764,
-  'blocks2-channels16-regularization1-dropout0.score.red': 0.856,
-  'blocks2-channels16-regularization1-dropout0.score.green': 1,
-  'blocks2-channels16-regularization1-dropout0.score.wormy': 0.344,
-  'blocks2-channels16-regularization1-dropout0.earnings.mild': 1465,
-  'blocks2-channels16-regularization1-dropout0.earnings.wet': 1207,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.score.overall': 0.764,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.score.red': 0.856,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.score.green': 1,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.score.wormy': 0.344,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.earnings.mild': 1465,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.earnings.wet': 1207,
 
-  'blocks2-channels32-regularization1-dropout0.score.overall': 0.786,
-  'blocks2-channels32-regularization1-dropout0.score.red': 0.868,
-  'blocks2-channels32-regularization1-dropout0.score.green': 1,
-  'blocks2-channels32-regularization1-dropout0.score.wormy': 0.408,
-  'blocks2-channels32-regularization1-dropout0.earnings.mild': 1495,
-  'blocks2-channels32-regularization1-dropout0.earnings.wet': 1250,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.score.overall': 0.786,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.score.red': 0.868,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.score.green': 1,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.score.wormy': 0.408,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.earnings.mild': 1495,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.earnings.wet': 1250,
 }
 
 describe('the recording has something real to measure', () => {
@@ -263,7 +263,7 @@ describe('the comparison reports the position rather than refusing it', () => {
     // money, because the rule reaches the same year with far fewer worms in the crates.
     const behind = rows.filter((row) => row.margin < 0)
     expect(behind.map((row) => `${row.configurationId} ${row.figure}`)).toEqual([
-      'blocks2-channels32-regularization1-dropout0 wormy',
+      'blocks2-channels32-regularization1-dropout0-datasetstarter wormy',
     ])
 
     for (const year of ['mild', 'wet'] as const) {

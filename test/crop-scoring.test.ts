@@ -61,7 +61,7 @@ function shippedEntry(configurationId: string): ConfigurationEntry {
   ) as ConfigurationEntry
 }
 
-const SHIPPED = 'blocks2-channels16-regularization1-dropout0'
+const SHIPPED = 'blocks2-channels16-regularization1-dropout0-datasetstarter'
 const stored = shippedEntry(SHIPPED)
 const entry = entryFromPredictions(stored)
 

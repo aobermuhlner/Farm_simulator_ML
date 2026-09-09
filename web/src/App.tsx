@@ -300,7 +300,8 @@ export function App({
   const loadSplit = useMemo(() => {
     const declaration = open?.declaration
     if (open === undefined || declaration === undefined) return undefined
-    return () => loadTrainingSplit(open.paths.pool, declaration)
+    // The tier comes from the workshop, which is where the knob that names it lives.
+    return (tier: string) => loadTrainingSplit(open.paths.pool, declaration, tier)
   }, [open])
 
   // The loader is memoised on the stage rather than on the farm, so settling the year —

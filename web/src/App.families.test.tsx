@@ -43,7 +43,7 @@ const task = taskFrom(
   ladder,
   [ladderPredictions()],
   unrelatedTruth(),
-  { [SHIPS_MODEL!.id]: { depth1: { ...ladderModelDocument() } } },
+  { [SHIPS_MODEL!.id]: { 'depth1-photographsclinic': { ...ladderModelDocument() } } },
   ladderFeatures(),
 )
 
@@ -127,8 +127,8 @@ describe('a task the screens have never seen, through the same screens', () => {
 
     const report = screen.getByRole('region', { name: 'Run report' })
     expect(report.textContent).toContain(SHIPS_MODEL!.label)
-    expect(report.textContent).toContain('depth1')
-    expect(saved(storage).slots[ladder.id]).toEqual({ configuration: 'depth1', family: SHIPS_MODEL!.id })
+    expect(report.textContent).toContain('depth1-photographsclinic')
+    expect(saved(storage).slots[ladder.id]).toEqual({ configuration: 'depth1-photographsclinic', family: SHIPS_MODEL!.id })
   })
 
   it('shows the family the crop was brought in by, not the one now selected', async () => {
@@ -178,7 +178,7 @@ describe('selecting a family costs nothing', () => {
 
     // Looking at a family is not putting it to work: the slot is the commitment.
     expect(saved(storage).slots[ladder.id]?.family).toBe(SHIPS_MODEL!.id)
-    expect(screen.getByTestId('at-work').textContent).toBe('depth1')
+    expect(screen.getByTestId('at-work').textContent).toBe('depth1-photographsclinic')
     await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
     expect(slotText()).toContain(SHIPS_MODEL!.slot.label)
   })
@@ -208,8 +208,13 @@ describe('which family a task shows is progress', () => {
     await openWorkshop()
     await userEvent.selectOptions(screen.getByLabelText(knob.label), String(other))
 
+    // The whole set this family is sitting at, its dataset knob included: what a family
+    // is fitted on is one of its knob values like any other.
     const stored = saved(storage).knobs[ladder.id] as Record<string, unknown>
-    expect(stored[SHIPS_PREDICTIONS!.id]).toEqual({ [knob.id]: other })
+    expect(stored[SHIPS_PREDICTIONS!.id]).toEqual({
+      [knob.id]: other,
+      [SHIPS_PREDICTIONS!.datasetKnob]: 'clinic',
+    })
     expect(stored[SHIPS_MODEL!.id]).toBeUndefined()
   })
 })

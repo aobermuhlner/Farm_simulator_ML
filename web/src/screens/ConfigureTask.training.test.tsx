@@ -24,6 +24,14 @@ afterEach(cleanup)
 
 const apple = appleDeclaration()
 const split = appleTrainingSplit()
+const family = firstFamily(apple)
+
+/** The knob that selects the fitting set, found the way every screen finds it. */
+const datasetKnob = (() => {
+  const knob = family.knobs.find((candidate) => candidate.id === family.datasetKnob)
+  if (knob === undefined) throw new Error('the shipped family must declare its dataset knob')
+  return knob
+})()
 
 function renderApple(load: () => Promise<Loaded<TrainingSplitView>> = () =>
   Promise.resolve({ ok: true, value: split })) {
@@ -119,7 +127,7 @@ describe('the configuration survives the trip', () => {
 
     expect((screen.getByLabelText('Convolutional blocks') as HTMLSelectElement).value).toBe(chosen)
     expect(screen.getByTestId('current-configuration').textContent).toBe(
-      'blocks2-channels16-regularization1-dropout0',
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
     )
   })
 
@@ -144,5 +152,90 @@ describe('browsing without running', () => {
     expect(screen.queryAllByRole('img').length).toBeGreaterThan(0)
     expect(screen.queryByRole('region', { name: 'Run report' })).toBeNull()
     expect(screen.queryByText(/Total earnings/)).toBeNull()
+  })
+})
+
+describe('the browsed set follows the dataset knob', () => {
+  /** The tier each call to the loader asked for, in order. */
+  function recordingLoader(): { readonly asked: string[]; readonly load: (tier: string) => Promise<Loaded<TrainingSplitView>> } {
+    const asked: string[] = []
+    return {
+      asked,
+      load: (tier: string) => {
+        asked.push(tier)
+        return Promise.resolve({ ok: true as const, value: split })
+      },
+    }
+  }
+
+  /** Every tier the shipped task declares, available to select. */
+  const everyTierOpen = {
+    taskId: apple.id,
+    families: [],
+    knobs: [
+      {
+        knobId: family.datasetKnob,
+        values: apple.datasets.map((tier) => ({ value: tier.id, available: true })),
+      },
+    ],
+  }
+
+  it('asks for the tier the knob names, not for the whole split', async () => {
+    const loader = recordingLoader()
+    render(
+      <ConfigureTask
+        declaration={apple}
+        loadEntry={entryLoader(apple, appleArtifact())}
+        loadSplit={loader.load}
+        replayMs={0}
+        onBack={() => {}}
+      />,
+    )
+
+    await openBrowser()
+
+    expect(loader.asked).toEqual([apple.datasets[0]?.id])
+  })
+
+  it('shows the selected tier to a student who owns a larger one', async () => {
+    // The whole point of the rule: owning the largest set and having selected the
+    // smallest shows the smallest, because that is the set this model will be fitted on.
+    const loader = recordingLoader()
+    render(
+      <ConfigureTask
+        declaration={apple}
+        loadEntry={entryLoader(apple, appleArtifact())}
+        loadSplit={loader.load}
+        availability={everyTierOpen}
+        replayMs={0}
+        onBack={() => {}}
+      />,
+    )
+
+    await openBrowser()
+    await leaveBrowser()
+
+    expect(loader.asked).toEqual([apple.datasets[0]?.id])
+  })
+
+  it('asks for the larger tier once it is the one selected', async () => {
+    const loader = recordingLoader()
+    render(
+      <ConfigureTask
+        declaration={apple}
+        loadEntry={entryLoader(apple, appleArtifact())}
+        loadSplit={loader.load}
+        availability={everyTierOpen}
+        replayMs={0}
+        onBack={() => {}}
+      />,
+    )
+
+    const larger = apple.datasets[1]
+    if (larger === undefined) throw new Error('the shipped task must declare a larger tier')
+    await userEvent.selectOptions(screen.getByLabelText(datasetKnob.label), larger.id)
+    await openBrowser()
+
+    expect(loader.asked).toEqual([larger.id])
   })
 })

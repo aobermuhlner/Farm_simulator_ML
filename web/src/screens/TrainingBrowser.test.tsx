@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { regionFor } from '../../../src/pool/index.js'
+import { readPool, regionFor } from '../../../src/pool/index.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import { dataUrlFor } from '../data/paths.js'
 import type { TrainingSplitView } from '../data/pool.js'
-import { loadTrainingSplit } from '../data/pool.js'
+import { loadTrainingSplit, trainingSplitView } from '../data/pool.js'
 import { appleDeclaration } from '../test-support/declarations.js'
 import { appleManifest, applePool, appleTrainingSplit } from '../test-support/pool.js'
 import { CELL_DISPLAY_PX, TrainingBrowser } from './TrainingBrowser.js'
@@ -61,7 +61,7 @@ async function renderManifest(served: unknown): Promise<void> {
   )
   render(
     <TrainingBrowser
-      load={() => loadTrainingSplit(POOL_PATHS, apple)}
+      load={() => loadTrainingSplit(POOL_PATHS, apple, apple.datasets[0]?.id ?? '')}
       onBack={() => {}}
     />,
   )
@@ -431,5 +431,117 @@ describe('a pool that will not load', () => {
     expect(alert.textContent).toContain(imageId)
     expect(cells()).toHaveLength(0)
     expect(screen.queryByRole('table')).toBeNull()
+  })
+})
+
+/** The task's smallest tier: the one that came with the robot. */
+const smallest = (() => {
+  const tier = apple.datasets[0]
+  if (tier === undefined) throw new Error('the shipped task must declare a tier')
+  return tier
+})()
+
+describe('the tier the browser is showing', () => {
+
+  /**
+   * The committed split projected through a tier that files some apples wrongly.
+   *
+   * The manifest's labels move and its categories do not, and the task's declared
+   * composition moves with the labels — which is what a tier declares. Everything below
+   * goes through the real reader and the real projection, so what is asserted is what a
+   * student would be shown if the photographs arrived tomorrow.
+   */
+  function misfiling(): TrainingSplitView {
+    const raw = JSON.parse(JSON.stringify(appleManifest())) as {
+      images: Record<string, { category: string; tierLabels?: Record<string, string> }>
+    }
+    let moved = 0
+    for (const image of Object.values(raw.images)) {
+      if (image.tierLabels?.[smallest.id] !== 'wormy' || moved >= 7) continue
+      image.tierLabels[smallest.id] = 'red'
+      moved += 1
+    }
+    expect(moved).toBe(7)
+
+    const filed = {
+      ...apple,
+      datasets: apple.datasets.map((tier) =>
+        tier.id !== smallest.id
+          ? tier
+          : {
+              ...tier,
+              label: 'A hurried pile',
+              disclosure: 'Filed in an afternoon. Some of what it says is wrong.',
+              composition: { red: 107, green: 50, wormy: 43 },
+            },
+      ),
+    }
+
+    const read = readPool(raw, filed)
+    if (!read.ok) throw new Error(`the doctored pool must read: ${read.issues[0]?.message}`)
+    const view = trainingSplitView(read.pool, filed, POOL_PATHS.atlases, smallest.id)
+    if (!view.ok) throw new Error(`the doctored split must project: ${view.issues[0]?.message}`)
+    return view.value
+  }
+
+  it('names the set on screen by the label its declaration carries', async () => {
+    await renderSplit()
+
+    expect(screen.getByText(smallest.label, { exact: false })).toBeDefined()
+  })
+
+  it('states the tier’s declared label quality beside its images', async () => {
+    await renderSplit()
+
+    expect(screen.getByText(smallest.disclosure)).toBeDefined()
+  })
+
+  it('states a hurried tier’s disclosure just as it states a checked one’s', async () => {
+    const view = misfiling()
+    await renderSplit(view)
+
+    expect(screen.getByText(view.tier.disclosure)).toBeDefined()
+    expect(screen.getByText('A hurried pile', { exact: false })).toBeDefined()
+  })
+
+  it('labels each image by the category its tier files it under, not by the truth', async () => {
+    const view = misfiling()
+    const wormy = apple.categories.find((category) => category.id === 'wormy')
+    const red = apple.categories.find((category) => category.id === 'red')
+    await renderSplit(view)
+
+    // Seven apples the manifest calls wormy are filed as red by this tier, and the
+    // browser shows them as red — the browser is showing the dataset, not the orchard.
+    const labelled = cells().filter((cell) => cell.getAttribute('aria-label') === red?.label)
+    expect(labelled).toHaveLength(107)
+    expect(
+      cells().filter((cell) => cell.getAttribute('aria-label') === wormy?.label),
+    ).toHaveLength(43)
+  })
+
+  it('counts the composition by those same labels', async () => {
+    const view = misfiling()
+    await renderSplit(view)
+
+    const table = screen.getByRole('table')
+    expect(within(table).getByText('107')).toBeDefined()
+    expect(within(table).getByText('43')).toBeDefined()
+    // No count of true categories anywhere: the 50 wormy apples the pool really holds are
+    // the discrepancy the harvest reveals, not something the browser gives away.
+    expect(within(table).queryAllByText('50')).toHaveLength(1)
+  })
+
+  it('marks no image as mislabelled and states no count of them', async () => {
+    const view = misfiling()
+    await renderSplit(view)
+
+    for (const cell of cells()) {
+      expect(cell.getAttribute('data-mislabelled')).toBeNull()
+      expect(cell.className).not.toContain('mislabelled')
+    }
+    expect(screen.queryByText(/mislabel/i)).toBeNull()
+    expect(screen.queryByText(/wrongly labelled/i)).toBeNull()
+    // Seven is the count that must not be recoverable from the screen.
+    expect(screen.queryAllByText('7')).toHaveLength(0)
   })
 })
