@@ -208,9 +208,11 @@ describe('structural refusals', () => {
  */
 function cnnTask(inputSize: number): TaskDeclaration {
   const raw = loadRawDeclaration('apple-harvest')
-  const knobs = raw.knobs as Record<string, unknown>[]
-  const declaration = {
-    ...raw,
+  const families = raw.families as Record<string, unknown>[]
+  const family = families[0] as Record<string, unknown>
+  const knobs = family.knobs as Record<string, unknown>[]
+  const drawn = {
+    ...family,
     knobs: [
       ...knobs,
       {
@@ -238,6 +240,7 @@ function cnnTask(inputSize: number): TaskDeclaration {
       channelsShown: { '8': 2, '16': 3 },
     },
   }
+  const declaration = { ...raw, families: [drawn] }
 
   const validated = validateDeclaration(declaration)
   if (!validated.ok) throw new Error(messages(validated.issues))
@@ -400,6 +403,152 @@ describe('the roles are not a split', () => {
     expect(result.pool.order.training).toHaveLength(200)
     for (const id of result.pool.roles.heldOut) {
       expect(result.pool.order.training).toContain(id)
+    }
+  })
+})
+
+describe('the dataset tier of a training image', () => {
+  it('is read for every training image, and for no evaluation image', () => {
+    const result = readPool(manifest, apple)
+    if (!result.ok) throw new Error('expected the committed pool to load')
+
+    const smallest = apple.datasets[0]!
+    expect(result.pool.images['t-001']?.tier).toBe(smallest.id)
+    expect(result.pool.tierLabels['t-001']).toEqual({ [smallest.id]: 'red' })
+    expect(result.pool.images['p-0001']?.tier).toBeUndefined()
+    expect(result.pool.tierLabels['p-0001']).toBeUndefined()
+  })
+
+  it('lists the images every declared tier holds, empty for a tier with none', () => {
+    const result = readPool(manifest, apple)
+    if (!result.ok) throw new Error('expected the committed pool to load')
+
+    const [smallest, ...larger] = apple.datasets
+    expect(result.pool.tiers[smallest!.id]).toHaveLength(smallest!.size)
+    // Declared, shown and explained, with no photographs behind them yet: an empty list
+    // rather than a missing key, so nothing downstream has to special-case them.
+    for (const tier of larger) expect(result.pool.tiers[tier.id], tier.id).toEqual([])
+  })
+
+  it('refuses a training image with no tier, naming the image', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      delete images['t-001']!.tier
+    })
+    expect(issues.map((issue) => issue.code)).toContain('missing-tier')
+    expect(messages(issues)).toContain('t-001')
+  })
+
+  it('refuses an entry tier the task does not declare, naming the image and the tier', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      images['t-001']!.tier = 'bought-later'
+      images['t-001']!.tierLabels = { 'bought-later': 'red' }
+    })
+    expect(issues.map((issue) => issue.code)).toContain('unknown-tier')
+    expect(messages(issues)).toContain('t-001')
+    expect(messages(issues)).toContain('bought-later')
+  })
+
+  it('refuses a label outside the declared categories, naming the image, the tier and the label', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      images['t-002']!.tierLabels = { starter: 'bruised' }
+    })
+    expect(issues.map((issue) => issue.code)).toContain('unknown-tier-label')
+    expect(messages(issues)).toContain('t-002')
+    expect(messages(issues)).toContain('starter')
+    expect(messages(issues)).toContain('bruised')
+  })
+
+  it('refuses a training image whose holding tier files it under nothing', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      images['t-003']!.tierLabels = {}
+    })
+    expect(issues.map((issue) => issue.code)).toContain('missing-tier-label')
+    expect(messages(issues)).toContain('t-003')
+  })
+
+  it('refuses a label filed by a tier that does not hold the image', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      images['t-004']!.tierLabels = { starter: 'red', checked: 'red' }
+    })
+    expect(issues.map((issue) => issue.code)).toContain('tier-does-not-hold')
+    expect(messages(issues)).toContain('t-004')
+    expect(messages(issues)).toContain('checked')
+  })
+
+  it('refuses a tier on an evaluation image, naming the image', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      images['p-0001']!.tier = 'starter'
+      images['p-0001']!.tierLabels = { starter: 'red' }
+    })
+    expect(issues.map((issue) => issue.code)).toContain('tier-outside-training')
+    expect(messages(issues)).toContain('p-0001')
+  })
+
+  it('refuses a tier label on an evaluation image even with no tier beside it', () => {
+    const issues = issuesFor((draft) => {
+      const images = draft.images as Record<string, Record<string, unknown>>
+      images['p-0002']!.tierLabels = { starter: 'red' }
+    })
+    expect(issues.map((issue) => issue.code)).toContain('tier-outside-training')
+    expect(messages(issues)).toContain('p-0002')
+  })
+})
+
+describe('a declared tier against the images the manifest gives it', () => {
+  /** The declaration with one tier's declared figures doctored. */
+  function withTier(mutate: (tier: Record<string, unknown>) => void): TaskDeclaration {
+    const raw = copy(loadRawDeclaration('apple-harvest')) as Record<string, unknown>
+    const tiers = raw.datasets as Record<string, unknown>[]
+    mutate(tiers[0]!)
+    const result = validateDeclaration(raw)
+    if (!result.ok) throw new Error(`expected the doctored declaration to validate: ${messages(result.issues)}`)
+    return result.declaration
+  }
+
+  it('accepts the smallest tier, whose declared figures the pool agrees with', () => {
+    const result = readPool(manifest, apple)
+    expect(result.ok).toBe(true)
+  })
+
+  it('refuses a declared size the manifest disagrees with, naming both figures', () => {
+    const doctored = withTier((tier) => {
+      tier.size = 180
+      tier.composition = { red: 90, green: 45, wormy: 45 }
+    })
+    const result = readPool(manifest, doctored)
+    if (result.ok) throw new Error('expected the pool to be refused')
+    expect(result.issues.map((issue) => issue.code)).toContain('tier-size-mismatch')
+    expect(messages(result.issues)).toContain('180')
+    expect(messages(result.issues)).toContain('200')
+  })
+
+  it('refuses a declared composition the manifest disagrees with, naming the category and both counts', () => {
+    const doctored = withTier((tier) => {
+      tier.composition = { red: 120, green: 50, wormy: 30 }
+    })
+    const result = readPool(manifest, doctored)
+    if (result.ok) throw new Error('expected the pool to be refused')
+    expect(result.issues.map((issue) => issue.code)).toContain('tier-composition-mismatch')
+    expect(messages(result.issues)).toContain('120')
+    expect(messages(result.issues)).toContain('100')
+    expect(messages(result.issues)).toContain('red')
+  })
+
+  it('accepts the larger tiers, which the pool holds no photographs for at all', () => {
+    // A tier declares 1 000 and 2 000 photographs that do not exist yet. It loads,
+    // because that is how a tier is shown and priced before it is authored — and it stays
+    // unreachable through the untrained and locked refusals that already exist.
+    const result = readPool(manifest, apple)
+    if (!result.ok) throw new Error('expected the committed pool to load')
+    for (const tier of apple.datasets.slice(1)) {
+      expect(tier.size).toBeGreaterThan(0)
+      expect(result.pool.tiers[tier.id]).toEqual([])
     }
   })
 })

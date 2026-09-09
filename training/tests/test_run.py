@@ -40,7 +40,12 @@ def result(declaration, pool, decoded, knobs):
 
 
 def test_the_identifier_matches_the_declared_knob_order(declaration, knobs):
-    assert configuration_id(declaration, knobs) == "blocks2-channels8-regularization1-dropout0"
+    # The dataset knob is declared last, so the tier arrives as a suffix and every part
+    # before it keeps its position — which is what made the re-key mechanical.
+    assert (
+        configuration_id(declaration, knobs)
+        == "blocks2-channels8-regularization1-dropout0-datasetstarter"
+    )
 
 
 def test_epochs_are_contiguous_from_one(result):
@@ -96,6 +101,7 @@ def test_no_held_out_image_reaches_the_optimizer(declaration, pool, decoded, kno
         images=pool.images,
         order=pool.order,
         roles={"fitted": pool.roles["fitted"], "heldOut": [pool.roles["fitted"][0]]},
+        tiers=pool.tiers,
     )
     other = train_configuration(declaration, starved, decoded, knobs, seed=7, epochs=SHORT_RUN)
     assert [e.train_loss for e in other.history] == [e.train_loss for e in result.history]

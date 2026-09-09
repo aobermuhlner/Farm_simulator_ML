@@ -4,6 +4,13 @@ import { loadRawDeclaration } from './helpers/load-raw'
 
 const declaration = loadRawDeclaration('apple-harvest')
 
+/**
+ * The task's one model family, where its knobs, its drawing and its prediction reference
+ * now live. The task keeps what describes the job; the family keeps what describes the
+ * model doing it.
+ */
+const family = (declaration.families as Record<string, unknown>[])[0] as Record<string, unknown>
+
 describe('apple-harvest declaration: identity and references', () => {
   it('declares a stable id and a display title', () => {
     expect(declaration.id).toBe('apple-harvest')
@@ -17,7 +24,7 @@ describe('apple-harvest declaration: identity and references', () => {
 
   it('references an image pool and a precomputed prediction artifact', () => {
     expect(declaration.pool).toBeTypeOf('string')
-    expect(declaration.predictions).toBeTypeOf('string')
+    expect(family.predictions).toBeTypeOf('string')
   })
 })
 
@@ -68,10 +75,19 @@ describe('apple-harvest declaration: categories, actions and mapping', () => {
 
 describe('apple-harvest declaration: knobs', () => {
   type RawKnob = Record<string, unknown>
-  const knobs = declaration.knobs as RawKnob[]
+  const knobs = family.knobs as RawKnob[]
 
   it('declares the knob set design.md budgets its artifact size against', () => {
-    expect(knobs.map((k) => k.id)).toEqual(['blocks', 'channels', 'regularization', 'dropout'])
+    // `dataset` is declared last, and that position is the whole reason the tier could be
+    // folded into configuration identity for the price of one re-run: the identifier gains
+    // a suffix and every part before it keeps its place — `dataset-tiers/design.md`.
+    expect(knobs.map((k) => k.id)).toEqual([
+      'blocks',
+      'channels',
+      'regularization',
+      'dropout',
+      'dataset',
+    ])
   })
 
   it('declares the capacity knobs as blocks and channels, not layers and units', () => {
@@ -141,14 +157,17 @@ describe('apple-harvest declaration: knobs', () => {
       const step = knob.step as number
       return acc * (Math.round((max - min) / step) + 1)
     }, 1)
-    expect(total).toBe(108)
-    expect(total).toBeLessThan(200)
+    // 108 architectures times the three declared tiers. Two of the tiers have no
+    // photographs behind them yet, so what is *trained* is still the smallest corner of
+    // this; the budget is about what a student can select once they are authored.
+    expect(total).toBe(324)
+    expect(total).toBeLessThan(400)
   })
 })
 
 describe('apple-harvest declaration: architecture', () => {
-  const diagram = declaration.diagram as Record<string, unknown>
-  const knobs = declaration.knobs as Record<string, unknown>[]
+  const diagram = family.diagram as Record<string, unknown>
+  const knobs = family.knobs as Record<string, unknown>[]
 
   it('declares a convolutional architecture, not a fully-connected one', () => {
     // A fully-connected network over a 128px image gives every unit of the first layer
@@ -307,12 +326,13 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
   })
 
   it('leaves the knob help copy to the knobs, which this widening did not touch', () => {
-    const knobs = declaration.knobs as Record<string, unknown>[]
+    const knobs = family.knobs as Record<string, unknown>[]
     const expected: Record<string, string> = {
       blocks: 'How many blocks the robot',
       channels: 'How many different patterns the first block looks for',
       regularization: 'How hard training pushes the network towards simpler answers',
       dropout: 'The fraction of the pattern detectors switched off at random',
+      dataset: 'Which set of photographs this model is fitted on',
     }
 
     for (const knob of knobs) {
@@ -350,7 +370,12 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
     for (const [action, earned] of blanket) {
       expect(earned, `always choosing ${action} must not match perfect play`).toBeLessThan(perfect)
     }
-    expect(Math.min(...blanket.map(([, earned]) => earned))).toBeLessThan(0)
+    // And not merely less: no blanket strategy comes near perfect play, so a student who
+    // never rejects anything cannot mistake a decent-looking figure for a decent model.
+    // The per-apple fine no longer has to make any of them lose money outright — the
+    // declared delivery term is what punishes crating a whole year's worth of the
+    // measured category, and `delivery-guards.test.ts` is where that is held.
+    expect(Math.max(...blanket.map(([, earned]) => earned))).toBeLessThan(perfect / 2)
   })
 
   it('declares whether the task is playable or merely announced', () => {
@@ -372,5 +397,53 @@ describe('apple-harvest declaration: what one person can sort by hand', () => {
 
   it('can show one apple of every declared category in a single harvest', () => {
     expect(handSorting.perHarvest).toBeGreaterThanOrEqual(declared.length)
+  })
+})
+
+describe('apple-harvest declaration: its one model family', () => {
+  it('declares exactly one family, and everything about the model under it', () => {
+    const families = declaration.families as Record<string, unknown>[]
+
+    expect(families).toHaveLength(1)
+    expect(family.id).toBeTypeOf('string')
+    expect(family.label).toBeTypeOf('string')
+    // The knobs, the drawing and the prediction reference are the family's, not the task's.
+    for (const field of ['knobs', 'diagram', 'predictions']) {
+      expect(family[field], field).toBeDefined()
+      expect(declaration[field], field).toBeUndefined()
+    }
+  })
+
+  it('says it ships a table of its predictions rather than its model', () => {
+    // 128 channels of weights will not go down the wire and will not run on a laptop in
+    // a lesson, which is why this family precomputes at all.
+    expect(family.ships).toBe('predictions')
+    expect(family.predictions).toBeTypeOf('string')
+  })
+
+  it('declares how it is recognised in a labour slot', () => {
+    const slot = family.slot as Record<string, unknown>
+
+    expect(String(slot.icon).length).toBeGreaterThan(0)
+    expect(String(slot.label).length).toBeGreaterThan(0)
+    // Short enough to sit on a card beside the year and the crop.
+    expect(String(slot.label).length).toBeLessThan(20)
+  })
+
+  it('declares what its training history is indexed by, in a student’s words', () => {
+    const history = family.history as Record<string, unknown>
+
+    expect(history).toBeDefined()
+    expect(history.axis).toBe('epoch')
+  })
+
+  it('carries teaching copy of its own, about the model rather than the job', () => {
+    const teaching = family.teaching as Record<string, unknown>
+
+    for (const field of ['summary', 'theory']) {
+      expect(String(teaching[field]).length, field).toBeGreaterThan(20)
+    }
+    // The task's own copy is about the job, and stays where it was.
+    expect(teaching.summary).not.toBe((declaration.teaching as Record<string, unknown>).summary)
   })
 })

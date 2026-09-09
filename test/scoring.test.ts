@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { runHarvest } from '../src/scoring/index.js'
+import { firstFamily } from '../src/task/families.js'
 import type { CategoryId } from '../src/task/types.js'
 import {
   applePool,
@@ -10,6 +11,7 @@ import {
 } from './helpers/apple'
 
 const apple = appleDeclaration()
+const family = firstFamily(apple)
 const artifact = applePredictions()
 
 const truth: Record<string, CategoryId> = Object.fromEntries(
@@ -17,7 +19,7 @@ const truth: Record<string, CategoryId> = Object.fromEntries(
 )
 
 function run(knobs: Readonly<Record<string, unknown>>, split: 'training' | 'pool') {
-  const result = runHarvest(apple, knobs, artifact, split, truth)
+  const result = runHarvest(apple, family, knobs, artifact, split, truth)
   if (!result.ok) {
     throw new Error(`expected the run to score; issues: ${result.issues.map((i) => i.message).join(' ')}`)
   }
@@ -25,12 +27,13 @@ function run(knobs: Readonly<Record<string, unknown>>, split: 'training' | 'pool
 }
 
 describe('earnings are the sum of payoff entries', () => {
-  it('loses money on the over-regularized configuration, which crates wormy apples', () => {
+  it('earns little on the over-regularized configuration, which crates wormy apples', () => {
     // 3 reds crated as red at +0.40, one green crated as green at +0.20, and 2 wormy
-    // apples crated as red at -1.50 each.
+    // apples crated as red at -0.50 each. The per-apple fine is mild now that the batch
+    // term carries the worm lesson, so this is a thin year rather than a losing one.
     const { outcome } = run(OVER_REGULARIZED, 'pool')
     expect(outcome.evaluated).toBe(6)
-    expect(outcome.earnings).toBeCloseTo(-1.6, 10)
+    expect(outcome.earnings).toBeCloseTo(0.4, 10)
   })
 
   it('earns little on the over-selective configuration, which downgrades good reds', () => {
@@ -143,7 +146,7 @@ describe('outcomes are reported per category and action combination', () => {
 
 describe('a run refuses rather than scoring partial data', () => {
   it('scores nothing when a knob value is out of range', () => {
-    const result = runHarvest(apple, { ...OVER_REGULARIZED, blocks: 5 }, artifact, 'pool', truth)
+    const result = runHarvest(apple, family, { ...OVER_REGULARIZED, blocks: 5 }, artifact, 'pool', truth)
     expect(result.ok).toBe(false)
     expect(result).not.toHaveProperty('outcome')
     if (!result.ok) expect(result.issues[0]?.code).toBe('knob-value-out-of-range')
@@ -151,14 +154,14 @@ describe('a run refuses rather than scoring partial data', () => {
 
   it('scores nothing when the artifact schema version does not match', () => {
     const stale = { ...artifact, schemaVersion: '2.0.0' }
-    const result = runHarvest(apple, OVER_REGULARIZED, stale, 'pool', truth)
+    const result = runHarvest(apple, family, OVER_REGULARIZED, stale, 'pool', truth)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.issues.map((i) => i.code)).toContain('schema-version-mismatch')
   })
 
   it('scores nothing when the pool declares no truth for an evaluated image', () => {
     const { 'p-004': _omitted, ...incomplete } = truth
-    const result = runHarvest(apple, OVER_REGULARIZED, artifact, 'pool', incomplete)
+    const result = runHarvest(apple, family, OVER_REGULARIZED, artifact, 'pool', incomplete)
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.issues[0]?.code).toBe('missing-ground-truth')
@@ -170,9 +173,9 @@ describe('a run refuses rather than scoring partial data', () => {
     const corrupt = structuredClone(artifact) as typeof artifact & {
       configurations: Record<string, { predictions: { pool: Record<string, number[]> } }>
     }
-    const entry = corrupt.configurations['blocks2-channels8-regularization3-dropout0.5']
+    const entry = corrupt.configurations['blocks2-channels8-regularization3-dropout0.5-datasetstarter']
     if (entry) entry.predictions.pool['p-001'] = [0.5, 0.2]
-    const result = runHarvest(apple, OVER_REGULARIZED, corrupt, 'pool', truth)
+    const result = runHarvest(apple, family, OVER_REGULARIZED, corrupt, 'pool', truth)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.issues[0]?.code).toBe('malformed-distribution')
   })

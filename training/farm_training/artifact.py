@@ -25,7 +25,7 @@ from .declaration import Declaration
 from .encode import encoding_record, quantize
 from .paths import REPO_ROOT
 from .pool import Pool
-from .run import RunResult
+from .run import RunResult, format_value
 
 #: Field names that would turn a distribution into an answer. Never written.
 FORBIDDEN_FIELDS = frozenset({"category", "truth", "label", "action", "prediction", "correct"})
@@ -102,7 +102,14 @@ def _predictions_document(
     categories = len(declaration.categories)
     predictions: dict[str, dict[str, list[float]]] = {}
 
-    for split, ids in pool.order.items():
+    # A configuration covers its own tier's training images and the whole evaluation
+    # pool — `specs/prediction-artifacts/spec.md`, which stops requiring a distribution
+    # for a training image outside the tier once tiers exist.
+    covered = {
+        "training": pool.tier_images(result.tier),
+        "pool": pool.order["pool"],
+    }
+    for split, ids in covered.items():
         produced = result.predictions.get(split, {})
         missing = [image_id for image_id in ids if image_id not in produced]
         if missing:
@@ -111,6 +118,12 @@ def _predictions_document(
             )
         extra = set(produced) - set(ids)
         if extra:
+            outside = sorted(extra & set(pool.order.get(split, ())))
+            if outside:
+                raise ArtifactError(
+                    f'configuration "{result.configuration_id}" predicts image "{outside[0]}", '
+                    f'which dataset tier "{result.tier}" does not hold'
+                )
             raise ArtifactError(
                 f'configuration "{result.configuration_id}" predicts image "{sorted(extra)[0]}", '
                 "which the manifest does not declare"
@@ -137,6 +150,7 @@ def _predictions_document(
     return {
         "schemaVersion": declaration.schema_version,
         "taskId": declaration.id,
+        "familyId": declaration.family_id,
         "configurationId": result.configuration_id,
         "history": [
             {
@@ -160,9 +174,20 @@ def _index_document(
 ) -> dict:
     configurations = {}
     for result in results:
+        # The tier is recorded rather than left to be read off the identifier's spelling:
+        # two configurations differing only in their tier are the comparison the tiers
+        # exist to teach, and a reviewer holding the artifact should be able to say which
+        # fitting set produced which curve.
+        carried = format_value(result.knobs[declaration.dataset_knob])
+        if carried != result.tier:
+            raise ArtifactError(
+                f'configuration "{result.configuration_id}" was fitted on dataset tier '
+                f'"{result.tier}" but its identifier carries "{carried}"'
+            )
         configurations[result.configuration_id] = {
             "file": configuration_file_name(result.configuration_id),
             "knobs": dict(result.knobs),
+            "tier": result.tier,
             "epochs": result.epochs,
             "seed": result.seed,
             "pipeline": pipeline.as_record(),
@@ -175,6 +200,7 @@ def _index_document(
     return {
         "schemaVersion": declaration.schema_version,
         "taskId": declaration.id,
+        "familyId": declaration.family_id,
         "categories": list(declaration.categories),
         "pool": {
             "poolId": pool.pool_id,

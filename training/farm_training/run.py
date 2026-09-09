@@ -65,6 +65,8 @@ class Epoch:
 class RunResult:
     configuration_id: str
     knobs: dict[str, float | int | str]
+    #: The dataset tier this run was fitted on, as its identifier carries it.
+    tier: str
     epochs: int
     seed: int
     architecture: Architecture
@@ -81,9 +83,26 @@ def _seed_everything(seed: int) -> None:
     torch.use_deterministic_algorithms(True)
 
 
-def _targets(pool: Pool, declaration: Declaration, ids: tuple[str, ...]) -> torch.Tensor:
+def _targets(
+    pool: Pool, declaration: Declaration, tier: str, ids: tuple[str, ...]
+) -> torch.Tensor:
+    """What the model is taught: the label the tier files each image under.
+
+    Deliberately not `pool.truth`. `specs/dataset-tiers/spec.md` — a model is fitted
+    against its tier's labels and every outcome is scored against the manifest's truth,
+    because a practitioner holding a cheaply labelled set has exactly those labels to fit
+    to and nothing else. The two coincide for a checked tier and diverge for a hurried
+    one, and that divergence is the whole of what a bought dataset teaches.
+    """
     index = {category: position for position, category in enumerate(declaration.categories)}
-    return torch.tensor([index[pool.truth(image_id)] for image_id in ids], dtype=torch.long)
+    labels = [pool.tier_label(tier, image_id) for image_id in ids]
+    unknown = [label for label in labels if label not in index]
+    if unknown:
+        raise ValueError(
+            f'dataset tier "{tier}" files an image under "{unknown[0]}", '
+            "which the task does not declare as a category"
+        )
+    return torch.tensor([index[label] for label in labels], dtype=torch.long)
 
 
 def _tensor(pixels: np.ndarray) -> torch.Tensor:
@@ -127,6 +146,10 @@ def train_configuration(
     """Trains one configuration and evaluates it over the whole pool."""
     _seed_everything(seed)
 
+    tier = str(knobs[declaration.dataset_knob])
+    if tier not in declaration.datasets:
+        raise ValueError(f'the task declares no dataset tier "{tier}"')
+
     blocks = int(knobs[declaration.blocks_knob])
     channels = int(knobs[declaration.channels_knob])
     dropout = float(knobs[DROPOUT_KNOB])
@@ -136,15 +159,24 @@ def train_configuration(
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=decay)
 
+    # Both roles restricted to the tier this run is fitted on. The restriction is what
+    # makes each tier's yardstick its own: a larger tier is judged against a larger
+    # held-out set drawn from the same distribution, rather than against a fixed one.
+    fitted_ids = tuple(pool.tier_role(tier, "fitted"))
+    held_out_ids = tuple(pool.tier_role(tier, "heldOut"))
+    for role, ids in (("fitted", fitted_ids), ("heldOut", held_out_ids)):
+        if not ids:
+            raise ValueError(f'dataset tier "{tier}" holds no image in role "{role}"')
+
     training = decoded["training"]
     position = {image_id: index for index, image_id in enumerate(training.ids)}
-    fitted = np.array([position[image_id] for image_id in pool.roles["fitted"]])
-    held_out = np.array([position[image_id] for image_id in pool.roles["heldOut"]])
+    fitted = np.array([position[image_id] for image_id in fitted_ids])
+    held_out = np.array([position[image_id] for image_id in held_out_ids])
 
     fitted_pixels = _tensor(training.pixels[fitted])
-    fitted_targets = _targets(pool, declaration, tuple(pool.roles["fitted"]))
+    fitted_targets = _targets(pool, declaration, tier, fitted_ids)
     held_out_pixels = _tensor(training.pixels[held_out])
-    held_out_targets = _targets(pool, declaration, tuple(pool.roles["heldOut"]))
+    held_out_targets = _targets(pool, declaration, tier, held_out_ids)
 
     generator = np.random.default_rng(seed)
     history: list[Epoch] = []
@@ -171,17 +203,23 @@ def train_configuration(
             )
         )
 
+    # The training split is predicted over this tier's images alone. A configuration
+    # fitted on the smallest tier of a large split would otherwise carry distributions
+    # for photographs its student cannot browse and its workshop never reports on.
+    held = set(pool.tier_images(tier))
     predictions: dict[str, dict[str, list[float]]] = {}
     for split, images in decoded.items():
         probabilities = _distributions(model, _tensor(images.pixels))
         predictions[split] = {
             image_id: [float(value) for value in row]
             for image_id, row in zip(images.ids, probabilities)
+            if split != "training" or image_id in held
         }
 
     return RunResult(
         configuration_id=configuration_id(declaration, knobs),
         knobs=dict(knobs),
+        tier=tier,
         epochs=epochs,
         seed=seed,
         architecture=architecture,

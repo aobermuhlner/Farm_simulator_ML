@@ -11,11 +11,21 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { computeAvailability, knobAvailability, lockedValue, taskAvailability } from '../src/progression/index.js'
+import { firstFamily } from '../src/task/families.js'
 import { appleDeclaration } from './helpers/apple.js'
 import { loadRawDeclaration } from './helpers/load-raw.js'
-import { catalogWith, pricedItem, soundCatalog, unpricedItem } from './helpers/catalog.js'
+import {
+  catalogWith,
+  landItem,
+  pricedItem,
+  shippedCatalogJson,
+  soundCatalog,
+  unpricedItem,
+} from './helpers/catalog.js'
+import { shippedFarm } from './helpers/farm.js'
 
 const apple = appleDeclaration()
+const family = firstFamily(apple)
 const tasks = [apple]
 
 /** The values of one knob a given ownership may select. */
@@ -66,7 +76,7 @@ describe('what the catalog mentions is locked until it is bought', () => {
     const before = computeAvailability(catalogOf(), tasks, [])
     const after = computeAvailability(catalogOf(), tasks, ['wider-blocks'])
 
-    for (const knob of apple.knobs) {
+    for (const knob of family.knobs) {
       if (knob.id === 'channels') continue
       expect(
         knobAvailability(taskAvailability(after, apple.id)!, knob.id),
@@ -117,7 +127,7 @@ describe('a task declaration says nothing about availability', () => {
     for (const field of ['available"', 'availability', 'requires', 'unlock', 'locked', 'price']) {
       // `available` is the task-level flag and is allowed; a knob-level one is not, which
       // is why the knobs are searched rather than the whole file for that one.
-      expect(JSON.stringify(raw.knobs), field).not.toContain(field)
+      expect(JSON.stringify(firstFamily(apple).knobs), field).not.toContain(field)
     }
     expect(text).toContain('"available"')
   })
@@ -128,9 +138,9 @@ describe('a task declaration says nothing about availability', () => {
     computeAvailability(catalogOf(), tasks, ['wider-blocks'])
 
     expect(JSON.stringify(apple)).toBe(before)
-    for (const knob of apple.knobs) {
+    for (const knob of family.knobs) {
       expect(knob.default, `${knob.id} default`).toBe(
-        appleDeclaration().knobs.find((candidate) => candidate.id === knob.id)?.default,
+        firstFamily(appleDeclaration()).knobs.find((candidate) => candidate.id === knob.id)?.default,
       )
     }
   })
@@ -162,5 +172,97 @@ describe('the progression engine stays free of the browser', () => {
 
     expect(files.length).toBeGreaterThan(4)
     expect(offences.map((file) => relative(process.cwd(), file))).toEqual([])
+  })
+})
+
+describe('a repeated id says nothing more than a single one', () => {
+  const withLand = soundCatalog(catalogWith([pricedItem(), unpricedItem(), landItem()]))
+
+  it('reports exactly the availability of a farm owning that item once', () => {
+    // `owned` is a multiset: an item the catalog permits five times appears in it five
+    // times. Every consumer that reads it today asks membership, and this is what a
+    // future consumer that starts counting has to break.
+    const once = computeAvailability(withLand, tasks, ['wider-blocks', 'starter-plot'])
+    const twice = computeAvailability(withLand, tasks, [
+      'wider-blocks',
+      'starter-plot',
+      'starter-plot',
+    ])
+
+    expect(twice).toEqual(once)
+  })
+
+  it('opens nothing a farm owning it none of the times does not have', () => {
+    const never = computeAvailability(withLand, tasks, ['wider-blocks'])
+    const thrice = computeAvailability(withLand, tasks, [
+      'wider-blocks',
+      'starter-plot',
+      'starter-plot',
+      'starter-plot',
+    ])
+
+    expect(thrice).toEqual(never)
+  })
+})
+
+describe('a dataset tier is gated exactly as any other knob value is', () => {
+  /** The shipped catalog, which carries the two tiers as unpriced items. */
+  const shipped = soundCatalog(shippedCatalogJson(), shippedFarm())
+
+  /** The item that opens one tier, as the shipped catalog names it. */
+  function opener(tier: string): string {
+    const item = shipped.items.find((candidate) =>
+      candidate.opens.some(
+        (unlock) =>
+          unlock.kind === 'knob-values' &&
+          unlock.knob === 'dataset' &&
+          unlock.values.map(String).includes(tier),
+      ),
+    )
+    if (item === undefined) throw new Error(`no shipped item opens dataset tier "${tier}"`)
+    return item.id
+  }
+
+  it('needs no unlock kind of its own: the tiers are opened by knob-values', () => {
+    for (const tier of ['bulk', 'checked']) {
+      const item = shipped.items.find((candidate) => candidate.id === opener(tier))
+      expect(item?.opens.map((unlock) => unlock.kind)).toEqual(['knob-values'])
+    }
+  })
+
+  it('shows an unowned tier and does not offer it for selection', () => {
+    const values = openValues([], shipped, 'dataset')
+    expect(values).toEqual(['starter'])
+
+    const task = taskAvailability(computeAvailability(shipped, tasks, []), apple.id)
+    const knob = knobAvailability(task!, 'dataset')
+    // Shown, all three of them, so a student can see what there is to earn.
+    expect(knob?.values.map((value) => value.value)).toEqual(['starter', 'bulk', 'checked'])
+    for (const tier of ['bulk', 'checked']) {
+      const entry = knob?.values.find((value) => value.value === tier)
+      expect(entry?.available, tier).toBe(false)
+      expect(entry?.openedBy?.id, tier).toBe(opener(tier))
+    }
+  })
+
+  it('names the item that would open it, so the workshop states no condition of its own', () => {
+    const task = taskAvailability(computeAvailability(shipped, tasks, []), apple.id)
+    for (const tier of ['bulk', 'checked']) {
+      expect(lockedValue(task, 'dataset', tier)?.openedBy?.id).toBe(opener(tier))
+    }
+    // The one a student already has is not locked, so there is nothing to name for it.
+    expect(lockedValue(task, 'dataset', 'starter')).toBeUndefined()
+  })
+
+  it('opens the tier for every family declaring that knob once the item is owned', () => {
+    // The unlock names a task and a knob and no family, which is the reading the catalog
+    // has always had: a tier bought once is a tier every family fitted on it can select.
+    const owned = openValues([opener('bulk')], shipped, 'dataset')
+    expect(owned).toEqual(['starter', 'bulk'])
+    expect(openValues([opener('bulk'), opener('checked')], shipped, 'dataset')).toEqual([
+      'starter',
+      'bulk',
+      'checked',
+    ])
   })
 })

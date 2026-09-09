@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { REQUIRED_FIELDS, validateDeclaration } from '../src/task/validate.js'
+import {
+  REQUIRED_DATASET_FIELDS,
+  REQUIRED_DELIVERY_FIELDS,
+  REQUIRED_FIELDS,
+  validateDeclaration,
+} from '../src/task/validate.js'
 import { loadRawDeclaration } from './helpers/load-raw'
 
 const apple = loadRawDeclaration('apple-harvest')
@@ -15,6 +20,29 @@ function without(field: string): Record<string, unknown> {
 function withField(field: string, value: unknown): Record<string, unknown> {
   const copy: Record<string, unknown> = structuredClone(apple)
   copy[field] = value
+  return copy
+}
+
+/** The task's one declared family, where its knobs live. */
+function familyOf(declaration: Record<string, unknown>): Record<string, unknown> {
+  const families = declaration.families as Record<string, unknown>[]
+  const family = families[0]
+  if (family === undefined) throw new Error('the shipped declaration must declare a family')
+  return family
+}
+
+/** The shipped knobs, as raw data to edit. */
+function appleKnobs(): Record<string, unknown>[] {
+  return structuredClone(familyOf(apple).knobs) as Record<string, unknown>[]
+}
+
+/** Where a knob sits in a refusal's field path, now that knobs belong to a family. */
+const KNOBS = 'families[0].knobs'
+
+/** The shipped declaration with its one family's knob list replaced. */
+function withKnobs(knobs: unknown): Record<string, unknown> {
+  const copy: Record<string, unknown> = structuredClone(apple)
+  familyOf(copy).knobs = knobs
   return copy
 }
 
@@ -121,9 +149,48 @@ describe('categories, actions and their mapping', () => {
         { id: 'pass', label: 'Pass' },
       ],
       categoryActions: { healthy: 'pass', diseased: 'flag' },
+      // Its own photographs as well, because a tier's composition is a count of the
+      // categories *its* task declares — one more thing a second lesson brings its own of.
+      datasets: [
+        {
+          id: 'clinic',
+          label: 'The clinic’s own photographs',
+          size: 40,
+          composition: { healthy: 25, diseased: 15 },
+          labelQuality: 'checked',
+          disclosure: 'Every one of these was confirmed by the vet who took it.',
+        },
+      ],
+      families: (apple.families as Record<string, unknown>[]).map((family) => ({
+        ...family,
+        knobs: [
+          ...(family.knobs as Record<string, unknown>[]).filter(
+            (knob) => knob.id !== family.datasetKnob,
+          ),
+          {
+            kind: 'choice',
+            id: 'photographs',
+            label: 'Photographs to learn from',
+            values: ['clinic'],
+            default: 'clinic',
+            help: 'Which set of photographs the screen was fitted on.',
+          },
+        ],
+        datasetKnob: 'photographs',
+      })),
       payoffs: {
         healthy: { flag: -5, pass: 0 },
         diseased: { flag: -5, pass: -500 },
+      },
+      // Its own term, over its own vocabulary: a task with a different subject prices its
+      // batch by naming what it declares, and the validator has nothing else to check it
+      // against.
+      delivery: {
+        measures: ['diseased'],
+        delivering: ['pass'],
+        tolerance: 0.05,
+        warnAbove: 0.02,
+        downgradedValue: 0,
       },
     }
     const result = validateDeclaration(screening)
@@ -232,41 +299,72 @@ describe('decision policy declaration', () => {
 describe('knob declarations', () => {
   it('rejects a knob missing any of its required fields', () => {
     for (const field of ['id', 'label', 'kind', 'help', 'default'] as const) {
-      const knobs = structuredClone(apple.knobs) as Record<string, unknown>[]
+      const knobs = appleKnobs()
       delete knobs[0]?.[field]
-      const issues = issuesOf(withField('knobs', knobs))
+      const issues = issuesOf(withKnobs(knobs))
       expect(
-        issues.some((i) => i.field === `knobs[0].${field}`),
+        issues.some((i) => i.field === `${KNOBS}[0].${field}`),
         `omitting knob field "${field}" should be reported`,
       ).toBe(true)
     }
   })
 
   it('rejects an unknown knob kind', () => {
-    const knobs = structuredClone(apple.knobs) as Record<string, unknown>[]
+    const knobs = appleKnobs()
     if (knobs[0]) knobs[0].kind = 'dial'
-    const issues = issuesOf(withField('knobs', knobs))
+    const issues = issuesOf(withKnobs(knobs))
     expect(issues.some((i) => i.code === 'unknown-knob-kind')).toBe(true)
   })
 
   it('rejects a choice knob whose default is not among its own values', () => {
-    const knobs = structuredClone(apple.knobs) as Record<string, unknown>[]
+    const knobs = appleKnobs()
     if (knobs[0]) knobs[0].default = 5
-    const issues = issuesOf(withField('knobs', knobs))
+    const issues = issuesOf(withKnobs(knobs))
     expect(issues.some((i) => i.code === 'default-not-allowed')).toBe(true)
   })
 
   it('rejects a slider knob whose default sits off its own step', () => {
-    const knobs = structuredClone(apple.knobs) as Record<string, unknown>[]
+    const knobs = appleKnobs()
     const slider = knobs.find((k) => k.kind === 'slider')
     if (slider) slider.default = 0.5
-    const issues = issuesOf(withField('knobs', knobs))
+    const issues = issuesOf(withKnobs(knobs))
     expect(issues.some((i) => i.code === 'default-not-allowed')).toBe(true)
   })
 
   it('rejects an empty knob list', () => {
-    const issues = issuesOf(withField('knobs', []))
-    expect(issues.some((i) => i.field === 'knobs')).toBe(true)
+    const issues = issuesOf(withKnobs([]))
+    expect(issues.some((i) => i.field === KNOBS)).toBe(true)
+  })
+
+  it('rejects knobs declared by the task rather than by a family, saying where they go', () => {
+    const issues = issuesOf(withField('knobs', appleKnobs()))
+
+    expect(issues.some((i) => i.code === 'belongs-to-family' && i.field === 'knobs')).toBe(true)
+    expect(issues.map((i) => i.message).join(' ')).toContain('families')
+  })
+
+  it('rejects a prediction reference declared by the task rather than by a family', () => {
+    const issues = issuesOf(withField('predictions', 'artifacts/somewhere'))
+
+    expect(
+      issues.some((i) => i.code === 'belongs-to-family' && i.field === 'predictions'),
+    ).toBe(true)
+  })
+
+  it('lets two families of one task declare a knob with the same id', () => {
+    const copy: Record<string, unknown> = structuredClone(apple)
+    const family = familyOf(copy)
+    copy.families = [
+      family,
+      {
+        ...family,
+        id: 'second-rung',
+        label: 'A second rung',
+        slot: { icon: 'x', label: 'Second' },
+      },
+    ]
+
+    expect(validateDeclaration(copy).ok).toBe(true)
   })
 })
 
@@ -282,11 +380,11 @@ describe('the identifier separator cannot enter a knob id or a declared value', 
     pick: (knobs: Record<string, unknown>[]) => Record<string, unknown> | undefined,
     edit: (knob: Record<string, unknown>) => void,
   ): Record<string, unknown> {
-    const knobs = structuredClone(apple.knobs) as Record<string, unknown>[]
+    const knobs = appleKnobs()
     const knob = pick(knobs)
     if (knob === undefined) throw new Error('the shipped declaration has no such knob')
     edit(knob)
-    return withField('knobs', knobs)
+    return withKnobs(knobs)
   }
 
   it('refuses a knob whose id contains the separator, naming that id', () => {
@@ -299,7 +397,7 @@ describe('the identifier separator cannot enter a knob id or a declared value', 
       ),
     )
     const refusal = issues.find((i) => i.code === 'separator-in-identifier')
-    expect(refusal?.field).toBe('knobs[0].id')
+    expect(refusal?.field).toBe(`${KNOBS}[0].id`)
     expect(refusal?.message).toContain('conv-blocks')
   })
 
@@ -314,7 +412,7 @@ describe('the identifier separator cannot enter a knob id or a declared value', 
       ),
     )
     const refusal = issues.find((i) => i.code === 'separator-in-identifier')
-    expect(refusal?.field).toBe('knobs[0].values')
+    expect(refusal?.field).toBe(`${KNOBS}[0].values`)
     expect(refusal?.message).toContain('blocks')
     expect(refusal?.message).toContain('two-blocks')
   })
@@ -329,7 +427,7 @@ describe('the identifier separator cannot enter a knob id or a declared value', 
       ),
     )
     const refusal = issues.find((i) => i.code === 'separator-in-identifier')
-    expect(refusal?.field).toBe('knobs[2]')
+    expect(refusal?.field).toBe(`${KNOBS}[2]`)
     expect(refusal?.message).toContain('regularization')
     expect(refusal?.message).toContain('-1')
   })
@@ -514,5 +612,260 @@ describe('what one person can sort by hand', () => {
       withField('handSorting', { perHarvest: 60, secondsPerImage: 2.5 }),
     )
     expect(result.ok ? [] : result.issues).toEqual([])
+  })
+})
+
+describe('a declared delivery term names only what the task declares', () => {
+  /** A well-formed term against the shipped vocabulary: worms in either crate. */
+  const SOUND = {
+    measures: ['wormy'],
+    delivering: ['crate-red', 'crate-green'],
+    tolerance: 0.12,
+    warnAbove: 0.09,
+    downgradedValue: 0.05,
+  }
+
+  /** The shipped declaration with a delivery term patched onto it. */
+  function withTerm(patch: Record<string, unknown>): Record<string, unknown> {
+    return withField('delivery', { ...SOUND, ...patch })
+  }
+
+  it('accepts a term measuring a category whose action lies outside the delivering ones', () => {
+    const result = validateDeclaration(withTerm({}))
+    expect(result.ok ? [] : result.issues).toEqual([])
+    expect(result.ok).toBe(true)
+  })
+
+  it('accepts a declaration carrying no term at all, and reports nothing missing', () => {
+    const result = validateDeclaration(without('delivery'))
+    expect(result.ok ? [] : result.issues).toEqual([])
+    expect(result.ok).toBe(true)
+    // The compatibility promise in words: nothing about a term is reported for a task
+    // that declares none, so adding the concept changed nothing for one that does not.
+    const named = issuesOf(without('payoffs')).map((issue) => issue.field ?? '')
+    expect(named.filter((field) => field.startsWith('delivery'))).toEqual([])
+  })
+
+  it('refuses a term measuring a category the task does not declare, naming it', () => {
+    const issues = issuesOf(withTerm({ measures: ['bruised'] }))
+    const refusal = issues.find((issue) => issue.code === 'unknown-category')
+    expect(refusal?.field).toBe('delivery.measures')
+    expect(refusal?.message).toContain('bruised')
+  })
+
+  it('refuses a term naming a delivering action the task does not declare, naming it', () => {
+    const issues = issuesOf(withTerm({ delivering: ['crate-red', 'juice-it'] }))
+    const refusal = issues.find((issue) => issue.code === 'unknown-action')
+    expect(refusal?.field).toBe('delivery.delivering')
+    expect(refusal?.message).toContain('juice-it')
+  })
+
+  it('refuses a term naming no category and one naming no action', () => {
+    for (const field of ['measures', 'delivering'] as const) {
+      const issues = issuesOf(withTerm({ [field]: [] }))
+      const refusal = issues.find((issue) => issue.code === 'too-few')
+      expect(refusal?.field, `an empty "${field}" should be refused`).toBe(`delivery.${field}`)
+    }
+  })
+
+  it('refuses a term with no way out, naming the delivering actions', () => {
+    const actions = (apple.actions as { id: string }[]).map((action) => action.id)
+    const issues = issuesOf(withTerm({ delivering: actions }))
+    const refusal = issues.find((issue) => issue.code === 'delivery-has-no-way-out')
+    expect(refusal?.field).toBe('delivery.delivering')
+    for (const action of actions) expect(refusal?.message).toContain(action)
+  })
+
+  it('refuses a term that prices only correct work, naming those categories', () => {
+    // "red" is declared to call for "crate-red", which is a delivering action, so a term
+    // measuring only it charges for doing the task exactly right.
+    const issues = issuesOf(withTerm({ measures: ['red'] }))
+    const refusal = issues.find((issue) => issue.code === 'delivery-prices-correct-work')
+    expect(refusal?.field).toBe('delivery.measures')
+    expect(refusal?.message).toContain('red')
+  })
+
+  it('accepts a term measuring one correct category alongside one incorrect', () => {
+    const result = validateDeclaration(withTerm({ measures: ['red', 'wormy'] }))
+    expect(result.ok ? [] : result.issues).toEqual([])
+  })
+
+  it('refuses a term missing any of its own fields, naming that field', () => {
+    for (const field of REQUIRED_DELIVERY_FIELDS) {
+      const term: Record<string, unknown> = { ...SOUND }
+      delete term[field]
+      const issues = issuesOf(withField('delivery', term))
+      expect(
+        issues.filter((issue) => issue.code === 'missing-field').map((issue) => issue.field),
+        `omitting "${field}" should be reported`,
+      ).toContain(`delivery.${field}`)
+    }
+  })
+
+  it('refuses a term that is not an object at all', () => {
+    for (const value of [42, 'wormy', ['wormy']]) {
+      const issues = issuesOf(withField('delivery', value))
+      expect(issues.some((issue) => issue.field === 'delivery')).toBe(true)
+    }
+  })
+})
+
+describe('the warning comes before the punishment', () => {
+  const SOUND = {
+    measures: ['wormy'],
+    delivering: ['crate-red', 'crate-green'],
+    tolerance: 0.12,
+    warnAbove: 0.09,
+    downgradedValue: 0.05,
+  }
+
+  function withTerm(patch: Record<string, unknown>): Record<string, unknown> {
+    return withField('delivery', { ...SOUND, ...patch })
+  }
+
+  it('refuses a tolerance of zero, naming the field', () => {
+    const issues = issuesOf(withTerm({ tolerance: 0, warnAbove: 0.09 }))
+    const refusal = issues.find((issue) => issue.code === 'delivery-tolerance-unusable')
+    expect(refusal?.field).toBe('delivery.tolerance')
+    expect(refusal?.message).toContain('tolerance')
+  })
+
+  it('refuses a negative tolerance and one that is not a number', () => {
+    for (const tolerance of [-0.1, 'a lot', Number.NaN]) {
+      const issues = issuesOf(withTerm({ tolerance }))
+      expect(
+        issues.map((issue) => issue.field),
+        `a tolerance of ${JSON.stringify(tolerance)} should be refused`,
+      ).toContain('delivery.tolerance')
+    }
+  })
+
+  it('refuses a warning at the tolerance, naming the field', () => {
+    const issues = issuesOf(withTerm({ warnAbove: 0.12 }))
+    const refusal = issues.find((issue) => issue.code === 'delivery-warning-unusable')
+    expect(refusal?.field).toBe('delivery.warnAbove')
+    expect(refusal?.message).toContain('warnAbove')
+  })
+
+  it('refuses a warning above the tolerance, and one of zero', () => {
+    for (const warnAbove of [0.2, 0, -0.01]) {
+      const issues = issuesOf(withTerm({ warnAbove }))
+      expect(
+        issues.map((issue) => issue.field),
+        `a warning at ${warnAbove} should be refused`,
+      ).toContain('delivery.warnAbove')
+    }
+  })
+
+  it('accepts a warning strictly below the tolerance', () => {
+    expect(validateDeclaration(withTerm({ warnAbove: 0.119, tolerance: 0.12 })).ok).toBe(true)
+  })
+})
+
+describe('the dataset tiers a task declares', () => {
+  /** The shipped tiers, as raw data to edit. */
+  function appleTiers(): Record<string, unknown>[] {
+    return structuredClone(apple.datasets) as Record<string, unknown>[]
+  }
+
+  /** The shipped declaration with its tiers replaced. */
+  function withTiers(datasets: unknown): Record<string, unknown> {
+    return withField('datasets', datasets)
+  }
+
+  it('accepts the three the shipped task declares, in ascending order of size', () => {
+    const tiers = appleTiers()
+    expect(tiers.map((tier) => tier.id)).toEqual(['starter', 'bulk', 'checked'])
+    expect(tiers.map((tier) => tier.size)).toEqual([200, 1000, 2000])
+    expect(validateDeclaration(apple).ok).toBe(true)
+  })
+
+  it('refuses a task declaring no tier at all, naming the omission', () => {
+    for (const datasets of [undefined, []]) {
+      const raw = datasets === undefined ? without('datasets') : withTiers(datasets)
+      const codes = issuesOf(raw).map((issue) => issue.code)
+      expect(codes.some((code) => code === 'missing-field' || code === 'no-datasets')).toBe(true)
+    }
+  })
+
+  it('refuses two tiers sharing an id, naming that id', () => {
+    const tiers = appleTiers()
+    tiers[1]!.id = 'starter'
+    const issues = issuesOf(withTiers(tiers))
+    const duplicate = issues.find((issue) => issue.code === 'duplicate-id')
+    expect(duplicate?.message).toContain('starter')
+  })
+
+  it('refuses tiers out of ascending size order, naming both tiers and their sizes', () => {
+    const tiers = appleTiers()
+    tiers[1]!.size = 150
+    tiers[1]!.composition = { red: 100, green: 25, wormy: 25 }
+    const issue = issuesOf(withTiers(tiers)).find((entry) => entry.code === 'datasets-out-of-order')
+    expect(issue?.message).toContain('bulk')
+    expect(issue?.message).toContain('starter')
+    expect(issue?.message).toContain('150')
+    expect(issue?.message).toContain('200')
+  })
+
+  it('refuses two tiers of the same size, so “the larger set” names exactly one', () => {
+    const tiers = appleTiers()
+    tiers[1]!.size = 200
+    tiers[1]!.composition = { red: 130, green: 30, wormy: 40 }
+    const issue = issuesOf(withTiers(tiers)).find((entry) => entry.code === 'datasets-out-of-order')
+    expect(issue?.message).toContain('bulk')
+  })
+
+  it('refuses a tier missing any required field, naming the tier and the field', () => {
+    for (const field of REQUIRED_DATASET_FIELDS) {
+      const tiers = appleTiers()
+      delete tiers[0]![field]
+      const issues = issuesOf(withTiers(tiers))
+      const missing = issues.filter((issue) => issue.field === `datasets[0].${field}`)
+      expect(missing.length, `omitting ${field} was accepted`).toBeGreaterThan(0)
+    }
+  })
+
+  it('refuses a composition naming a category the task does not declare', () => {
+    const tiers = appleTiers()
+    tiers[0]!.composition = { red: 100, green: 50, bruised: 50 }
+    const issues = issuesOf(withTiers(tiers))
+    expect(issues.map((issue) => issue.code)).toContain('unknown-category')
+    expect(issues.map((issue) => issue.message).join(' ')).toContain('bruised')
+  })
+
+  it('refuses a composition that does not add up to the declared size', () => {
+    const tiers = appleTiers()
+    tiers[0]!.composition = { red: 90, green: 50, wormy: 50 }
+    const issue = issuesOf(withTiers(tiers)).find(
+      (entry) => entry.code === 'composition-mismatch',
+    )
+    expect(issue?.message).toContain('200')
+    expect(issue?.message).toContain('190')
+  })
+
+  it('refuses a label quality this build does not recognise', () => {
+    const tiers = appleTiers()
+    tiers[0]!.labelQuality = 'probably-fine'
+    const issue = issuesOf(withTiers(tiers)).find(
+      (entry) => entry.code === 'unknown-label-quality',
+    )
+    expect(issue?.message).toContain('probably-fine')
+    expect(issue?.message).toContain('checked')
+  })
+
+  it('refuses a tier id carrying the identifier separator', () => {
+    const tiers = appleTiers()
+    tiers[0]!.id = 'the-starter'
+    const issues = issuesOf(withTiers(tiers))
+    expect(issues.map((issue) => issue.code)).toContain('separator-in-id')
+  })
+
+  it('refuses tiers declared inside a family, naming where they belong', () => {
+    const copy: Record<string, unknown> = structuredClone(apple)
+    familyOf(copy).datasets = appleTiers()
+    const issue = issuesOf(copy).find((entry) => entry.code === 'belongs-to-task')
+    expect(issue?.field).toBe('families[0].datasets')
+    expect(issue?.message).toContain('task')
+    expect(issue?.message).toContain('datasetKnob')
   })
 })

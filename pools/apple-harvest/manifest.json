@@ -1,6 +1,6 @@
 {
   "poolId": "pools/apple-harvest",
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "seed": 855711213,
   "splits": {
     "training": {
@@ -85,7 +85,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 0,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-002": {
       "split": "training",
@@ -106,7 +110,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 1,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-003": {
       "split": "training",
@@ -127,7 +135,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 2,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-004": {
       "split": "training",
@@ -148,7 +160,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 3,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-005": {
       "split": "training",
@@ -169,7 +185,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 4,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-006": {
       "split": "training",
@@ -190,7 +210,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 5,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-007": {
       "split": "training",
@@ -211,7 +235,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 6,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-008": {
       "split": "training",
@@ -232,7 +260,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 7,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-009": {
       "split": "training",
@@ -253,7 +285,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 8,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-010": {
       "split": "training",
@@ -274,7 +310,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 9,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-011": {
       "split": "training",
@@ -295,7 +335,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 10,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-012": {
       "split": "training",
@@ -316,7 +360,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 11,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-013": {
       "split": "training",
@@ -337,7 +385,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 12,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-014": {
       "split": "training",
@@ -358,7 +410,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 13,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-015": {
       "split": "training",
@@ -379,7 +435,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 14,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-016": {
       "split": "training",
@@ -400,7 +460,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 15,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-017": {
       "split": "training",
@@ -421,7 +485,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 16,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-018": {
       "split": "training",
@@ -442,7 +510,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 17,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-019": {
       "split": "training",
@@ -463,7 +535,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 18,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-020": {
       "split": "training",
@@ -484,7 +560,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 19,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-021": {
       "split": "training",
@@ -505,7 +585,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 20,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-022": {
       "split": "training",
@@ -526,7 +610,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 21,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-023": {
       "split": "training",
@@ -547,7 +635,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 22,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-024": {
       "split": "training",
@@ -568,7 +660,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 23,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-025": {
       "split": "training",
@@ -589,7 +685,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 24,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-026": {
       "split": "training",
@@ -610,7 +710,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 25,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-027": {
       "split": "training",
@@ -631,7 +735,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 26,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-028": {
       "split": "training",
@@ -652,7 +760,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 27,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-029": {
       "split": "training",
@@ -673,7 +785,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 28,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-030": {
       "split": "training",
@@ -694,7 +810,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 29,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-031": {
       "split": "training",
@@ -715,7 +835,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 30,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-032": {
       "split": "training",
@@ -736,7 +860,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 31,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-033": {
       "split": "training",
@@ -757,7 +885,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 32,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-034": {
       "split": "training",
@@ -778,7 +910,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 33,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-035": {
       "split": "training",
@@ -799,7 +935,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 34,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-036": {
       "split": "training",
@@ -820,7 +960,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 35,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-037": {
       "split": "training",
@@ -841,7 +985,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 36,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-038": {
       "split": "training",
@@ -862,7 +1010,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 37,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-039": {
       "split": "training",
@@ -883,7 +1035,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 38,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-040": {
       "split": "training",
@@ -904,7 +1060,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 39,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-041": {
       "split": "training",
@@ -925,7 +1085,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 40,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-042": {
       "split": "training",
@@ -946,7 +1110,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 41,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-043": {
       "split": "training",
@@ -967,7 +1135,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 42,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-044": {
       "split": "training",
@@ -988,7 +1160,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 43,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-045": {
       "split": "training",
@@ -1009,7 +1185,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 44,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-046": {
       "split": "training",
@@ -1030,7 +1210,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 45,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-047": {
       "split": "training",
@@ -1051,7 +1235,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 46,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-048": {
       "split": "training",
@@ -1072,7 +1260,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 47,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-049": {
       "split": "training",
@@ -1093,7 +1285,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 48,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-050": {
       "split": "training",
@@ -1114,7 +1310,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 49,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-051": {
       "split": "training",
@@ -1135,7 +1335,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 50,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-052": {
       "split": "training",
@@ -1156,7 +1360,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 51,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-053": {
       "split": "training",
@@ -1177,7 +1385,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 52,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-054": {
       "split": "training",
@@ -1198,7 +1410,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 53,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-055": {
       "split": "training",
@@ -1219,7 +1435,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 54,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-056": {
       "split": "training",
@@ -1240,7 +1460,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 55,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-057": {
       "split": "training",
@@ -1261,7 +1485,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 56,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-058": {
       "split": "training",
@@ -1282,7 +1510,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 57,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-059": {
       "split": "training",
@@ -1303,7 +1535,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 58,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-060": {
       "split": "training",
@@ -1324,7 +1560,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 59,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-061": {
       "split": "training",
@@ -1345,7 +1585,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 60,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-062": {
       "split": "training",
@@ -1366,7 +1610,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 61,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-063": {
       "split": "training",
@@ -1387,7 +1635,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 62,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-064": {
       "split": "training",
@@ -1408,7 +1660,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 63,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-065": {
       "split": "training",
@@ -1429,7 +1685,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 64,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-066": {
       "split": "training",
@@ -1450,7 +1710,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 65,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-067": {
       "split": "training",
@@ -1471,7 +1735,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 66,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-068": {
       "split": "training",
@@ -1492,7 +1760,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 67,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-069": {
       "split": "training",
@@ -1513,7 +1785,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 68,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-070": {
       "split": "training",
@@ -1534,7 +1810,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 69,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-071": {
       "split": "training",
@@ -1555,7 +1835,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 70,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-072": {
       "split": "training",
@@ -1576,7 +1860,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 71,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-073": {
       "split": "training",
@@ -1597,7 +1885,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 72,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-074": {
       "split": "training",
@@ -1618,7 +1910,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 73,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-075": {
       "split": "training",
@@ -1639,7 +1935,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 74,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-076": {
       "split": "training",
@@ -1660,7 +1960,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 75,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-077": {
       "split": "training",
@@ -1681,7 +1985,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 76,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-078": {
       "split": "training",
@@ -1702,7 +2010,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 77,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-079": {
       "split": "training",
@@ -1723,7 +2035,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 78,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-080": {
       "split": "training",
@@ -1744,7 +2060,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 79,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-081": {
       "split": "training",
@@ -1765,7 +2085,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 80,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-082": {
       "split": "training",
@@ -1786,7 +2110,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 81,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-083": {
       "split": "training",
@@ -1807,7 +2135,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 82,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-084": {
       "split": "training",
@@ -1828,7 +2160,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 83,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-085": {
       "split": "training",
@@ -1849,7 +2185,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 84,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-086": {
       "split": "training",
@@ -1870,7 +2210,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 85,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-087": {
       "split": "training",
@@ -1891,7 +2235,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 86,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-088": {
       "split": "training",
@@ -1912,7 +2260,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 87,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-089": {
       "split": "training",
@@ -1933,7 +2285,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 88,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-090": {
       "split": "training",
@@ -1954,7 +2310,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 89,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-091": {
       "split": "training",
@@ -1975,7 +2335,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 90,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-092": {
       "split": "training",
@@ -1996,7 +2360,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 91,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-093": {
       "split": "training",
@@ -2017,7 +2385,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 92,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-094": {
       "split": "training",
@@ -2038,7 +2410,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 93,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-095": {
       "split": "training",
@@ -2059,7 +2435,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 94,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-096": {
       "split": "training",
@@ -2080,7 +2460,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 95,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-097": {
       "split": "training",
@@ -2101,7 +2485,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 96,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-098": {
       "split": "training",
@@ -2122,7 +2510,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 97,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-099": {
       "split": "training",
@@ -2143,7 +2535,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 98,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-100": {
       "split": "training",
@@ -2164,7 +2560,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 99,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-101": {
       "split": "training",
@@ -2185,7 +2585,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 100,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-102": {
       "split": "training",
@@ -2206,7 +2610,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 101,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-103": {
       "split": "training",
@@ -2227,7 +2635,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 102,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-104": {
       "split": "training",
@@ -2248,7 +2660,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 103,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-105": {
       "split": "training",
@@ -2269,7 +2685,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 104,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-106": {
       "split": "training",
@@ -2290,7 +2710,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 105,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-107": {
       "split": "training",
@@ -2311,7 +2735,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 106,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-108": {
       "split": "training",
@@ -2332,7 +2760,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 107,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-109": {
       "split": "training",
@@ -2353,7 +2785,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 108,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-110": {
       "split": "training",
@@ -2374,7 +2810,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 109,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-111": {
       "split": "training",
@@ -2395,7 +2835,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 110,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-112": {
       "split": "training",
@@ -2416,7 +2860,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 111,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-113": {
       "split": "training",
@@ -2437,7 +2885,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 112,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-114": {
       "split": "training",
@@ -2458,7 +2910,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 113,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-115": {
       "split": "training",
@@ -2479,7 +2935,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 114,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-116": {
       "split": "training",
@@ -2500,7 +2960,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 115,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-117": {
       "split": "training",
@@ -2521,7 +2985,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 116,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-118": {
       "split": "training",
@@ -2542,7 +3010,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 117,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-119": {
       "split": "training",
@@ -2563,7 +3035,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 118,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-120": {
       "split": "training",
@@ -2584,7 +3060,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 119,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-121": {
       "split": "training",
@@ -2605,7 +3085,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 120,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-122": {
       "split": "training",
@@ -2626,7 +3110,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 121,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-123": {
       "split": "training",
@@ -2647,7 +3135,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 122,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-124": {
       "split": "training",
@@ -2668,7 +3160,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 123,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-125": {
       "split": "training",
@@ -2689,7 +3185,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 124,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-126": {
       "split": "training",
@@ -2710,7 +3210,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 125,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-127": {
       "split": "training",
@@ -2731,7 +3235,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 126,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-128": {
       "split": "training",
@@ -2752,7 +3260,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 127,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-129": {
       "split": "training",
@@ -2773,7 +3285,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 128,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-130": {
       "split": "training",
@@ -2794,7 +3310,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 129,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-131": {
       "split": "training",
@@ -2815,7 +3335,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 130,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-132": {
       "split": "training",
@@ -2836,7 +3360,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 131,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-133": {
       "split": "training",
@@ -2857,7 +3385,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 132,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-134": {
       "split": "training",
@@ -2878,7 +3410,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 133,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-135": {
       "split": "training",
@@ -2899,7 +3435,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 134,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-136": {
       "split": "training",
@@ -2920,7 +3460,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 135,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-137": {
       "split": "training",
@@ -2941,7 +3485,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 136,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-138": {
       "split": "training",
@@ -2962,7 +3510,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 137,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-139": {
       "split": "training",
@@ -2983,7 +3535,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 138,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-140": {
       "split": "training",
@@ -3004,7 +3560,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 139,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-141": {
       "split": "training",
@@ -3025,7 +3585,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 140,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-142": {
       "split": "training",
@@ -3046,7 +3610,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 141,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-143": {
       "split": "training",
@@ -3067,7 +3635,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 142,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-144": {
       "split": "training",
@@ -3088,7 +3660,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 143,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-145": {
       "split": "training",
@@ -3109,7 +3685,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 144,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-146": {
       "split": "training",
@@ -3130,7 +3710,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 145,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-147": {
       "split": "training",
@@ -3151,7 +3735,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 146,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-148": {
       "split": "training",
@@ -3172,7 +3760,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 147,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-149": {
       "split": "training",
@@ -3193,7 +3785,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 148,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-150": {
       "split": "training",
@@ -3214,7 +3810,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 149,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-151": {
       "split": "training",
@@ -3235,7 +3835,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 150,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-152": {
       "split": "training",
@@ -3256,7 +3860,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 151,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-153": {
       "split": "training",
@@ -3277,7 +3885,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 152,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-154": {
       "split": "training",
@@ -3298,7 +3910,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 153,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-155": {
       "split": "training",
@@ -3319,7 +3935,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 154,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-156": {
       "split": "training",
@@ -3340,7 +3960,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 155,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-157": {
       "split": "training",
@@ -3361,7 +3985,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 156,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-158": {
       "split": "training",
@@ -3382,7 +4010,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 157,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-159": {
       "split": "training",
@@ -3403,7 +4035,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 158,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-160": {
       "split": "training",
@@ -3424,7 +4060,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 159,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-161": {
       "split": "training",
@@ -3445,7 +4085,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 160,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-162": {
       "split": "training",
@@ -3466,7 +4110,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 161,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-163": {
       "split": "training",
@@ -3487,7 +4135,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 162,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-164": {
       "split": "training",
@@ -3508,7 +4160,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 163,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-165": {
       "split": "training",
@@ -3529,7 +4185,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 164,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-166": {
       "split": "training",
@@ -3550,7 +4210,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 165,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-167": {
       "split": "training",
@@ -3571,7 +4235,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 166,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-168": {
       "split": "training",
@@ -3592,7 +4260,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 167,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-169": {
       "split": "training",
@@ -3613,7 +4285,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 168,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-170": {
       "split": "training",
@@ -3634,7 +4310,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 169,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-171": {
       "split": "training",
@@ -3655,7 +4335,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 170,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-172": {
       "split": "training",
@@ -3676,7 +4360,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 171,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-173": {
       "split": "training",
@@ -3697,7 +4385,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 172,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-174": {
       "split": "training",
@@ -3718,7 +4410,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 173,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-175": {
       "split": "training",
@@ -3739,7 +4435,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 174,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-176": {
       "split": "training",
@@ -3760,7 +4460,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 175,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-177": {
       "split": "training",
@@ -3781,7 +4485,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 176,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-178": {
       "split": "training",
@@ -3802,7 +4510,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 177,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-179": {
       "split": "training",
@@ -3823,7 +4535,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 178,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-180": {
       "split": "training",
@@ -3844,7 +4560,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 179,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-181": {
       "split": "training",
@@ -3865,7 +4585,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 180,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-182": {
       "split": "training",
@@ -3886,7 +4610,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 181,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-183": {
       "split": "training",
@@ -3907,7 +4635,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 182,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-184": {
       "split": "training",
@@ -3928,7 +4660,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 183,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-185": {
       "split": "training",
@@ -3949,7 +4685,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 184,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-186": {
       "split": "training",
@@ -3970,7 +4710,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 185,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-187": {
       "split": "training",
@@ -3991,7 +4735,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 186,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-188": {
       "split": "training",
@@ -4012,7 +4760,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 187,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-189": {
       "split": "training",
@@ -4033,7 +4785,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 188,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-190": {
       "split": "training",
@@ -4054,7 +4810,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 189,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-191": {
       "split": "training",
@@ -4075,7 +4835,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 190,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-192": {
       "split": "training",
@@ -4096,7 +4860,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 191,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-193": {
       "split": "training",
@@ -4117,7 +4885,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 192,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-194": {
       "split": "training",
@@ -4138,7 +4910,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 193,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-195": {
       "split": "training",
@@ -4159,7 +4935,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 194,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-196": {
       "split": "training",
@@ -4180,7 +4960,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 195,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "wormy"
+      }
     },
     "t-197": {
       "split": "training",
@@ -4201,7 +4985,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 196,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-198": {
       "split": "training",
@@ -4222,7 +5010,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 197,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "green"
+      }
     },
     "t-199": {
       "split": "training",
@@ -4243,7 +5035,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 198,
-      "role": "heldOut"
+      "role": "heldOut",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "t-200": {
       "split": "training",
@@ -4264,7 +5060,11 @@
       },
       "atlas": "atlas-training-0",
       "cell": 199,
-      "role": "fitted"
+      "role": "fitted",
+      "tier": "starter",
+      "tierLabels": {
+        "starter": "red"
+      }
     },
     "p-0001": {
       "split": "pool",

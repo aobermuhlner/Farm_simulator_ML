@@ -32,6 +32,9 @@ class Declaration:
     id: str
     schema_version: str
     pool: str
+    #: The model family these runs belong to. Recorded in every artifact so that a
+    #: configuration identifier can never be resolved against the wrong family.
+    family_id: str
     predictions: str
     categories: tuple[str, ...]
     knobs: tuple[Knob, ...]
@@ -39,6 +42,10 @@ class Declaration:
     #: Which knob sets depth and which sets width — named by the declaration, not assumed.
     blocks_knob: str
     channels_knob: str
+    #: Which knob selects the dataset this family is fitted on. Named, never inferred.
+    dataset_knob: str
+    #: The dataset tiers the task declares, smallest first.
+    datasets: tuple[str, ...]
 
     def knob(self, knob_id: str) -> Knob:
         for knob in self.knobs:
@@ -77,9 +84,22 @@ def load_declaration(task_id: str) -> Declaration:
         raise DeclarationError(f"no declaration at {path}")
     raw = json.loads(path.read_text(encoding="utf8"))
 
-    diagram = raw.get("diagram")
-    if diagram is None or diagram.get("kind") != "cnn":
-        raise DeclarationError(f'task "{task_id}" declares no convolutional architecture to build')
+    # The family this trainer builds: the one that ships predictions and draws a
+    # convolutional stack. Found rather than assumed to be the first, because a task
+    # declares several families and only this one has weights to fit.
+    families = [
+        family
+        for family in raw.get("families", [])
+        if family.get("ships") == "predictions"
+        and (family.get("diagram") or {}).get("kind") == "cnn"
+    ]
+    if len(families) != 1:
+        raise DeclarationError(
+            f'task "{task_id}" declares {len(families)} convolutional prediction-shipping '
+            "families; this trainer builds exactly one"
+        )
+    family = families[0]
+    diagram = family["diagram"]
 
     knobs = tuple(
         Knob(
@@ -88,17 +108,28 @@ def load_declaration(task_id: str) -> Declaration:
             values=tuple(knob["values"]) if knob["kind"] == "choice" else _slider_values(knob),
             default=knob["default"],
         )
-        for knob in raw["knobs"]
+        for knob in family["knobs"]
     )
+
+    datasets = tuple(tier["id"] for tier in raw["datasets"])
+    dataset_knob = family["datasetKnob"]
+    if dataset_knob not in {knob.id for knob in knobs}:
+        raise DeclarationError(
+            f'model family "{family["id"]}" selects its photographs with knob '
+            f'"{dataset_knob}", which it does not declare'
+        )
 
     return Declaration(
         id=raw["id"],
         schema_version=raw["schemaVersion"],
         pool=raw["pool"],
-        predictions=raw["predictions"],
+        family_id=family["id"],
+        predictions=family["predictions"],
         categories=tuple(category["id"] for category in raw["categories"]),
         knobs=knobs,
         input_size=diagram["inputSize"],
         blocks_knob=diagram["blocksKnob"],
         channels_knob=diagram["channelsKnob"],
+        dataset_knob=dataset_knob,
+        datasets=datasets,
     )

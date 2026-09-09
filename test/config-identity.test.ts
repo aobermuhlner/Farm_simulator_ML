@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { lookupConfiguration } from '../src/task/artifact.js'
 import { configurationId } from '../src/task/configId.js'
 import { defaultConfiguration, resolveConfiguration } from '../src/task/configuration.js'
+import { firstFamily } from '../src/task/families.js'
 import {
   applePredictions,
   appleDeclaration,
@@ -10,17 +11,42 @@ import {
 } from './helpers/apple'
 
 const apple = appleDeclaration()
+const family = firstFamily(apple)
 const artifact = applePredictions()
 
 function idFor(requested: Record<string, unknown>): string {
-  const result = resolveConfiguration(apple, requested)
+  const result = resolveConfiguration(apple, family, requested)
   if (!result.ok) throw new Error(`expected ${JSON.stringify(requested)} to resolve`)
   return configurationId(result.configuration)
 }
 
+/**
+ * The tier every identifier in this file ends in.
+ *
+ * The dataset knob is declared last, so the tier arrives as a pure suffix and every part
+ * before it keeps its position and its spelling — which is what made folding the tier into
+ * configuration identity a mechanical re-key of three artifacts rather than an afternoon.
+ */
+const TIER = '-datasetstarter'
+
 describe('deterministic configuration identity', () => {
   it('derives a readable identifier from knob ids and values', () => {
-    expect(idFor(OVER_SELECTIVE)).toBe('blocks4-channels32-regularization0-dropout0')
+    expect(idFor(OVER_SELECTIVE)).toBe(`blocks4-channels32-regularization0-dropout0${TIER}`)
+  })
+
+  it('appends the tier and leaves every earlier part where it was', () => {
+    const id = idFor(OVER_SELECTIVE)
+    expect(id.endsWith(TIER)).toBe(true)
+    expect(id.slice(0, -TIER.length)).toBe('blocks4-channels32-regularization0-dropout0')
+  })
+
+  it('gives two tiers of one architecture two identifiers', () => {
+    const starter = idFor({ ...OVER_SELECTIVE, dataset: 'starter' })
+    const checked = idFor({ ...OVER_SELECTIVE, dataset: 'checked' })
+    expect(starter).not.toBe(checked)
+    // The comparison the tiers exist to teach: hold the architecture still, move only the
+    // data, and the two runs are separate entries rather than one reinterpreted.
+    expect(checked).toBe('blocks4-channels32-regularization0-dropout0-datasetchecked')
   })
 
   it('yields the same identifier no matter what order the knobs were set in', () => {
@@ -55,24 +81,24 @@ describe('deterministic configuration identity', () => {
   })
 
   it('identifies the default configuration too', () => {
-    expect(configurationId(defaultConfiguration(apple))).toBe(
-      'blocks2-channels16-regularization1-dropout0',
+    expect(configurationId(defaultConfiguration(apple, family))).toBe(
+      `blocks2-channels16-regularization1-dropout0${TIER}`,
     )
   })
 })
 
 describe('artifact lookup by configuration identity', () => {
   function lookup(requested: Record<string, unknown>) {
-    const resolved = resolveConfiguration(apple, requested)
+    const resolved = resolveConfiguration(apple, family, requested)
     if (!resolved.ok) throw new Error('expected the configuration to resolve')
-    return lookupConfiguration(apple, resolved.configuration, artifact)
+    return lookupConfiguration(apple, family, resolved.configuration, artifact)
   }
 
   it('selects the entry keyed by the configuration identifier', () => {
     const result = lookup(OVER_REGULARIZED)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.configurationId).toBe('blocks2-channels8-regularization3-dropout0.5')
+    expect(result.configurationId).toBe(`blocks2-channels8-regularization3-dropout0.5${TIER}`)
   })
 
   it('returns predictions and training history from one and the same configuration', () => {
@@ -91,34 +117,36 @@ describe('artifact lookup by configuration identity', () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.issues[0]?.code).toBe('unknown-configuration')
-    expect(result.issues[0]?.message).toContain('blocks3-channels8-regularization2-dropout0.2')
+    expect(result.issues[0]?.message).toContain(
+      `blocks3-channels8-regularization2-dropout0.2${TIER}`,
+    )
   })
 
   it('refuses on a schema version mismatch before reading any rows', () => {
-    const resolved = resolveConfiguration(apple, OVER_REGULARIZED)
+    const resolved = resolveConfiguration(apple, family, OVER_REGULARIZED)
     if (!resolved.ok) throw new Error('expected the configuration to resolve')
     const stale = { ...artifact, schemaVersion: '2.0.0' }
-    const result = lookupConfiguration(apple, resolved.configuration, stale)
+    const result = lookupConfiguration(apple, family, resolved.configuration, stale)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.issues.map((issue) => issue.code)).toContain('schema-version-mismatch')
   })
 
   it('refuses an artifact that indexes probabilities by a different category order', () => {
-    const resolved = resolveConfiguration(apple, OVER_REGULARIZED)
+    const resolved = resolveConfiguration(apple, family, OVER_REGULARIZED)
     if (!resolved.ok) throw new Error('expected the configuration to resolve')
     const reordered = { ...artifact, categories: ['wormy', 'green', 'red'] }
-    const result = lookupConfiguration(apple, resolved.configuration, reordered)
+    const result = lookupConfiguration(apple, family, resolved.configuration, reordered)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.issues.map((issue) => issue.code)).toContain('artifact-category-mismatch')
   })
 
   it('refuses an artifact belonging to a different task', () => {
-    const resolved = resolveConfiguration(apple, OVER_REGULARIZED)
+    const resolved = resolveConfiguration(apple, family, OVER_REGULARIZED)
     if (!resolved.ok) throw new Error('expected the configuration to resolve')
     const other = { ...artifact, taskId: 'skin-screening' }
-    const result = lookupConfiguration(apple, resolved.configuration, other)
+    const result = lookupConfiguration(apple, family, resolved.configuration, other)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.issues.map((issue) => issue.code)).toContain('artifact-task-mismatch')

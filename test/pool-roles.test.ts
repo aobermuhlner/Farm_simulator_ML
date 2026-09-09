@@ -5,10 +5,17 @@ import {
   FITTED_RED,
   HELD_OUT_COUNTS,
   SPLIT_SIZES,
+  DATASET_TIERS,
   WORM_VISIBILITY,
   type PoolCategory,
 } from '../tools/pool/params.js'
 import { assertRolesCanShowTheGap, heldOutBandDefect, roleCounts, rolesOf } from '../tools/pool/roles.js'
+import {
+  assertTiersAreFittedAndValidated,
+  imagesHeldBy,
+  tierRoleDefect,
+  tiersOf,
+} from '../tools/pool/tiers.js'
 import { samplePool, type SampledImage } from '../tools/pool/sample.js'
 
 const pool = samplePool()
@@ -119,5 +126,43 @@ describe('a held-out set that cannot show the gap', () => {
         : image,
     )
     expect(() => assertRolesCanShowTheGap(starved)).toThrow(/green/)
+  })
+})
+
+describe('the roles restricted to a dataset tier', () => {
+  const categories = Object.keys(CATEGORY_COUNTS.training) as PoolCategory[]
+
+  it('gives every declared tier both roles in every category', () => {
+    const assignment = tiersOf(pool)
+    for (const tier of DATASET_TIERS) {
+      const ids = new Set(imagesHeldBy(tier.id, assignment))
+      for (const category of categories) {
+        for (const role of ['fitted', 'heldOut'] as const) {
+          const held = idsOf(category, role).filter((id) => ids.has(id))
+          expect(held.length, `${tier.id}/${category}/${role}`).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+
+  it('refuses a tier missing a role in some category, naming all three', () => {
+    // A tier holding two images cannot reach six (category, role) groups, so the
+    // arithmetic that spreads a tier across the split cannot rescue it and the generator
+    // says which hole it found rather than writing a pool that draws a flat curve.
+    const tiny = [
+      { id: 'crumb', holds: 2, mislabels: 0 },
+      { id: 'whole', holds: SPLIT_SIZES.training, mislabels: 0 },
+    ]
+    const defect = tierRoleDefect(pool, tiersOf(pool, tiny), categories, tiny)
+    expect(defect).toMatch(/"crumb"/)
+    expect(defect).toMatch(/role "(fitted|heldOut)"/)
+    expect(defect).toMatch(/category "(red|green|wormy)"/)
+  })
+
+  it('is checked before a pool is written, from the manifest builder', () => {
+    // The guard sits beside the held-out band guard in `buildManifest`, so a pool whose
+    // tiers cannot be validated fails the generator run rather than shipping.
+    const assignment = tiersOf(pool)
+    expect(() => assertTiersAreFittedAndValidated(pool, assignment, categories)).not.toThrow()
   })
 })

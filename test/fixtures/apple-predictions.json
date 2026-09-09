@@ -1,14 +1,15 @@
 {
   "_comment": "Hand-written stand-in for the real artifact that prediction-artifacts will generate. Two configurations, chosen to carry the two teaching points. Probability vectors are indexed by the categories array; no action or label is stored anywhere.",
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "taskId": "apple-harvest",
+  "familyId": "convolutional",
   "categories": [
     "red",
     "green",
     "wormy"
   ],
   "configurations": {
-    "blocks2-channels8-regularization3-dropout0.5": {
+    "blocks2-channels8-regularization3-dropout0.5-datasetstarter": {
       "_comment": "Over-regularized: learned little more than 'is it reddish', so it sells wormy apples.",
       "history": [
         {
@@ -104,7 +105,7 @@
         }
       }
     },
-    "blocks4-channels32-regularization0-dropout0": {
+    "blocks4-channels32-regularization0-dropout0-datasetstarter": {
       "_comment": "Under-regularized: memorised the training reds, so it declines reds that do not match them.",
       "history": [
         {
@@ -200,7 +201,7 @@
         }
       }
     },
-    "blocks3-channels16-regularization1-dropout0": {
+    "blocks3-channels16-regularization1-dropout0-datasetstarter": {
       "_comment": "The declared default, and the balanced one: picks every ripe red and leaves both worms.",
       "history": [
         {
@@ -296,7 +297,7 @@
         }
       }
     },
-    "blocks2-channels16-regularization1-dropout0": {
+    "blocks2-channels16-regularization1-dropout0-datasetstarter": {
       "_comment": "One knob shallower: still fine on obvious fruit, but a subtle worm reads as ripe.",
       "history": [
         {
@@ -392,7 +393,7 @@
         }
       }
     },
-    "blocks4-channels16-regularization1-dropout0": {
+    "blocks4-channels16-regularization1-dropout0-datasetstarter": {
       "_comment": "One knob deeper: sells no worms at all, but only because it refuses most reds too.",
       "history": [
         {
@@ -488,7 +489,7 @@
         }
       }
     },
-    "blocks3-channels8-regularization1-dropout0": {
+    "blocks3-channels8-regularization1-dropout0-datasetstarter": {
       "_comment": "One knob narrower: not enough room to hold the worm distinction on every apple.",
       "history": [
         {
@@ -584,7 +585,7 @@
         }
       }
     },
-    "blocks3-channels16-regularization0-dropout0": {
+    "blocks3-channels16-regularization0-dropout0-datasetstarter": {
       "_comment": "Regularization off: memorised the perfect training red, so varied reds now look wrong.",
       "history": [
         {
@@ -680,7 +681,7 @@
         }
       }
     },
-    "blocks3-channels16-regularization3-dropout0": {
+    "blocks3-channels16-regularization3-dropout0-datasetstarter": {
       "_comment": "Regularization at maximum: flattened to \"reddish or not\", worms included.",
       "history": [
         {
@@ -776,7 +777,7 @@
         }
       }
     },
-    "blocks3-channels16-regularization1-dropout0.5": {
+    "blocks3-channels16-regularization1-dropout0.5-datasetstarter": {
       "_comment": "Heavy dropout on top of the balanced setting: too little of the net left to be sure.",
       "history": [
         {

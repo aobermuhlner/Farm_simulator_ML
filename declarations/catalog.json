@@ -9,6 +9,35 @@
   "ownedAtStart": [],
   "items": [
     {
+      "id": "orchard-expansion",
+      "group": "orchard",
+      "label": "A hundred more trees",
+      "copy": "A hundred trees more to bring in, bearing sixty apples each. Six thousand more apples pass whatever sorts them, so whatever they earn — and whatever they cost — is six thousand apples more of it.",
+      "price": 1000,
+      "repeat": 5,
+      "opens": [{ "kind": "farm-land", "units": 100 }]
+    },
+    {
+      "id": "bulk-photos",
+      "group": "data",
+      "label": "The job lot",
+      "copy": "A thousand apple photographs off a neighbour clearing out his shed, filed in one afternoon by whoever was free. Five times what came with the robot, for a fraction of what careful sorting costs — and some of what it says about the apples is wrong.",
+      "notForSaleReason": "No model has been fitted on these photographs yet, so buying them would buy a run that cannot be scored.",
+      "opens": [
+        { "kind": "knob-values", "task": "apple-harvest", "knob": "dataset", "values": ["bulk"] }
+      ]
+    },
+    {
+      "id": "checked-photos",
+      "group": "data",
+      "label": "The checked set",
+      "copy": "Two thousand photographs, sorted twice by two people, every disagreement settled by cutting the apple open. What it says about an apple is what the apple was.",
+      "notForSaleReason": "No model has been fitted on these photographs yet, so buying them would buy a run that cannot be scored.",
+      "opens": [
+        { "kind": "knob-values", "task": "apple-harvest", "knob": "dataset", "values": ["checked"] }
+      ]
+    },
+    {
       "id": "deeper-stacks",
       "group": "models",
       "label": "Deeper stacks",

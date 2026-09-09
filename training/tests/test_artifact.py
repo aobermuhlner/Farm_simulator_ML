@@ -31,19 +31,31 @@ def pool(declaration):
     return load_pool(declaration.pool_dir())
 
 
-def fake_result(pool, declaration, configuration_id="blocks2-channels8-regularization1-dropout0"):
-    """A run-shaped result over the real pool, so completeness is genuinely exercised."""
+#: The tier the shipped runs are fitted on, and the one every identifier here ends in.
+TIER = "starter"
+
+SHIPPED_ID = f"blocks2-channels8-regularization1-dropout0-dataset{TIER}"
+
+
+def fake_result(pool, declaration, configuration_id=SHIPPED_ID, tier=TIER):
+    """A run-shaped result over the real pool, so completeness is genuinely exercised.
+
+    The training split is covered over the tier's own images rather than over the whole
+    split, which is what a configuration is now complete when it spans.
+    """
     uniform = [1 / len(declaration.categories)] * len(declaration.categories)
+    covered = {"training": pool.tier_images(tier), "pool": pool.order["pool"]}
     return RunResult(
         configuration_id=configuration_id,
-        knobs={"blocks": 2, "channels": 8, "regularization": 1, "dropout": 0},
+        knobs={"blocks": 2, "channels": 8, "regularization": 1, "dropout": 0, "dataset": tier},
+        tier=tier,
         epochs=2,
         seed=7,
         architecture=Architecture(blocks=2, channels=(8, 16), spatial=(64, 32), parameters=1),
         hyperparameters={"optimizer": "adam"},
         history=(Epoch(1, 1.0, 1.1, 0.5, 0.4), Epoch(2, 0.9, 1.0, 0.7, 0.6)),
         predictions={
-            split: {image_id: list(uniform) for image_id in ids} for split, ids in pool.order.items()
+            split: {image_id: list(uniform) for image_id in ids} for split, ids in covered.items()
         },
     )
 
@@ -52,7 +64,8 @@ def test_writes_an_index_and_one_file_per_configuration(tmp_path, declaration, p
     write_artifact(declaration, pool, [fake_result(pool, declaration)], tmp_path, PIPELINE)
 
     index = json.loads((tmp_path / "index.json").read_text(encoding="utf8"))
-    assert set(index["configurations"]) == {"blocks2-channels8-regularization1-dropout0"}
+    assert set(index["configurations"]) == {SHIPPED_ID}
+    assert index["configurations"][SHIPPED_ID]["tier"] == TIER
     assert index["pool"] == {
         "poolId": pool.pool_id,
         "schemaVersion": pool.schema_version,
@@ -62,7 +75,7 @@ def test_writes_an_index_and_one_file_per_configuration(tmp_path, declaration, p
     assert index["encoding"]["sumTolerance"] >= SUM_TOLERANCE
     assert index["categories"] == list(declaration.categories)
 
-    entry = index["configurations"]["blocks2-channels8-regularization1-dropout0"]
+    entry = index["configurations"][SHIPPED_ID]
     assert entry["shaping"] == []
     assert entry["pipeline"] == {"revision": "0" * 40, "dirty": False}
     for field in ("knobs", "epochs", "seed", "hyperparameters", "architecture", "file"):
@@ -70,7 +83,7 @@ def test_writes_an_index_and_one_file_per_configuration(tmp_path, declaration, p
 
     document = json.loads((tmp_path / entry["file"]).read_text(encoding="utf8"))
     assert document["taskId"] == declaration.id
-    assert document["configurationId"] == "blocks2-channels8-regularization1-dropout0"
+    assert document["configurationId"] == SHIPPED_ID
     assert len(document["predictions"]["training"]) == 200
     assert len(document["predictions"]["pool"]) == 1000
     assert [epoch["epoch"] for epoch in document["history"]] == [1, 2]
@@ -79,7 +92,7 @@ def test_writes_an_index_and_one_file_per_configuration(tmp_path, declaration, p
 def test_the_index_carries_no_predictions(tmp_path, declaration, pool):
     write_artifact(declaration, pool, [fake_result(pool, declaration)], tmp_path, PIPELINE)
     index_size = (tmp_path / "index.json").stat().st_size
-    configuration_size = (tmp_path / "blocks2-channels8-regularization1-dropout0.json").stat().st_size
+    configuration_size = (tmp_path / f"{SHIPPED_ID}.json").stat().st_size
     assert index_size * 10 < configuration_size
 
 
@@ -103,6 +116,36 @@ def test_a_history_with_a_gap_refuses(tmp_path, declaration, pool):
     broken = RunResult(**{**result.__dict__, "history": (Epoch(1, 1.0, 1.0, 0.5, 0.5), Epoch(3, 0.9, 0.9, 0.6, 0.6))})
     with pytest.raises(ArtifactError, match="blocks2-channels8"):
         write_artifact(declaration, pool, [broken], tmp_path, PIPELINE)
+
+
+def test_a_recorded_tier_disagreeing_with_the_identifier_refuses(tmp_path, declaration, pool):
+    result = fake_result(pool, declaration)
+    # The identifier says `starter`; the run claims it was fitted on the checked set.
+    lying = RunResult(**{**result.__dict__, "tier": "checked"})
+    with pytest.raises(ArtifactError, match="checked"):
+        write_artifact(declaration, pool, [lying], tmp_path, PIPELINE)
+    assert not (tmp_path / "index.json").exists()
+
+
+def test_a_training_image_outside_the_tier_refuses_naming_the_tier(tmp_path, declaration, pool):
+    result = fake_result(pool, declaration)
+    # Every training image is in `starter` today, so an image outside the tier has to be
+    # made by narrowing what the tier holds rather than by finding one that is left over.
+    narrowed = type(pool)(**{**pool.__dict__, "tiers": {TIER: pool.tier_images(TIER)[:-1]}})
+    with pytest.raises(ArtifactError, match=TIER):
+        write_artifact(declaration, narrowed, [result], tmp_path, PIPELINE)
+
+
+def test_a_configuration_need_not_cover_a_training_image_outside_its_tier(
+    tmp_path, declaration, pool
+):
+    narrowed = type(pool)(**{**pool.__dict__, "tiers": {TIER: pool.tier_images(TIER)[:-1]}})
+    result = fake_result(narrowed, declaration)
+    write_artifact(declaration, narrowed, [result], tmp_path, PIPELINE)
+
+    document = json.loads((tmp_path / f"{SHIPPED_ID}.json").read_text(encoding="utf8"))
+    assert set(document["predictions"]["training"]) == set(narrowed.tier_images(TIER))
+    assert pool.tier_images(TIER)[-1] not in document["predictions"]["training"]
 
 
 def test_an_id_that_is_not_a_file_name_refuses():
@@ -180,7 +223,7 @@ def test_the_writer_alters_no_value_it_was_given(tmp_path, declaration, pool):
 
     write_artifact(declaration, pool, [result], tmp_path, PIPELINE)
     document = json.loads(
-        (tmp_path / "blocks2-channels8-regularization1-dropout0.json").read_text(encoding="utf8")
+        (tmp_path / f"{SHIPPED_ID}.json").read_text(encoding="utf8")
     )
 
     for image_id, values in produced.items():

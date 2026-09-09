@@ -9,9 +9,11 @@
  * See openspec/changes/task-abstraction/specs/task-contract/spec.md.
  */
 
+import type { TutorialKinds } from '../tutorials/index.js'
+import { TUTORIAL_KINDS, tutorialKind } from '../tutorials/index.js'
 import { blockSizes } from './cnn.js'
 import { ID_SEPARATOR } from './configId.js'
-import { DIAGRAM_KINDS } from './types.js'
+import { DIAGRAM_KINDS, LABEL_QUALITIES, SHIPPED_FORMS } from './types.js'
 import type { KnobDeclaration, TaskDeclaration } from './types.js'
 
 export interface ValidationIssue {
@@ -35,8 +37,8 @@ export const REQUIRED_FIELDS = [
   'categoryActions',
   'policy',
   'pool',
-  'predictions',
-  'knobs',
+  'datasets',
+  'families',
   'features',
   'ruleBudget',
   'payoffs',
@@ -104,25 +106,55 @@ function identified(entries: unknown, field: string, issues: ValidationIssue[]):
   return ids
 }
 
-function checkKnob(knob: unknown, index: number, issues: ValidationIssue[]): string | undefined {
-  const where = `knobs[${index}]`
+/**
+ * Where a knob list lives and whose it is.
+ *
+ * Knobs belong to a model family rather than to a task, so every refusal has to name the
+ * family as well as the knob: two families of one task may declare the same knob id, and
+ * "knob \"blocks\" permits -1" would then name two different declarations.
+ */
+interface KnobScope {
+  /** Field path of the knob list, e.g. `families[0].knobs`. */
+  readonly path: string
+  /** The family the knobs belong to, as its refusals name it. */
+  readonly family: string
+  /**
+   * The id of the knob that selects this family's dataset, where it declares one.
+   *
+   * A knob offering one value is normally not a knob at all, and is refused as one. The
+   * dataset knob is the exception, because it does a second job besides offering a choice:
+   * it puts the fitting set into the configuration identifier. A task declaring a single
+   * tier — which `specs/dataset-tiers/spec.md` permits, since it requires *at least* one —
+   * would otherwise be unloadable, and a lesson with nothing to buy is a legitimate lesson.
+   */
+  readonly datasetKnob?: string
+}
+
+function checkKnob(
+  knob: unknown,
+  index: number,
+  scope: KnobScope,
+  issues: ValidationIssue[],
+): string | undefined {
+  const where = `${scope.path}[${index}]`
+  const of = ` of family "${scope.family}"`
   if (!isRecord(knob)) {
     issues.push({
       code: 'malformed-knob',
       field: where,
-      message: `Knob ${index} must be an object.`,
+      message: `Knob ${index}${of} must be an object.`,
     })
     return undefined
   }
   const id = isNonEmptyString(knob.id) ? knob.id : undefined
-  const named = `knob "${id ?? index}"`
+  const named = `knob "${id ?? index}"${of}`
 
   for (const field of ['id', 'label', 'kind', 'help'] as const) {
     if (!isNonEmptyString(knob[field])) {
       issues.push({
         code: 'missing-knob-field',
         field: `${where}.${field}`,
-        message: `Knob ${id ?? index} is missing a non-empty "${field}".`,
+        message: `Knob ${id ?? index}${of} is missing a non-empty "${field}".`,
       })
     }
   }
@@ -130,16 +162,17 @@ function checkKnob(knob: unknown, index: number, issues: ValidationIssue[]): str
     issues.push({
       code: 'missing-knob-field',
       field: `${where}.default`,
-      message: `Knob ${id ?? index} is missing a "default".`,
+      message: `Knob ${id ?? index}${of} is missing a "default".`,
     })
   }
 
   if (knob.kind === 'choice') {
-    if (!Array.isArray(knob.values) || knob.values.length < 2) {
+    const fewest = knob.id === scope.datasetKnob ? 1 : 2
+    if (!Array.isArray(knob.values) || knob.values.length < fewest) {
       issues.push({
         code: 'malformed-knob-values',
         field: `${where}.values`,
-        message: `Choice ${named} must declare at least two allowed values.`,
+        message: `Choice ${named} must declare at least ${fewest === 1 ? 'one allowed value' : 'two allowed values'}.`,
       })
     } else if (knob.default !== undefined && !knob.values.includes(knob.default)) {
       issues.push({
@@ -173,11 +206,11 @@ function checkKnob(knob: unknown, index: number, issues: ValidationIssue[]): str
     issues.push({
       code: 'unknown-knob-kind',
       field: `${where}.kind`,
-      message: `Knob ${id ?? index} declares unknown kind "${knob.kind}"; expected "choice" or "slider".`,
+      message: `Knob ${id ?? index}${of} declares unknown kind "${knob.kind}"; expected "choice" or "slider".`,
     })
   }
 
-  checkSeparator(knob, id, index, issues)
+  checkSeparator(knob, id, index, scope, issues)
 
   return id
 }
@@ -200,15 +233,17 @@ function checkSeparator(
   knob: Record<string, unknown>,
   id: string | undefined,
   index: number,
+  scope: KnobScope,
   issues: ValidationIssue[],
 ): void {
-  const where = `knobs[${index}]`
+  const where = `${scope.path}[${index}]`
+  const of = ` of family "${scope.family}"`
 
   if (id !== undefined && id.includes(ID_SEPARATOR)) {
     issues.push({
       code: 'separator-in-identifier',
       field: `${where}.id`,
-      message: `Knob id "${id}" contains "${ID_SEPARATOR}", which joins the parts of a configuration identifier and so cannot appear inside one.`,
+      message: `Knob id "${id}"${of} contains "${ID_SEPARATOR}", which joins the parts of a configuration identifier and so cannot appear inside one.`,
     })
   }
 
@@ -219,7 +254,7 @@ function checkSeparator(
     issues.push({
       code: 'separator-in-identifier',
       field: knob.kind === 'choice' ? `${where}.values` : where,
-      message: `Knob ${id ?? index} permits value ${JSON.stringify(offending)}, whose written form "${String(offending)}" contains "${ID_SEPARATOR}" — the character that joins the parts of a configuration identifier, so it cannot appear inside one.`,
+      message: `Knob ${id ?? index}${of} permits value ${JSON.stringify(offending)}, whose written form "${String(offending)}" contains "${ID_SEPARATOR}" — the character that joins the parts of a configuration identifier, so it cannot appear inside one.`,
     })
   }
 }
@@ -453,24 +488,31 @@ function checkCategoryActions(
   }
 }
 
-function checkKnobs(knobs: unknown, issues: ValidationIssue[]): void {
+/**
+ * Validates one family's knob list.
+ *
+ * Uniqueness is scoped to the family and not to the task, deliberately: an identifier is
+ * composed from one family's knobs and resolved only against that family, so two families
+ * declaring a knob called `depth` collide nowhere.
+ */
+function checkKnobs(knobs: unknown, scope: KnobScope, issues: ValidationIssue[]): void {
   if (!Array.isArray(knobs) || knobs.length === 0) {
     issues.push({
       code: 'malformed-field',
-      field: 'knobs',
-      message: 'Field "knobs" must be a non-empty list.',
+      field: scope.path,
+      message: `Field "${scope.path}" must be a non-empty list.`,
     })
     return
   }
   const seen: string[] = []
   knobs.forEach((knob, index) => {
-    const id = checkKnob(knob, index, issues)
+    const id = checkKnob(knob, index, scope, issues)
     if (id === undefined) return
     if (seen.includes(id)) {
       issues.push({
         code: 'duplicate-id',
-        field: `knobs[${index}].id`,
-        message: `Field "knobs" declares id "${id}" more than once.`,
+        field: `${scope.path}[${index}].id`,
+        message: `Family "${scope.family}" declares knob id "${id}" more than once.`,
       })
     }
     seen.push(id)
@@ -534,14 +576,17 @@ function isPositiveInteger(value: unknown): value is number {
  */
 function checkDiagram(
   diagram: unknown,
+  scope: KnobScope,
   knobs: readonly Record<string, unknown>[],
   issues: ValidationIssue[],
 ): void {
+  const at = `${scope.path.slice(0, scope.path.lastIndexOf('.'))}.diagram`
+  const of = ` of family "${scope.family}"`
   if (!isRecord(diagram)) {
     issues.push({
       code: 'malformed-field',
-      field: 'diagram',
-      message: 'Field "diagram" must be an object.',
+      field: at,
+      message: `Field "${at}" must be an object.`,
     })
     return
   }
@@ -550,36 +595,54 @@ function checkDiagram(
   if (kind === undefined || kind === null) {
     issues.push({
       code: 'missing-field',
-      field: 'diagram.kind',
-      message: 'Task declaration is missing required field "diagram.kind".',
+      field: `${at}.kind`,
+      message: `Task declaration is missing required field "${at}.kind".`,
     })
     return
   }
   if (!DIAGRAM_KINDS.includes(kind as never)) {
     issues.push({
       code: 'unknown-diagram-kind',
-      field: 'diagram.kind',
-      message: `Field "diagram.kind" declares unknown kind ${JSON.stringify(kind)}; expected ${DIAGRAM_KINDS.map((known) => `"${known}"`).join(', ')}.`,
+      field: `${at}.kind`,
+      message: `Field "${at}.kind"${of} declares unknown kind ${JSON.stringify(kind)}; expected ${DIAGRAM_KINDS.map((known) => `"${known}"`).join(', ')}.`,
     })
     return
   }
 
-  if (kind === 'feedforward') checkFeedforwardDiagram(diagram, knobs, issues)
-  else checkCnnDiagram(diagram, knobs, issues)
+  const drawn: DiagramScope = { at, of, knobs, family: scope.family }
+  if (kind === 'feedforward') checkFeedforwardDiagram(diagram, drawn, issues)
+  else checkCnnDiagram(diagram, drawn, issues)
+}
+
+/**
+ * Where a diagram lives, whose it is, and the knobs it may name.
+ *
+ * `knobs` is that family's own knob list rather than the task's: a diagram naming a knob
+ * a *different* family declares is refused, because each family's drawing has to be
+ * resolvable from that family's declaration and knob values alone.
+ */
+interface DiagramScope {
+  /** Field path of the diagram block, e.g. `families[0].diagram`. */
+  readonly at: string
+  /** ` of family "x"`, appended to a message that names a knob. */
+  readonly of: string
+  readonly knobs: readonly Record<string, unknown>[]
+  readonly family: string
 }
 
 /** Reports the fields a diagram of some kind must carry and does not. */
 function requireDiagramFields(
   diagram: Record<string, unknown>,
   fields: readonly string[],
+  scope: DiagramScope,
   issues: ValidationIssue[],
 ): void {
   for (const field of fields) {
     if (diagram[field] === undefined || diagram[field] === null) {
       issues.push({
         code: 'missing-field',
-        field: `diagram.${field}`,
-        message: `Task declaration is missing required field "diagram.${field}".`,
+        field: `${scope.at}.${field}`,
+        message: `Task declaration is missing required field "${scope.at}.${field}".`,
       })
     }
   }
@@ -593,17 +656,17 @@ function requireDiagramFields(
 function diagramKnob(
   diagram: Record<string, unknown>,
   field: string,
-  knobs: readonly Record<string, unknown>[],
+  scope: DiagramScope,
   issues: ValidationIssue[],
 ): Record<string, unknown> | undefined {
   const id = diagram[field]
   if (id === undefined) return undefined
-  const knob = knobs.find((candidate) => candidate.id === id)
+  const knob = scope.knobs.find((candidate) => candidate.id === id)
   if (knob === undefined) {
     issues.push({
       code: 'unknown-knob',
-      field: `diagram.${field}`,
-      message: `Field "diagram.${field}" names knob ${JSON.stringify(id)}, which the task does not declare.`,
+      field: `${scope.at}.${field}`,
+      message: `Field "${scope.at}.${field}" names knob ${JSON.stringify(id)}, which family "${scope.family}" does not declare.`,
     })
   }
   return knob
@@ -619,6 +682,7 @@ function wholeCountsOf(
   knob: Record<string, unknown>,
   field: string,
   noun: string,
+  scope: DiagramScope,
   issues: ValidationIssue[],
 ): number[] {
   const counts: number[] = []
@@ -628,8 +692,8 @@ function wholeCountsOf(
       usable = false
       issues.push({
         code: 'malformed-diagram',
-        field: `diagram.${field}`,
-        message: `Knob "${String(knob.id)}" sets the number of ${noun} but permits ${JSON.stringify(value)}, which is not a whole number of ${noun}.`,
+        field: `${scope.at}.${field}`,
+        message: `Knob "${String(knob.id)}"${scope.of} sets the number of ${noun} but permits ${JSON.stringify(value)}, which is not a whole number of ${noun}.`,
       })
       continue
     }
@@ -651,6 +715,7 @@ function checkDrawnCounts(
   field: string,
   knob: Record<string, unknown> | undefined,
   noun: string,
+  scope: DiagramScope,
   issues: ValidationIssue[],
 ): void {
   const shown = diagram[field]
@@ -658,8 +723,8 @@ function checkDrawnCounts(
     if (shown !== undefined) {
       issues.push({
         code: 'malformed-field',
-        field: `diagram.${field}`,
-        message: `Field "diagram.${field}" must be an object keyed by the values its knob permits.`,
+        field: `${scope.at}.${field}`,
+        message: `Field "${scope.at}.${field}" must be an object keyed by the values its knob permits.`,
       })
     }
     return
@@ -669,8 +734,8 @@ function checkDrawnCounts(
     if (!isPositiveInteger(count)) {
       issues.push({
         code: 'malformed-diagram',
-        field: `diagram.${field}.${value}`,
-        message: `Field "diagram.${field}" draws ${JSON.stringify(count)} ${noun} for value "${value}"; a drawn count must be a positive whole number.`,
+        field: `${scope.at}.${field}.${value}`,
+        message: `Field "${scope.at}.${field}" draws ${JSON.stringify(count)} ${noun} for value "${value}"; a drawn count must be a positive whole number.`,
       })
     }
   }
@@ -680,8 +745,8 @@ function checkDrawnCounts(
     if (shown[String(value)] === undefined) {
       issues.push({
         code: 'unmapped-knob-value',
-        field: `diagram.${field}`,
-        message: `Knob "${String(knob.id)}" permits value ${JSON.stringify(value)}, which "diagram.${field}" gives no drawn count for.`,
+        field: `${scope.at}.${field}`,
+        message: `Knob "${String(knob.id)}"${scope.of} permits value ${JSON.stringify(value)}, which "${scope.at}.${field}" gives no drawn count for.`,
       })
     }
   }
@@ -692,24 +757,24 @@ const FEEDFORWARD_DIAGRAM_FIELDS = ['layersKnob', 'unitsKnob', 'unitsShown', 'in
 
 function checkFeedforwardDiagram(
   diagram: Record<string, unknown>,
-  knobs: readonly Record<string, unknown>[],
+  scope: DiagramScope,
   issues: ValidationIssue[],
 ): void {
-  requireDiagramFields(diagram, FEEDFORWARD_DIAGRAM_FIELDS, issues)
+  requireDiagramFields(diagram, FEEDFORWARD_DIAGRAM_FIELDS, scope, issues)
 
   if (diagram.inputsShown !== undefined && !isPositiveInteger(diagram.inputsShown)) {
     issues.push({
       code: 'malformed-diagram',
-      field: 'diagram.inputsShown',
-      message: `Field "diagram.inputsShown" must be a positive whole number; found ${JSON.stringify(diagram.inputsShown)}.`,
+      field: `${scope.at}.inputsShown`,
+      message: `Field "${scope.at}.inputsShown" must be a positive whole number; found ${JSON.stringify(diagram.inputsShown)}.`,
     })
   }
 
-  const layersKnob = diagramKnob(diagram, 'layersKnob', knobs, issues)
-  const unitsKnob = diagramKnob(diagram, 'unitsKnob', knobs, issues)
+  const layersKnob = diagramKnob(diagram, 'layersKnob', scope, issues)
+  const unitsKnob = diagramKnob(diagram, 'unitsKnob', scope, issues)
 
-  if (layersKnob !== undefined) wholeCountsOf(layersKnob, 'layersKnob', 'layers', issues)
-  checkDrawnCounts(diagram, 'unitsShown', unitsKnob, 'units', issues)
+  if (layersKnob !== undefined) wholeCountsOf(layersKnob, 'layersKnob', 'layers', scope, issues)
+  checkDrawnCounts(diagram, 'unitsShown', unitsKnob, 'units', scope, issues)
 }
 
 /** The fields only a convolutional diagram carries. */
@@ -727,33 +792,33 @@ const CNN_DIAGRAM_FIELDS = ['blocksKnob', 'channelsKnob', 'inputSize', 'channels
  */
 function checkCnnDiagram(
   diagram: Record<string, unknown>,
-  knobs: readonly Record<string, unknown>[],
+  scope: DiagramScope,
   issues: ValidationIssue[],
 ): void {
-  requireDiagramFields(diagram, CNN_DIAGRAM_FIELDS, issues)
+  requireDiagramFields(diagram, CNN_DIAGRAM_FIELDS, scope, issues)
 
   const inputSize = diagram.inputSize
   const sizeUsable = isPositiveInteger(inputSize)
   if (inputSize !== undefined && !sizeUsable) {
     issues.push({
       code: 'malformed-diagram',
-      field: 'diagram.inputSize',
-      message: `Field "diagram.inputSize" must be a positive whole number of pixels; found ${JSON.stringify(inputSize)}.`,
+      field: `${scope.at}.inputSize`,
+      message: `Field "${scope.at}.inputSize" must be a positive whole number of pixels; found ${JSON.stringify(inputSize)}.`,
     })
   }
 
-  const blocksKnob = diagramKnob(diagram, 'blocksKnob', knobs, issues)
-  const channelsKnob = diagramKnob(diagram, 'channelsKnob', knobs, issues)
+  const blocksKnob = diagramKnob(diagram, 'blocksKnob', scope, issues)
+  const channelsKnob = diagramKnob(diagram, 'channelsKnob', scope, issues)
 
   if (blocksKnob !== undefined) {
-    const counts = wholeCountsOf(blocksKnob, 'blocksKnob', 'blocks', issues)
+    const counts = wholeCountsOf(blocksKnob, 'blocksKnob', 'blocks', scope, issues)
     if (sizeUsable) {
       for (const blocks of counts) {
         if (blockSizes(inputSize as number, blocks) === undefined) {
           issues.push({
             code: 'unbuildable-block-count',
-            field: 'diagram.blocksKnob',
-            message: `Knob "${String(blocksKnob.id)}" permits ${blocks} convolutional blocks, which pools a ${String(inputSize)}px input below a single spatial position.`,
+            field: `${scope.at}.blocksKnob`,
+            message: `Knob "${String(blocksKnob.id)}"${scope.of} permits ${blocks} convolutional blocks, which pools a ${String(inputSize)}px input below a single spatial position.`,
           })
         }
       }
@@ -765,9 +830,11 @@ function checkCnnDiagram(
   // because the true channel counts are stated on screen. "wide" is not a channel count
   // the architecture can be built at, so it is refused here rather than resolving to
   // nothing at render time.
-  if (channelsKnob !== undefined) wholeCountsOf(channelsKnob, 'channelsKnob', 'channels', issues)
+  if (channelsKnob !== undefined) {
+    wholeCountsOf(channelsKnob, 'channelsKnob', 'channels', scope, issues)
+  }
 
-  checkDrawnCounts(diagram, 'channelsShown', channelsKnob, 'channels', issues)
+  checkDrawnCounts(diagram, 'channelsShown', channelsKnob, 'channels', scope, issues)
 }
 
 /**
@@ -1000,12 +1067,185 @@ function checkRuleBudget(ruleBudget: unknown, issues: ValidationIssue[]): void {
   }
 }
 
-function checkTeaching(teaching: unknown, issues: ValidationIssue[]): void {
+/** Every field a declared delivery term must carry. */
+export const REQUIRED_DELIVERY_FIELDS = [
+  'measures',
+  'delivering',
+  'tolerance',
+  'warnAbove',
+  'downgradedValue',
+] as const
+
+/**
+ * Validates a declared delivery term against the categories and actions the task declares.
+ *
+ * Four refusals, and each is about a term that would be a fine wearing a threshold's
+ * clothes.
+ *
+ * A term naming a category or an action the task does not declare measures something
+ * nothing can produce, so the share it reports is meaningless rather than merely wrong.
+ *
+ * A term whose delivering actions are every declared action has a denominator that is the
+ * whole crop, and no decision available to a student can move an image out of it. There
+ * is then no way to escape the term by working well, which is a flat fine on the whole
+ * batch and is what a payoff entry is already for.
+ *
+ * A term measuring only categories whose declared action is itself a delivering one
+ * prices correct work: doing the task perfectly maximises the measured share, so the
+ * lesson runs backwards.
+ *
+ * A tolerance of zero downgrades a faultless delivery, and a warning at or above the
+ * tolerance is never seen before the downgrade it exists to precede. Both are values that
+ * can only have been a mistake, so both are named rather than clamped.
+ */
+function checkDelivery(
+  delivery: unknown,
+  mapping: unknown,
+  categoryIds: readonly string[],
+  actionIds: readonly string[],
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(delivery)) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'delivery',
+      message: 'Field "delivery" must be an object declaring the term the batch is priced by.',
+    })
+    return
+  }
+
+  for (const field of REQUIRED_DELIVERY_FIELDS) {
+    if (delivery[field] === undefined || delivery[field] === null) {
+      issues.push({
+        code: 'missing-field',
+        field: `delivery.${field}`,
+        message: `A declared delivery term is missing required field "delivery.${field}".`,
+      })
+    }
+  }
+
+  const named = (
+    field: 'measures' | 'delivering',
+    declared: readonly string[],
+    what: string,
+    code: string,
+  ): string[] | undefined => {
+    const value = delivery[field]
+    if (value === undefined || value === null) return undefined
+    if (!Array.isArray(value) || value.some((entry) => !isNonEmptyString(entry))) {
+      issues.push({
+        code: 'malformed-field',
+        field: `delivery.${field}`,
+        message: `Field "delivery.${field}" must be a list of declared ${what} ids.`,
+      })
+      return undefined
+    }
+    if (value.length === 0) {
+      issues.push({
+        code: 'too-few',
+        field: `delivery.${field}`,
+        message: `Field "delivery.${field}" names no ${what}, so the term measures nothing.`,
+      })
+      return undefined
+    }
+    const ids = value as string[]
+    let sound = true
+    for (const id of ids) {
+      if (declared.includes(id)) continue
+      sound = false
+      issues.push({
+        code,
+        field: `delivery.${field}`,
+        message: `The delivery term names ${what} "${id}", which this task does not declare.`,
+      })
+    }
+    return sound ? ids : undefined
+  }
+
+  const measures = named('measures', categoryIds, 'category', 'unknown-category')
+  const delivering = named('delivering', actionIds, 'action', 'unknown-action')
+
+  if (delivering !== undefined && actionIds.length > 0) {
+    const outside = actionIds.filter((action) => !delivering.includes(action))
+    if (outside.length === 0) {
+      issues.push({
+        code: 'delivery-has-no-way-out',
+        field: 'delivery.delivering',
+        message:
+          `The delivery term names every declared action — ${delivering.join(', ')} — as ` +
+          'delivering, so the share it measures is over the whole crop and no decision can ' +
+          'escape it. That is a fine rather than a threshold.',
+      })
+    }
+  }
+
+  if (measures !== undefined && delivering !== undefined && isRecord(mapping)) {
+    const priced = measures.filter((category) => {
+      const called = mapping[category]
+      return typeof called === 'string' && !delivering.includes(called)
+    })
+    if (priced.length === 0) {
+      issues.push({
+        code: 'delivery-prices-correct-work',
+        field: 'delivery.measures',
+        message:
+          `Every category the delivery term measures — ${measures.join(', ')} — is declared ` +
+          'to call for a delivering action, so the term prices correct work rather than a ' +
+          'mistake. At least one measured category must call for an action outside the ' +
+          'delivering ones.',
+      })
+    }
+  }
+
+  const tolerance = delivery.tolerance
+  const toleranceUsable =
+    typeof tolerance === 'number' && Number.isFinite(tolerance) && tolerance > 0
+  if (tolerance !== undefined && tolerance !== null && !toleranceUsable) {
+    issues.push({
+      code: 'delivery-tolerance-unusable',
+      field: 'delivery.tolerance',
+      message: `Field "delivery.tolerance" must be a share greater than zero; found ${JSON.stringify(tolerance)}. A tolerance of zero downgrades a faultless delivery.`,
+    })
+  }
+
+  const warnAbove = delivery.warnAbove
+  if (warnAbove !== undefined && warnAbove !== null) {
+    const usable = typeof warnAbove === 'number' && Number.isFinite(warnAbove) && warnAbove > 0
+    if (!usable) {
+      issues.push({
+        code: 'delivery-warning-unusable',
+        field: 'delivery.warnAbove',
+        message: `Field "delivery.warnAbove" must be a share greater than zero; found ${JSON.stringify(warnAbove)}.`,
+      })
+    } else if (toleranceUsable && warnAbove >= (tolerance as number)) {
+      issues.push({
+        code: 'delivery-warning-unusable',
+        field: 'delivery.warnAbove',
+        message: `Field "delivery.warnAbove" is ${warnAbove} against a tolerance of ${String(tolerance)}, so the warning would never be seen before the downgrade it exists to precede. It must be strictly below the tolerance.`,
+      })
+    }
+  }
+
+  const downgraded = delivery.downgradedValue
+  if (
+    downgraded !== undefined &&
+    downgraded !== null &&
+    (typeof downgraded !== 'number' || !Number.isFinite(downgraded))
+  ) {
+    issues.push({
+      code: 'malformed-field',
+      field: 'delivery.downgradedValue',
+      message: `Field "delivery.downgradedValue" must be a finite amount; found ${JSON.stringify(downgraded)}.`,
+    })
+  }
+}
+
+function checkTeaching(teaching: unknown, at: string, issues: ValidationIssue[]): void {
   if (!isRecord(teaching)) {
     issues.push({
       code: 'malformed-field',
-      field: 'teaching',
-      message: 'Field "teaching" must be an object.',
+      field: at,
+      message: `Field "${at}" must be an object.`,
     })
     return
   }
@@ -1013,19 +1253,709 @@ function checkTeaching(teaching: unknown, issues: ValidationIssue[]): void {
     if (!isNonEmptyString(teaching[field])) {
       issues.push({
         code: 'missing-field',
-        field: `teaching.${field}`,
-        message: `Task declaration is missing required field "teaching.${field}".`,
+        field: `${at}.${field}`,
+        message: `Task declaration is missing required field "${at}.${field}".`,
+      })
+    }
+  }
+}
+
+/** Every field a dataset tier must carry in order to be offered or explained. */
+export const REQUIRED_DATASET_FIELDS = [
+  'id',
+  'label',
+  'size',
+  'composition',
+  'labelQuality',
+  'disclosure',
+] as const
+
+/**
+ * Validates the dataset tiers a task declares, returning their ids smallest first.
+ *
+ * `specs/dataset-tiers/spec.md` — the ordering is load-bearing rather than cosmetic. Every
+ * family's dataset knob must default to *the smallest tier*, and a screen naming "the
+ * larger set" has to have exactly one of them to mean, so tiers are required in ascending
+ * order of size with no two the same size. Two tiers of 1 000 photos would leave both
+ * phrases ambiguous and nothing able to say which was meant.
+ *
+ * Label quality is checked as a declared value and never derived. A tier the pool holds no
+ * images for is entirely legitimate — it is how a tier is shown and explained before it is
+ * authored — so there is no image here to infer anything from.
+ */
+function checkDatasets(
+  datasets: unknown,
+  categoryIds: readonly string[],
+  issues: ValidationIssue[],
+): readonly string[] {
+  if (!Array.isArray(datasets) || datasets.length === 0) {
+    issues.push({
+      code: 'no-datasets',
+      field: 'datasets',
+      message:
+        'Field "datasets" must declare at least one dataset tier; a task with none offers no photographs for a model to be fitted on.',
+    })
+    return []
+  }
+
+  const ids: string[] = []
+  const sizes: (number | undefined)[] = []
+
+  datasets.forEach((tier, index) => {
+    const where = `datasets[${index}]`
+    if (!isRecord(tier)) {
+      issues.push({
+        code: 'malformed-dataset',
+        field: where,
+        message: `Dataset tier ${index} must be an object.`,
+      })
+      sizes.push(undefined)
+      return
+    }
+
+    const named = isNonEmptyString(tier.id) ? tier.id : String(index)
+    for (const field of REQUIRED_DATASET_FIELDS) {
+      if (tier[field] === undefined || tier[field] === null) {
+        issues.push({
+          code: 'missing-field',
+          field: `${where}.${field}`,
+          message: `Dataset tier "${named}" is missing required field "${field}".`,
+        })
+      }
+    }
+
+    for (const field of ['id', 'label', 'disclosure'] as const) {
+      if (tier[field] !== undefined && !isNonEmptyString(tier[field])) {
+        issues.push({
+          code: 'malformed-field',
+          field: `${where}.${field}`,
+          message: `Field "${where}.${field}" must be a non-empty string.`,
+        })
+      }
+    }
+
+    if (isNonEmptyString(tier.id)) {
+      if (ids.includes(tier.id)) {
+        issues.push({
+          code: 'duplicate-id',
+          field: `${where}.id`,
+          message: `Field "datasets" declares id "${tier.id}" more than once.`,
+        })
+      } else {
+        ids.push(tier.id)
+      }
+      // A tier id ends up inside a configuration identifier, through the value of the
+      // knob that selects it, so it is held to the same separator rule every knob value is.
+      if (tier.id.includes(ID_SEPARATOR)) {
+        issues.push({
+          code: 'separator-in-id',
+          field: `${where}.id`,
+          message: `Dataset tier "${tier.id}" contains "${ID_SEPARATOR}", which separates the parts of a configuration identifier and so cannot appear inside one.`,
+        })
+      }
+    }
+
+    if (tier.labelQuality !== undefined && !LABEL_QUALITIES.includes(tier.labelQuality as never)) {
+      issues.push({
+        code: 'unknown-label-quality',
+        field: `${where}.labelQuality`,
+        message: `Dataset tier "${named}" declares label quality ${JSON.stringify(tier.labelQuality)}; the declared qualities are ${LABEL_QUALITIES.map((quality) => `"${quality}"`).join(' and ')}.`,
+      })
+    }
+
+    const size = tier.size
+    if (size !== undefined && !isPositiveInteger(size)) {
+      issues.push({
+        code: 'malformed-field',
+        field: `${where}.size`,
+        message: `Dataset tier "${named}" declares a size of ${JSON.stringify(size)}; it must be a whole number of photographs above zero.`,
+      })
+      sizes.push(undefined)
+    } else {
+      sizes.push(size as number | undefined)
+    }
+
+    if (tier.composition !== undefined) {
+      checkComposition(tier.composition, named, where, size, categoryIds, issues)
+    }
+  })
+
+  // Ascending and distinct, checked against the tier before rather than by sorting: the
+  // declared order is what a screen presents and what "the smallest tier" reads off, so a
+  // declaration whose order disagrees with its sizes is refused rather than reordered.
+  for (let index = 1; index < sizes.length; index += 1) {
+    const previous = sizes[index - 1]
+    const size = sizes[index]
+    if (previous === undefined || size === undefined) continue
+    if (size > previous) continue
+    const before = (datasets[index - 1] as Record<string, unknown>).id
+    const here = (datasets[index] as Record<string, unknown>).id
+    issues.push({
+      code: 'datasets-out-of-order',
+      field: `datasets[${index}].size`,
+      message: `Dataset tier "${String(here)}" declares ${size} photographs, which does not exceed the ${previous} of "${String(before)}" declared before it; tiers must be declared in ascending order of size and no two may share a size.`,
+    })
+  }
+
+  return ids
+}
+
+/**
+ * Checks one tier's composition against the categories the task declares.
+ *
+ * A count per declared category and no others, summing to the declared size. Both halves
+ * are refusals rather than repairs: a composition that names a category the task does not
+ * declare came from a different task's vocabulary, and one that does not add up to its
+ * size leaves two declared figures for the same set of photographs with nothing able to
+ * say which is right.
+ */
+function checkComposition(
+  composition: unknown,
+  named: string,
+  where: string,
+  size: unknown,
+  categoryIds: readonly string[],
+  issues: ValidationIssue[],
+): void {
+  if (!isRecord(composition)) {
+    issues.push({
+      code: 'malformed-field',
+      field: `${where}.composition`,
+      message: `Field "${where}.composition" must be an object of counts keyed by category.`,
+    })
+    return
+  }
+
+  let total = 0
+  let complete = true
+  for (const category of categoryIds) {
+    const count = composition[category]
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) {
+      issues.push({
+        code: 'malformed-composition',
+        field: `${where}.composition.${category}`,
+        message: `Dataset tier "${named}" declares ${JSON.stringify(count)} photographs of category "${category}"; it must declare a whole count of every declared category.`,
+      })
+      complete = false
+      continue
+    }
+    total += count
+  }
+
+  for (const category of Object.keys(composition)) {
+    if (categoryIds.includes(category)) continue
+    issues.push({
+      code: 'unknown-category',
+      field: `${where}.composition.${category}`,
+      message: `Dataset tier "${named}" declares a count for category "${category}", which the task does not declare.`,
+    })
+    complete = false
+  }
+
+  if (complete && typeof size === 'number' && total !== size) {
+    issues.push({
+      code: 'composition-mismatch',
+      field: `${where}.composition`,
+      message: `Dataset tier "${named}" declares ${size} photographs but a composition of ${total}.`,
+    })
+  }
+}
+
+/** Every field a model family must carry in order to be offered. */
+export const REQUIRED_FAMILY_FIELDS = [
+  'id',
+  'label',
+  'ships',
+  'knobs',
+  'datasetKnob',
+  'teaching',
+  'slot',
+] as const
+
+/**
+ * Validates one declared model family.
+ *
+ * Everything a family owns is checked against that family and nothing wider: its knob ids
+ * are unique within it rather than across the task, its separator refusals name it, and
+ * its diagram may only name knobs it declares itself. That scoping is the whole point of
+ * the family being a declared entity — two rungs of one ladder share a job, not a model.
+ */
+function checkFamily(
+  family: unknown,
+  index: number,
+  kinds: TutorialKinds,
+  declared: TaskDeclaration,
+  datasetIds: readonly string[],
+  issues: ValidationIssue[],
+): string | undefined {
+  const where = `families[${index}]`
+  if (!isRecord(family)) {
+    issues.push({
+      code: 'malformed-family',
+      field: where,
+      message: `Model family ${index} must be an object.`,
+    })
+    return undefined
+  }
+
+  const id = isNonEmptyString(family.id) ? family.id : undefined
+  const named = id ?? String(index)
+
+  for (const field of REQUIRED_FAMILY_FIELDS) {
+    if (family[field] === undefined || family[field] === null) {
+      issues.push({
+        code: 'missing-field',
+        field: `${where}.${field}`,
+        message: `Model family "${named}" is missing required field "${field}".`,
+      })
+    }
+  }
+
+  for (const field of ['id', 'label'] as const) {
+    if (family[field] !== undefined && !isNonEmptyString(family[field])) {
+      issues.push({
+        code: 'malformed-field',
+        field: `${where}.${field}`,
+        message: `Field "${where}.${field}" must be a non-empty string.`,
+      })
+    }
+  }
+
+  checkShips(family, named, where, issues)
+  checkSlot(family.slot, named, where, issues)
+  if (family.teaching !== undefined) checkTeaching(family.teaching, `${where}.teaching`, issues)
+  checkHistory(family.history, named, where, issues)
+  checkTutorial(family.tutorial, named, where, kinds, declared, issues)
+
+  // Refused where a declaration written against the wrong half of the split would put
+  // them, naming where they belong: the photographs describe the job, so they are the
+  // task's, and every family of one task is fitted on the same declared tiers.
+  for (const field of BELONGS_TO_TASK) {
+    if (family[field] === undefined) continue
+    issues.push({
+      code: 'belongs-to-task',
+      field: `${where}.${field}`,
+      message: `Model family "${named}" declares "${field}", which belongs to the task rather than to a family: the photographs describe the job and are the same photographs whatever is fitted to them. A family declares only which of its knobs selects one, in "datasetKnob".`,
+    })
+  }
+
+  const scope: KnobScope = {
+    path: `${where}.knobs`,
+    family: named,
+    ...(isNonEmptyString(family.datasetKnob) ? { datasetKnob: family.datasetKnob } : {}),
+  }
+  if (family.knobs !== undefined) checkKnobs(family.knobs, scope, issues)
+  checkDatasetKnob(family, named, where, datasetIds, issues)
+
+  // Optional, so absence is not an issue. Checked only against knobs sound enough to
+  // refer to; otherwise the knob issues already name the cause.
+  if (family.diagram !== undefined) {
+    const referrable = referrableKnobs(family.knobs)
+    if (referrable !== undefined) checkDiagram(family.diagram, scope, referrable, issues)
+  }
+
+  return id
+}
+
+/**
+ * Refuses a family whose dataset knob cannot select a tier the task declares.
+ *
+ * `specs/dataset-tiers/spec.md` — the knob must be an enumerated choice, every one of its
+ * values must be a declared tier id, and its default must be the task's smallest tier. The
+ * default is held to the smallest rather than to any tier because that is the one that
+ * comes with the robot: a family opening on a tier a student has not bought would present
+ * a configuration nothing has been fitted for, and progress that records no value falls to
+ * the declared default.
+ *
+ * A slider is refused outright. Tier ids are names, so "every value between" means nothing
+ * and a slider would let a student select a set that does not exist.
+ */
+function checkDatasetKnob(
+  family: Record<string, unknown>,
+  named: string,
+  where: string,
+  datasetIds: readonly string[],
+  issues: ValidationIssue[],
+): void {
+  const knobId = family.datasetKnob
+  if (knobId === undefined || knobId === null) return
+  if (!isNonEmptyString(knobId)) {
+    issues.push({
+      code: 'malformed-field',
+      field: `${where}.datasetKnob`,
+      message: `Field "${where}.datasetKnob" must be a non-empty string.`,
+    })
+    return
+  }
+
+  const knobs = referrableKnobs(family.knobs)
+  // Knobs unsound enough to refer to already name their own cause; naming this one too
+  // would report the same defect twice under two codes.
+  if (knobs === undefined) return
+
+  const knob = knobs.find((candidate) => candidate.id === knobId)
+  if (knob === undefined) {
+    issues.push({
+      code: 'unknown-dataset-knob',
+      field: `${where}.datasetKnob`,
+      message: `Model family "${named}" selects its photographs with knob "${knobId}", which it does not declare.`,
+    })
+    return
+  }
+
+  if (knob.kind !== 'choice' || !Array.isArray(knob.values)) {
+    issues.push({
+      code: 'dataset-knob-not-a-choice',
+      field: `${where}.datasetKnob`,
+      message: `Model family "${named}" selects its photographs with knob "${knobId}", which offers a range rather than a fixed set of choices; a dataset is named, so there is nothing between two of them to select.`,
+    })
+    return
+  }
+
+  // Nothing to hold the values to when the task's tiers were themselves refused; those
+  // issues name the cause.
+  if (datasetIds.length === 0) return
+
+  for (const value of knob.values) {
+    if (datasetIds.includes(String(value))) continue
+    issues.push({
+      code: 'unknown-dataset-tier',
+      field: `${where}.datasetKnob`,
+      message: `Knob "${knobId}" of model family "${named}" permits ${JSON.stringify(value)}, which is the id of no dataset tier the task declares.`,
+    })
+  }
+
+  const smallest = datasetIds[0]
+  if (knob.default !== undefined && String(knob.default) !== smallest) {
+    issues.push({
+      code: 'dataset-knob-default',
+      field: `${where}.datasetKnob`,
+      message: `Knob "${knobId}" of model family "${named}" defaults to ${JSON.stringify(knob.default)}, but a dataset knob must default to the task's smallest tier, which is "${String(smallest)}".`,
+    })
+  }
+}
+
+/**
+ * Refuses a family that does not say what it ships, or says something unsupported.
+ *
+ * Declared rather than inferred from the family's id, its knobs, its architecture or
+ * whether an artifact happens to be present — inferring it would make adding a file
+ * change behaviour, and would make a typo in an id silently switch how a model predicts.
+ */
+function checkShips(
+  family: Record<string, unknown>,
+  named: string,
+  where: string,
+  issues: ValidationIssue[],
+): void {
+  const ships = family.ships
+  if (ships === undefined || ships === null) return
+  if (!SHIPPED_FORMS.includes(ships as never)) {
+    issues.push({
+      code: 'unknown-shipped-form',
+      field: `${where}.ships`,
+      message: `Model family "${named}" declares that it ships ${JSON.stringify(ships)}; the supported forms are ${SHIPPED_FORMS.map((form) => `"${form}"`).join(' and ')}.`,
+    })
+    return
+  }
+
+  // The reference each form needs, and only that one: a family shipping predictions is
+  // looked up in an artifact, one shipping its model fetches the model. A missing
+  // reference is a family whose configurations could never be resolved at all.
+  const field = ships === 'predictions' ? 'predictions' : 'models'
+  if (!isNonEmptyString(family[field])) {
+    issues.push({
+      code: 'missing-field',
+      field: `${where}.${field}`,
+      message: `Model family "${named}" ships ${JSON.stringify(ships)} and so must name where its ${field} are served from.`,
+    })
+  }
+}
+
+/** Refuses a family that cannot be recognised in a labour slot. */
+function checkSlot(
+  slot: unknown,
+  named: string,
+  where: string,
+  issues: ValidationIssue[],
+): void {
+  if (slot === undefined || slot === null) return
+  if (!isRecord(slot)) {
+    issues.push({
+      code: 'malformed-field',
+      field: `${where}.slot`,
+      message: `Field "${where}.slot" must be an object.`,
+    })
+    return
+  }
+  for (const field of ['icon', 'label'] as const) {
+    if (!isNonEmptyString(slot[field])) {
+      issues.push({
+        code: 'missing-field',
+        field: `${where}.slot.${field}`,
+        message: `Model family "${named}" declares no non-empty slot ${field}, so nothing could name it on the farm.`,
       })
     }
   }
 }
 
 /**
+ * Refuses a declared history with nothing to call its axis.
+ *
+ * The block is optional — a family that records no history declares none, and is not
+ * presented with an empty curve. Declaring one without an axis is the case that would
+ * leave a screen to supply a term of its own, which is exactly what moving the label into
+ * the declaration exists to stop.
+ */
+function checkHistory(
+  history: unknown,
+  named: string,
+  where: string,
+  issues: ValidationIssue[],
+): void {
+  if (history === undefined || history === null) return
+  if (!isRecord(history)) {
+    issues.push({
+      code: 'malformed-field',
+      field: `${where}.history`,
+      message: `Field "${where}.history" must be an object.`,
+    })
+    return
+  }
+  if (!isNonEmptyString(history.axis)) {
+    issues.push({
+      code: 'missing-field',
+      field: `${where}.history.axis`,
+      message: `Model family "${named}" records a training history but names nothing for its axis, so no screen could label it.`,
+    })
+  }
+}
+
+/**
+ * Every field a tutorial must carry before it can be posed.
+ *
+ * `disclosure` is among them rather than optional. A tutorial simplifies the model it
+ * teaches — that is what makes it a tutorial — and a simplification a student would
+ * notice by reading the source has to be stated where the puzzle is. Requiring the field
+ * is what makes that obligation hold for every kind added later, rather than resting on
+ * one body's prose.
+ */
+export const REQUIRED_TUTORIAL_FIELDS = [
+  'id',
+  'title',
+  'teaching',
+  'disclosure',
+  'kind',
+  'puzzle',
+] as const
+
+/**
+ * Refuses a tutorial the frame could not pose, or a puzzle its kind could not be solved.
+ *
+ * Three layers, in order, because each depends on the one before it. The envelope is the
+ * frame's business — an id to record completion against, a title and copy to present, a
+ * kind to dispatch on. Past `kind` nothing here understands the data, so it is handed to
+ * the registered kind: first to be checked for shape, and then, only if that passed, to be
+ * asked whether it can be solved at all.
+ *
+ * The winnability question is asked here rather than left to a screen because a student
+ * locked out by authored data is locked out somewhere no screen can explain. It is the same
+ * argument that puts every other structural impossibility in this file.
+ */
+function checkTutorial(
+  tutorial: unknown,
+  named: string,
+  where: string,
+  kinds: TutorialKinds,
+  declared: TaskDeclaration,
+  issues: ValidationIssue[],
+): void {
+  // Optional, and a family declaring none is fielded the moment it is owned.
+  if (tutorial === undefined || tutorial === null) return
+  const at = `${where}.tutorial`
+  if (!isRecord(tutorial)) {
+    issues.push({
+      code: 'malformed-field',
+      field: at,
+      message: `Field "${at}" must be an object.`,
+    })
+    return
+  }
+
+  for (const field of REQUIRED_TUTORIAL_FIELDS) {
+    if (tutorial[field] === undefined || tutorial[field] === null) {
+      issues.push({
+        code: 'missing-field',
+        field: `${at}.${field}`,
+        message: `The tutorial of model family "${named}" is missing required field "${field}".`,
+      })
+    }
+  }
+
+  for (const field of ['id', 'title', 'disclosure', 'kind'] as const) {
+    if (tutorial[field] !== undefined && !isNonEmptyString(tutorial[field])) {
+      issues.push({
+        code: 'malformed-field',
+        field: `${at}.${field}`,
+        message: `Field "${at}.${field}" must be a non-empty string.`,
+      })
+    }
+  }
+
+  if (tutorial.teaching !== undefined) checkTeaching(tutorial.teaching, `${at}.teaching`, issues)
+
+  if (!isNonEmptyString(tutorial.kind)) return
+  const kind = tutorialKind(tutorial.kind, kinds)
+  if (kind === undefined) {
+    // Refused rather than ignored: a tutorial that silently poses nothing is a gate that
+    // silently opens, and the family behind it would be fielded without the lesson.
+    issues.push({
+      code: 'unknown-tutorial-kind',
+      field: `${at}.kind`,
+      message: `The tutorial of model family "${named}" is of kind ${JSON.stringify(tutorial.kind)}, which this build does not carry.`,
+    })
+    return
+  }
+
+  if (tutorial.puzzle === undefined || tutorial.puzzle === null) return
+  const defects = kind.check(tutorial.puzzle, `${at}.puzzle`, declared)
+  if (defects.length > 0) {
+    // The kind's own cause, kept verbatim, with the family named in front of it. Every
+    // other refusal in here names the family, and an author reading "the puzzle names
+    // category X, which this task does not declare" against a task with several families
+    // would otherwise have to count array indices to find which one said it.
+    issues.push(
+      ...defects.map((defect) => ({
+        ...defect,
+        message: `In the tutorial of model family "${named}": ${defect.message}`,
+      })),
+    )
+    // Winnability over malformed data would report a second, derived cause for the same
+    // defect, and the author would have to guess which one to fix.
+    return
+  }
+
+  const winnable = kind.winnable(tutorial.puzzle)
+  if (!winnable.ok) {
+    issues.push({
+      code: 'unwinnable-tutorial',
+      field: `${at}.puzzle`,
+      message: `The tutorial ${JSON.stringify(isNonEmptyString(tutorial.id) ? tutorial.id : '')} of model family "${named}" cannot be solved: ${winnable.cause}`,
+    })
+  }
+}
+
+/**
+ * Refuses two families that declare one tutorial id and disagree about what it is.
+ *
+ * Completion is recorded against the tutorial's id and nothing else, so that a student
+ * meets each lesson exactly once however many families teach it. That only holds while one
+ * id means one puzzle: two that disagree would let passing either stand for both, and
+ * nothing could say which lesson the student actually sat.
+ *
+ * Deep equality over the declared JSON, because a tutorial is declared data all the way
+ * down and two authors writing "the same" puzzle twice is precisely the mistake worth
+ * catching at load.
+ */
+function checkTutorialAgreement(families: readonly unknown[], issues: ValidationIssue[]): void {
+  const seen = new Map<string, unknown>()
+  families.forEach((family, index) => {
+    if (!isRecord(family)) return
+    const tutorial = family.tutorial
+    if (!isRecord(tutorial) || !isNonEmptyString(tutorial.id)) return
+    const first = seen.get(tutorial.id)
+    if (first === undefined) {
+      seen.set(tutorial.id, tutorial)
+      return
+    }
+    if (JSON.stringify(first) === JSON.stringify(tutorial)) return
+    issues.push({
+      code: 'disagreeing-tutorial',
+      field: `families[${index}].tutorial.id`,
+      message: `Tutorial id ${JSON.stringify(tutorial.id)} is declared twice with different content; one completion cannot stand for two different puzzles.`,
+    })
+  })
+}
+
+/**
+ * Validates the families a task declares.
+ *
+ * At least one, because a task with no family offers no model and could never be
+ * configured; and no two sharing an id, because an id is what a labour slot, a save and
+ * an artifact all name a family by.
+ */
+function checkFamilies(
+  families: unknown,
+  kinds: TutorialKinds,
+  declared: TaskDeclaration,
+  datasetIds: readonly string[],
+  issues: ValidationIssue[],
+): void {
+  if (!Array.isArray(families) || families.length === 0) {
+    issues.push({
+      code: 'no-families',
+      field: 'families',
+      message: 'Field "families" must declare at least one model family; a task with none offers no model to make.',
+    })
+    return
+  }
+
+  checkTutorialAgreement(families, issues)
+
+  const seen: string[] = []
+  families.forEach((family, index) => {
+    const id = checkFamily(family, index, kinds, declared, datasetIds, issues)
+    if (id === undefined) return
+    if (seen.includes(id)) {
+      issues.push({
+        code: 'duplicate-id',
+        field: `families[${index}].id`,
+        message: `Field "families" declares id "${id}" more than once.`,
+      })
+    }
+    seen.push(id)
+  })
+}
+
+/**
+ * Fields that were the task's and are now each family's.
+ *
+ * Refused rather than ignored: a declaration still carrying task-level knobs would load
+ * with them silently dropped, and its author would see a workshop with the wrong controls
+ * rather than a message naming where they moved to.
+ */
+const MOVED_TO_FAMILY = ['knobs', 'predictions', 'diagram'] as const
+
+/**
+ * Fields a family may not declare, because they are the task's.
+ *
+ * The test for the split is whether two families of one task could disagree about the
+ * field. They cannot disagree about which photographs of the orchard exist, and they must
+ * be able to disagree about which of them each is fitted on — so the tiers are the task's
+ * and the knob that picks one is the family's.
+ */
+const BELONGS_TO_TASK = ['datasets'] as const
+
+/**
  * Validates a candidate declaration. On success the input is returned narrowed
  * to `TaskDeclaration`; on failure every issue found is reported, each naming
  * the field it concerns.
  */
-export function validateDeclaration(input: unknown): DeclarationValidation {
+export interface ValidationOptions {
+  /**
+   * The tutorial kinds to check declared tutorials against.
+   *
+   * Threaded rather than reached for, so that a test can pose a fixture puzzle without a
+   * test-only kind having to ship in the registry the browser loads.
+   */
+  readonly tutorialKinds?: TutorialKinds
+}
+
+export function validateDeclaration(
+  input: unknown,
+  options: ValidationOptions = {},
+): DeclarationValidation {
+  const kinds = options.tutorialKinds ?? TUTORIAL_KINDS
   if (!isRecord(input)) {
     return {
       ok: false,
@@ -1045,7 +1975,7 @@ export function validateDeclaration(input: unknown): DeclarationValidation {
     }
   }
 
-  for (const field of ['id', 'title', 'pool', 'predictions'] as const) {
+  for (const field of ['id', 'title', 'pool'] as const) {
     if (input[field] !== undefined && !isNonEmptyString(input[field])) {
       issues.push({
         code: 'malformed-field',
@@ -1070,7 +2000,26 @@ export function validateDeclaration(input: unknown): DeclarationValidation {
   if (input.categoryActions !== undefined) {
     checkCategoryActions(input.categoryActions, categoryIds, actionIds, issues)
   }
-  if (input.knobs !== undefined) checkKnobs(input.knobs, issues)
+  // Refused where they used to be declared, naming where they now belong. A declaration
+  // written against the old shape is a real thing an author will have in front of them.
+  for (const field of MOVED_TO_FAMILY) {
+    if (input[field] === undefined) continue
+    issues.push({
+      code: 'belongs-to-family',
+      field,
+      message: `Field "${field}" is declared by each model family rather than by the task, because a task offers several families and they share none of them. Move it into "families".`,
+    })
+  }
+  // The declaration is handed down as declared rather than as validated: a family's
+  // tutorial is checked in the same pass that checks the vocabulary it is held to, and a
+  // kind reads that vocabulary defensively for exactly that reason.
+  // Tiers are read before the families, because every family's dataset knob is held to
+  // the ids they declare and to which of them is smallest.
+  const datasetIds =
+    input.datasets === undefined ? [] : checkDatasets(input.datasets, categoryIds, issues)
+  if (input.families !== undefined) {
+    checkFamilies(input.families, kinds, input as unknown as TaskDeclaration, datasetIds, issues)
+  }
   if (input.features !== undefined) checkFeatures(input.features, issues)
   if (input.ruleBudget !== undefined) checkRuleBudget(input.ruleBudget, issues)
   if (input.payoffs !== undefined) {
@@ -1081,14 +2030,14 @@ export function validateDeclaration(input: unknown): DeclarationValidation {
     checkHandSorting(input.handSorting, categoryIds, issues)
   }
   if (input.policy !== undefined) checkPolicy(input.policy, categoryIds, actionIds, issues)
-  if (input.teaching !== undefined) checkTeaching(input.teaching, issues)
 
-  // Optional, so absence is not an issue. Checked only against knobs sound enough to
-  // refer to; otherwise the knob issues already name the cause.
-  if (input.diagram !== undefined) {
-    const referrable = referrableKnobs(input.knobs)
-    if (referrable !== undefined) checkDiagram(input.diagram, referrable, issues)
+  // Optional, so absence is not an issue and nothing is reported as missing for a task
+  // that declares none — which is the whole of what "a task without one behaves as though
+  // the concept did not exist" means at load time.
+  if (input.delivery !== undefined && input.delivery !== null) {
+    checkDelivery(input.delivery, input.categoryActions, categoryIds, actionIds, issues)
   }
+  if (input.teaching !== undefined) checkTeaching(input.teaching, 'teaching', issues)
 
   if (input.available !== undefined && typeof input.available !== 'boolean') {
     issues.push({

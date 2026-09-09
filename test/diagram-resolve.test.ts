@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { blockSizes } from '../src/task/cnn.js'
 import { layersOf, resolveArchitecture } from '../src/task/diagram.js'
+import { firstFamily } from '../src/task/families.js'
 import type { ChoiceKnob, TaskDeclaration } from '../src/task/types.js'
 import { validateDeclaration } from '../src/task/validate.js'
 import { cnnTask, feedforwardTask, rawCnnTask, rawFeedforwardTask } from './helpers/architectures'
@@ -17,48 +18,56 @@ import { cnnTask, feedforwardTask, rawCnnTask, rawFeedforwardTask } from './help
 const feedforward = feedforwardTask()
 const cnn = cnnTask()
 
-/** The feedforward diagram of a task, narrowed. */
+/** The feedforward diagram of a task's one family, narrowed. */
 function feedforwardDiagram(declaration: TaskDeclaration) {
-  const diagram = declaration.diagram
+  const diagram = firstFamily(declaration).diagram
   if (diagram?.kind !== 'feedforward') throw new Error('expected a feedforward task')
   return diagram
 }
 
-/** The convolutional diagram of a task, narrowed. */
+/** The convolutional diagram of a task's one family, narrowed. */
 function cnnDiagram(declaration: TaskDeclaration) {
-  const diagram = declaration.diagram
+  const diagram = firstFamily(declaration).diagram
   if (diagram?.kind !== 'cnn') throw new Error('expected a convolutional task')
   return diagram
 }
 
 /** The knob a diagram field names, as a choice knob. */
 function choiceKnob(declaration: TaskDeclaration, knobId: string): ChoiceKnob {
-  const knob = declaration.knobs.find((candidate) => candidate.id === knobId)
+  const knob = firstFamily(declaration).knobs.find((candidate) => candidate.id === knobId)
   if (knob?.kind !== 'choice') throw new Error(`${knobId} is expected to be a choice knob`)
   return knob
 }
 
-/** Default values of a task with some knobs overridden. */
+/** Default values of a task's one family with some knobs overridden. */
 function valuesOf(
   declaration: TaskDeclaration,
   overrides: Readonly<Record<string, string | number>> = {},
 ) {
   return {
-    ...Object.fromEntries(declaration.knobs.map((knob) => [knob.id, knob.default])),
+    ...Object.fromEntries(firstFamily(declaration).knobs.map((knob) => [knob.id, knob.default])),
     ...overrides,
   }
 }
 
+/** The architecture of a task's one family, resolved. */
+function resolve(
+  declaration: TaskDeclaration,
+  overrides: Readonly<Record<string, string | number>> = {},
+) {
+  return resolveArchitecture(declaration, firstFamily(declaration), valuesOf(declaration, overrides))
+}
+
 /** The resolved architecture of a task, narrowed to the fully-connected kind. */
 function resolveFeedforward(overrides: Readonly<Record<string, string | number>> = {}) {
-  const resolved = resolveArchitecture(feedforward, valuesOf(feedforward, overrides))
+  const resolved = resolve(feedforward, overrides)
   if (resolved?.kind !== 'feedforward') return undefined
   return resolved
 }
 
 /** The resolved architecture of a task, narrowed to the convolutional kind. */
 function resolveCnn(overrides: Readonly<Record<string, string | number>> = {}) {
-  const resolved = resolveArchitecture(cnn, valuesOf(cnn, overrides))
+  const resolved = resolve(cnn, overrides)
   if (resolved?.kind !== 'cnn') return undefined
   return resolved
 }
@@ -79,6 +88,29 @@ function twoCategories(raw: Record<string, unknown>): TaskDeclaration {
   copy.categoryActions = { ripe: 'take', unripe: 'leave' }
   copy.payoffs = { ripe: { take: 4, leave: 0 }, unripe: { take: -1, leave: 0 } }
   copy.policy = { kind: 'highest-probability' }
+  // A tier's composition is a count of its task's categories, so the photographs are this
+  // task's own too, for the same reason the delivery term below is.
+  copy.datasets = [
+    {
+      id: 'starter',
+      label: 'The photographs it came with',
+      size: 40,
+      composition: { ripe: 25, unripe: 15 },
+      labelQuality: 'checked',
+      disclosure: 'Somebody went through every one of these before they were handed over.',
+    },
+  ]
+  // The dataset knob's values are tier ids, so narrowing the tiers narrows the knob with
+  // them: a knob permitting a set the task no longer declares is refused at load.
+  copy.families = (copy.families as Record<string, unknown>[]).map((family) => ({
+    ...family,
+    knobs: (family.knobs as Record<string, unknown>[]).map((knob) =>
+      knob.id === family.datasetKnob ? { ...knob, values: ['starter'], default: 'starter' } : knob,
+    ),
+  }))
+  // A delivery term names categories and actions, and this task's are its own. Carrying
+  // the shipped one over would name a vocabulary nothing here declares.
+  delete copy.delivery
   const validated = validateDeclaration(copy)
   if (!validated.ok) throw new Error(validated.issues.map((issue) => issue.message).join(' '))
   return validated.declaration
@@ -86,14 +118,14 @@ function twoCategories(raw: Record<string, unknown>): TaskDeclaration {
 
 describe('a task is read as the family it declares', () => {
   it('reads a convolutional task as convolutional', () => {
-    const resolved = resolveArchitecture(cnn, valuesOf(cnn))
+    const resolved = resolve(cnn)
 
     expect(resolved?.kind).toBe('cnn')
     expect(resolved).not.toHaveProperty('hidden')
   })
 
   it('reads a fully-connected task as fully-connected', () => {
-    const resolved = resolveArchitecture(feedforward, valuesOf(feedforward))
+    const resolved = resolve(feedforward)
 
     expect(resolved?.kind).toBe('feedforward')
     expect(resolved).not.toHaveProperty('blocks')
@@ -101,11 +133,12 @@ describe('a task is read as the family it declares', () => {
 
   it('substitutes no family for a task declaring no architecture', () => {
     const raw = rawCnnTask()
-    delete raw.diagram
+    const families = raw.families as Record<string, unknown>[]
+    delete (families[0] as Record<string, unknown>).diagram
     const validated = validateDeclaration(raw)
     if (!validated.ok) throw new Error('a declaration without a diagram should validate')
 
-    expect(resolveArchitecture(validated.declaration, valuesOf(validated.declaration))).toBeUndefined()
+    expect(resolve(validated.declaration)).toBeUndefined()
   })
 })
 
@@ -292,7 +325,7 @@ describe('the classifier head of a convolutional task', () => {
   it('provides a place for a declared dropout knob to act', () => {
     // The task declares a dropout knob, so its architecture has to have somewhere to
     // apply dropout; a knob a student turns to no effect teaches that it does not matter.
-    expect(cnn.knobs.some((knob) => knob.id === 'dropout')).toBe(true)
+    expect(firstFamily(cnn).knobs.some((knob) => knob.id === 'dropout')).toBe(true)
     expect(resolveCnn()?.head.appliesDropout).toBe(true)
   })
 
@@ -304,7 +337,7 @@ describe('the classifier head of a convolutional task', () => {
   it('follows the categories rather than the diagram block', () => {
     const declaration = twoCategories(rawCnnTask())
 
-    const resolved = resolveArchitecture(declaration, valuesOf(declaration))
+    const resolved = resolve(declaration)
 
     expect(resolved?.kind === 'cnn' ? resolved.head.outputs : undefined).toBe(2)
   })
@@ -319,7 +352,7 @@ describe('the output layer of a fully-connected task', () => {
   it('follows the categories rather than the diagram block', () => {
     const declaration = twoCategories(rawFeedforwardTask())
 
-    const resolved = resolveArchitecture(declaration, valuesOf(declaration))
+    const resolved = resolve(declaration)
 
     expect(resolved?.kind === 'feedforward' ? resolved.outputs : undefined).toBe(2)
   })
@@ -331,10 +364,10 @@ describe('the labels the disclosure needs', () => {
     const resolved = resolveFeedforward()
 
     expect(resolved?.layersLabel).toBe(
-      feedforward.knobs.find((knob) => knob.id === diagram.layersKnob)?.label,
+      firstFamily(feedforward).knobs.find((knob) => knob.id === diagram.layersKnob)?.label,
     )
     expect(resolved?.unitsLabel).toBe(
-      feedforward.knobs.find((knob) => knob.id === diagram.unitsKnob)?.label,
+      firstFamily(feedforward).knobs.find((knob) => knob.id === diagram.unitsKnob)?.label,
     )
     expect(resolved?.layersLabel).not.toBe(diagram.layersKnob)
     expect(resolved?.unitsLabel).not.toBe(diagram.unitsKnob)
@@ -345,10 +378,10 @@ describe('the labels the disclosure needs', () => {
     const resolved = resolveCnn()
 
     expect(resolved?.blocksLabel).toBe(
-      cnn.knobs.find((knob) => knob.id === diagram.blocksKnob)?.label,
+      firstFamily(cnn).knobs.find((knob) => knob.id === diagram.blocksKnob)?.label,
     )
     expect(resolved?.channelsLabel).toBe(
-      cnn.knobs.find((knob) => knob.id === diagram.channelsKnob)?.label,
+      firstFamily(cnn).knobs.find((knob) => knob.id === diagram.channelsKnob)?.label,
     )
     expect(resolved?.blocksLabel).not.toBe(diagram.blocksKnob)
     expect(resolved?.channelsLabel).not.toBe(diagram.channelsKnob)
@@ -359,29 +392,29 @@ describe('when there is nothing honest to draw', () => {
   it('resolves nothing for a fully-connected value the knob does not permit', () => {
     const diagram = feedforwardDiagram(feedforward)
 
-    expect(resolveArchitecture(feedforward, valuesOf(feedforward, { [diagram.unitsKnob]: 999 }))).toBeUndefined()
-    expect(resolveArchitecture(feedforward, valuesOf(feedforward, { [diagram.layersKnob]: 5 }))).toBeUndefined()
+    expect(resolve(feedforward, { [diagram.unitsKnob]: 999 })).toBeUndefined()
+    expect(resolve(feedforward, { [diagram.layersKnob]: 5 })).toBeUndefined()
   })
 
   it('resolves nothing for a convolutional value the knob does not permit', () => {
     const diagram = cnnDiagram(cnn)
 
-    expect(resolveArchitecture(cnn, valuesOf(cnn, { [diagram.channelsKnob]: 999 }))).toBeUndefined()
-    expect(resolveArchitecture(cnn, valuesOf(cnn, { [diagram.blocksKnob]: 5 }))).toBeUndefined()
+    expect(resolve(cnn, { [diagram.channelsKnob]: 999 })).toBeUndefined()
+    expect(resolve(cnn, { [diagram.blocksKnob]: 5 })).toBeUndefined()
   })
 
   it('resolves nothing when an unrelated knob value is out of range', () => {
     // The whole configuration is refused, so there is no configuration to draw.
-    const slider = cnn.knobs.find((knob) => knob.kind === 'slider')
+    const slider = firstFamily(cnn).knobs.find((knob) => knob.kind === 'slider')
     if (slider?.kind !== 'slider') throw new Error('the test task should declare a slider')
 
-    expect(resolveArchitecture(cnn, valuesOf(cnn, { [slider.id]: slider.max + 1 }))).toBeUndefined()
+    expect(resolve(cnn, { [slider.id]: slider.max + 1 })).toBeUndefined()
   })
 
   it('needs no run, no score and no screen to resolve either family', () => {
     // Nothing but a declaration and a set of values, which is what makes a second page
     // able to present an architecture.
-    expect(resolveArchitecture(cnn, valuesOf(cnn))).toBeDefined()
-    expect(resolveArchitecture(feedforward, valuesOf(feedforward))).toBeDefined()
+    expect(resolve(cnn)).toBeDefined()
+    expect(resolve(feedforward)).toBeDefined()
   })
 })

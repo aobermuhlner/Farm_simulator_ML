@@ -16,7 +16,8 @@
  */
 
 import type { ConfigurationEntry, SplitPredictions, TrainingEpoch } from './artifact.js'
-import type { TaskDeclaration } from './types.js'
+import { ID_SEPARATOR } from './configId.js'
+import type { ModelFamilyDeclaration, TaskDeclaration } from './types.js'
 import type { ValidationIssue } from './validate.js'
 import { checkArtifactVersion } from './version.js'
 
@@ -37,6 +38,15 @@ export interface Encoding {
 export interface ConfigurationRecord {
   readonly file: string
   readonly knobs: Readonly<Record<string, string | number>>
+  /**
+   * The dataset tier this configuration was fitted on.
+   *
+   * Recorded rather than read off the identifier's spelling: two configurations differing
+   * only in their tier are the comparison the tiers exist to teach, and a reviewer holding
+   * the artifact should be able to say which fitting set produced which curve. Checked
+   * against the identifier at load, so the two cannot drift apart.
+   */
+  readonly tier: string
   readonly epochs: number
   readonly seed: number
   readonly pipeline: { readonly revision: string; readonly dirty: boolean }
@@ -52,6 +62,8 @@ export interface ConfigurationRecord {
 export interface LoadedIndex {
   readonly schemaVersion: string
   readonly taskId: string
+  /** The model family these predictions were made by. */
+  readonly familyId: string
   readonly categories: readonly string[]
   readonly pool: PoolBinding
   readonly encoding: Encoding
@@ -76,6 +88,7 @@ const FORBIDDEN_FIELDS = ['category', 'truth', 'label', 'action', 'correct']
 const REQUIRED_RECORD_FIELDS = [
   'file',
   'knobs',
+  'tier',
   'epochs',
   'seed',
   'pipeline',
@@ -104,6 +117,26 @@ export function truthFieldsIn(value: unknown, path = ''): readonly string[] {
     }
   }
   return found
+}
+
+/**
+ * The value an identifier carries for one knob, or nothing when it carries none.
+ *
+ * Read off the identifier rather than off the recorded knobs, because the identifier is
+ * what a lookup resolves and the recorded knobs are provenance beside it. The parts are
+ * `knobId + value` joined by the separator, so the tier part is the suffix that follows
+ * the knob's id — and the dataset knob is declared last precisely so that this is a
+ * suffix rather than a scan.
+ */
+function tierIn(configurationId: string, knobId: string): string | undefined {
+  const parts = configurationId.split(ID_SEPARATOR)
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index] as string
+    if (part.startsWith(knobId) && part.length > knobId.length) {
+      return part.slice(knobId.length)
+    }
+  }
+  return undefined
 }
 
 function readRecord(
@@ -178,6 +211,7 @@ function readRecord(
 export function readArtifactIndex(
   raw: unknown,
   declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
   pool: PoolBinding,
 ): IndexValidation {
   const issues: ValidationIssue[] = []
@@ -191,6 +225,18 @@ export function readArtifactIndex(
       issues.push(issue('missing-field', `The artifact index declares no ${field}.`, field))
     }
   }
+  // Its own refusal, not one of the list above: an artifact recording no family is not
+  // read as belonging to the family that happens to be asking for it, because two
+  // families of one task can compose the same identifiers and the wrong one would answer.
+  if (raw.familyId === undefined) {
+    issues.push(
+      issue(
+        'artifact-family-missing',
+        'The artifact index records no model family id, and no family is assumed for it.',
+        'familyId',
+      ),
+    )
+  }
   if (issues.length > 0) return { ok: false, issues }
 
   const version = checkArtifactVersion(declaration.schemaVersion, String(raw.schemaVersion))
@@ -202,6 +248,16 @@ export function readArtifactIndex(
         'artifact-task-mismatch',
         `Artifact belongs to task "${String(raw.taskId)}", not "${declaration.id}".`,
         'taskId',
+      ),
+    )
+  }
+
+  if (raw.familyId !== family.id) {
+    issues.push(
+      issue(
+        'artifact-family-mismatch',
+        `Artifact belongs to model family "${String(raw.familyId)}", not "${family.id}".`,
+        'familyId',
       ),
     )
   }
@@ -275,7 +331,21 @@ export function readArtifactIndex(
   } else {
     for (const [id, value] of Object.entries(raw.configurations)) {
       const record = readRecord(id, value, issues)
-      if (record !== undefined) configurations[id] = record
+      if (record === undefined) continue
+      // The recorded tier and the identifier's own must agree, or the artifact offers two
+      // answers to "which photographs was this fitted on" and nothing can say which.
+      const carried = tierIn(id, family.datasetKnob)
+      if (carried !== record.tier) {
+        issues.push(
+          issue(
+            'artifact-tier-mismatch',
+            `Configuration "${id}" records dataset tier "${record.tier}", but its identifier carries "${String(carried)}".`,
+            id,
+          ),
+        )
+        continue
+      }
+      configurations[id] = record
     }
     if (Object.keys(raw.configurations).length === 0) {
       issues.push(
@@ -291,6 +361,7 @@ export function readArtifactIndex(
     index: {
       schemaVersion: String(raw.schemaVersion),
       taskId: String(raw.taskId),
+      familyId: String(raw.familyId),
       categories,
       pool: binding as unknown as PoolBinding,
       encoding: encoding as unknown as Encoding,
@@ -474,6 +545,11 @@ function readSplit(
  *
  * `imageIds` is the manifest's own enumeration per split, so completeness is judged
  * against the pool rather than against whatever the file happens to contain.
+ *
+ * `tierImages` is the same enumeration narrowed per dataset tier. Passed in rather than
+ * derived, for the same reason: only the pool knows which photographs a tier holds. A
+ * caller that omits it holds the configuration to the whole training split, which is what
+ * the contract said before tiers existed and what a tier spanning it still means.
  */
 export function readConfigurationFile(
   raw: unknown,
@@ -481,6 +557,7 @@ export function readConfigurationFile(
   index: LoadedIndex,
   configurationId: string,
   imageIds: Readonly<Record<string, readonly string[]>>,
+  tierImages?: Readonly<Record<string, readonly string[]>>,
 ): EntryValidation {
   const issues: ValidationIssue[] = []
   const record = index.configurations[configurationId]
@@ -514,6 +591,15 @@ export function readConfigurationFile(
       ),
     )
   }
+  if (raw.familyId !== index.familyId) {
+    issues.push(
+      issue(
+        'artifact-family-mismatch',
+        `Configuration "${configurationId}" belongs to model family "${String(raw.familyId)}", not "${index.familyId}".`,
+        configurationId,
+      ),
+    )
+  }
   const version = checkArtifactVersion(declaration.schemaVersion, String(raw.schemaVersion))
   if (!version.ok) issues.push(version.issue)
 
@@ -538,11 +624,32 @@ export function readConfigurationFile(
     )
   } else {
     for (const [split, ids] of Object.entries(imageIds)) {
+      // A configuration covers its own tier's training images and the whole evaluation
+      // pool. Carrying the rest of a large training split would pay for pictures its
+      // student cannot browse and its workshop never reports on — `prediction-artifacts`.
+      const held = split === 'training' ? tierImages?.[record.tier] : undefined
+      const expected = held ?? ids
+      const outside =
+        held === undefined
+          ? []
+          : Object.keys(rows[split] ?? {}).filter(
+              (imageId) => !held.includes(imageId) && ids.includes(imageId),
+            )
+      if (outside.length > 0) {
+        issues.push(
+          issue(
+            'image-outside-tier',
+            `Configuration "${configurationId}" predicts training image "${String(outside[0])}", which dataset tier "${record.tier}" does not hold.`,
+            configurationId,
+          ),
+        )
+        continue
+      }
       const split_ = readSplit(
         configurationId,
         split,
         rows[split],
-        ids,
+        expected,
         index.encoding,
         index.categories.length,
         issues,

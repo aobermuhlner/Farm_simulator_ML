@@ -37,14 +37,37 @@ const REGULARIZATION_KNOB = {
   help: 'How hard training pushes towards simpler answers.',
 } as const
 
-/** The shipped declaration with its knobs and architecture replaced. */
+/**
+ * The shipped declaration with its one family's knobs and architecture replaced.
+ *
+ * The family is rebuilt rather than the task, because that is where knobs and a drawing
+ * live: a task-level `knobs` is refused at load, which is the point of moving them.
+ */
 function taskWith(
   id: string,
   knobs: readonly Record<string, unknown>[],
   diagram: Record<string, unknown>,
 ): Record<string, unknown> {
   const raw = loadRawDeclaration('apple-harvest')
-  return { ...raw, id, title: id, knobs: [...knobs], diagram }
+  const families = raw.families as readonly Record<string, unknown>[]
+  const family = families[0] as Record<string, unknown>
+  const shipped = family.knobs as readonly Record<string, unknown>[]
+  // The task's own dataset knob rides along with the replaced set. Every family declares
+  // one — a model is always fitted on something — and these tasks keep the apple task's
+  // tiers because it is the apple task's declaration they are built from.
+  const dataset = shipped.find((knob) => knob.id === family.datasetKnob)
+  return {
+    ...raw,
+    id,
+    title: id,
+    families: [
+      {
+        ...family,
+        knobs: dataset === undefined ? [...knobs] : [...knobs, dataset],
+        diagram,
+      },
+    ],
+  }
 }
 
 /** A fully-connected task, as raw declaration data. */

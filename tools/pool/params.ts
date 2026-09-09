@@ -496,6 +496,43 @@ export const CATEGORY_COUNTS: Readonly<Record<SplitName, Readonly<Record<PoolCat
 }
 
 /**
+ * One dataset tier this pool authors: how many training images it holds, and how many of
+ * them it files under the wrong category.
+ *
+ * `holds` is cumulative, because membership nests — `specs/dataset-tiers/spec.md` requires
+ * every image of a smaller tier to belong to every larger one, so a tier is described by
+ * the size of the set it ends up with rather than by what it adds. The manifest then
+ * declares membership once, as the smallest tier an image enters at.
+ *
+ * `mislabels` is how many of those held images this tier files under a category other than
+ * their true one. It is a count rather than a share so that the authored figure is the one
+ * a declaration can state and a reader can check, with no rounding between them.
+ */
+export interface DatasetTier {
+  readonly id: string
+  /** Training images held, counting the ones the smaller tiers hold too. */
+  readonly holds: number
+  /** How many of them this tier files under another category. */
+  readonly mislabels: number
+}
+
+/**
+ * The tiers this pool authors, smallest first.
+ *
+ * One tier today, holding the whole training split and filing every apple correctly. The
+ * task declares three — `dataset-tiers`' proposal ships `bulk` and `checked` as declared,
+ * explained and unreachable — and a tier the pool holds no images for is accepted as a
+ * declaration precisely so that this list can grow later without the declaration moving.
+ *
+ * When it does grow, the numbers here are the whole of what has to change: the assignment
+ * in `tiers.ts` deals every (category, role) group across these tiers proportionally, so a
+ * new tier arrives with both roles and every category already in it.
+ */
+export const DATASET_TIERS: readonly DatasetTier[] = [
+  { id: 'starter', holds: SPLIT_SIZES.training, mislabels: 0 },
+]
+
+/**
  * The narrow band the fitted reds occupy.
  *
  * A property of the fitted role rather than of the training split: the split's held-out

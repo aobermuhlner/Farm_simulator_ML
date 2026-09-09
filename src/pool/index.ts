@@ -14,7 +14,7 @@
  * See openspec/changes/dataset-generation/specs/image-pool/spec.md.
  */
 
-import type { CategoryId, TaskDeclaration } from '../task/types.js'
+import type { CategoryId, DatasetTierId, TaskDeclaration } from '../task/types.js'
 import type { ValidationIssue } from '../task/validate.js'
 
 /** The splits a pool declares, named as the prediction artifact names them. */
@@ -78,6 +78,23 @@ export interface PoolImage {
   readonly cell: number
   /** Training images only. An evaluation-pool image carrying one is refused. */
   readonly role?: TrainingRole
+  /**
+   * The smallest dataset tier that holds this image. Training images only.
+   *
+   * Membership nests, so this declares the whole of it: every larger tier the pool
+   * authors holds the image too. An evaluation-pool image carrying one is refused — a
+   * tier is a portion of the training split, and a model fitted on the harvest cannot
+   * show the gap the splits exist to teach.
+   */
+  readonly tier?: DatasetTierId
+  /**
+   * What each tier holding this image files it under. Training images only.
+   *
+   * A claim rather than ground truth: `category` above is the only truth in the system,
+   * and a tier whose claim differs from it was labelled carelessly. Labels do not nest,
+   * so a checked tier may correct what a hurried one filed wrongly and both stand.
+   */
+  readonly tierLabels?: Readonly<Record<DatasetTierId, CategoryId>>
 }
 
 /** A pool that loaded, with the lookups its consumers need. */
@@ -99,6 +116,16 @@ export interface LoadedPool {
    * enumerating its keys must find two splits, not four.
    */
   readonly roles: Readonly<Record<TrainingRole, readonly string[]>>
+  /**
+   * Training image ids each declared tier holds, in the manifest's order.
+   *
+   * Every declared tier has an entry, and a tier the pool holds no images for has an
+   * empty one — that is how a tier is shown and explained before it is authored, and it
+   * makes "unreachable" a matter of an empty list rather than a missing key.
+   */
+  readonly tiers: Readonly<Record<DatasetTierId, readonly string[]>>
+  /** What each tier files each training image under, keyed by image id then tier id. */
+  readonly tierLabels: Readonly<Record<string, Readonly<Record<DatasetTierId, CategoryId>>>>
 }
 
 export type PoolValidation =
@@ -230,12 +257,103 @@ function checkFeatures(
   return ok
 }
 
+/**
+ * Checks one training image's entry tier and the label each holding tier files it under.
+ *
+ * Two rules, and the second is the one worth explaining. The keys must be exactly the
+ * tiers *the pool authors* from this image's entry tier upwards — not every tier the task
+ * declares. A task may declare a tier before its photographs exist, which is how a tier is
+ * shown and priced before it is authored, and such a tier holds nothing and files nothing.
+ * `authored` is therefore the largest tier index any image enters at, and a manifest that
+ * declared a label for a tier past it would be claiming a set the pool does not hold.
+ *
+ * A label from a *smaller* tier than the image's own entry is refused for the same reason
+ * in reverse: that tier does not hold the image, so it has nothing to say about it.
+ */
+function checkTierFields(
+  id: string,
+  value: Record<string, unknown>,
+  tierIds: readonly DatasetTierId[],
+  authored: number,
+  categories: readonly CategoryId[],
+  issues: ValidationIssue[],
+): boolean {
+  const tier = value.tier
+  if (tier === undefined) {
+    issues.push(issue('missing-tier', `Training image "${id}" declares no dataset tier.`, id))
+    return false
+  }
+  const entry = tierIds.indexOf(String(tier))
+  if (entry === -1) {
+    issues.push(
+      issue(
+        'unknown-tier',
+        `Training image "${id}" enters at dataset tier "${String(tier)}", which the task does not declare.`,
+        id,
+      ),
+    )
+    return false
+  }
+
+  const labels = value.tierLabels
+  if (!isRecord(labels)) {
+    issues.push(
+      issue(
+        'missing-tier-labels',
+        `Training image "${id}" declares no label for the tiers that hold it.`,
+        id,
+      ),
+    )
+    return false
+  }
+
+  const holding = tierIds.slice(entry, Math.max(entry, authored) + 1)
+  let ok = true
+  for (const held of holding) {
+    if (labels[held] !== undefined) continue
+    issues.push(
+      issue(
+        'missing-tier-label',
+        `Training image "${id}" is held by dataset tier "${held}" but declares no label for it.`,
+        id,
+      ),
+    )
+    ok = false
+  }
+  for (const [named, label] of Object.entries(labels)) {
+    if (!holding.includes(named)) {
+      issues.push(
+        issue(
+          'tier-does-not-hold',
+          `Training image "${id}" declares a label filed by dataset tier "${named}", which does not hold it.`,
+          id,
+        ),
+      )
+      ok = false
+      continue
+    }
+    if (!categories.includes(label as CategoryId)) {
+      issues.push(
+        issue(
+          'unknown-tier-label',
+          `Training image "${id}" is filed by dataset tier "${named}" under "${String(label)}", which the task does not declare as a category.`,
+          id,
+        ),
+      )
+      ok = false
+    }
+  }
+  return ok
+}
+
 function readImage(
   id: string,
   value: unknown,
   atlases: Readonly<Record<string, PoolAtlas>>,
   categories: readonly CategoryId[],
   features: readonly string[],
+  tierIds: readonly DatasetTierId[],
+  authored: number,
   issues: ValidationIssue[],
 ): PoolImage | undefined {
   if (!isRecord(value)) {
@@ -332,11 +450,24 @@ function readImage(
       )
       return undefined
     }
+    if (!checkTierFields(id, value, tierIds, authored, categories, issues)) return undefined
   } else if (value.role !== undefined) {
     issues.push(
       issue(
         'role-outside-training',
         `Image "${id}" is in split "${String(value.split)}" but declares training role "${String(value.role)}".`,
+        id,
+      ),
+    )
+    return undefined
+  } else if (value.tier !== undefined || value.tierLabels !== undefined) {
+    // A tier on an evaluation image says a model was fitted on the harvest, and a label
+    // there says a dataset makes a claim about a picture nobody was ever sold. Both are
+    // silent if permitted, and both would collapse the gap the two splits exist to teach.
+    issues.push(
+      issue(
+        'tier-outside-training',
+        `Image "${id}" is in split "${String(value.split)}" but declares dataset tier "${String(value.tier)}"; a tier is a portion of the training split alone.`,
         id,
       ),
     )
@@ -374,18 +505,22 @@ function checkInputResolution(
   atlases: Readonly<Record<string, PoolAtlas>>,
   issues: ValidationIssue[],
 ): void {
-  const diagram = declaration.diagram
-  if (diagram === undefined || diagram.kind !== 'cnn') return
+  // Every family that draws a convolutional stack, not just the first: each declares its
+  // own input resolution and each of them is a claim about the same images.
+  for (const family of declaration.families) {
+    const diagram = family.diagram
+    if (diagram === undefined || diagram.kind !== 'cnn') continue
 
-  for (const [id, atlas] of Object.entries(atlases)) {
-    if (atlas.cellSize !== diagram.inputSize) {
-      issues.push(
-        issue(
-          'input-size-mismatch',
-          `The task declares a ${diagram.inputSize}px input, but atlas "${id}" provides ${atlas.cellSize}px images.`,
-          `atlases.${id}.cellSize`,
-        ),
-      )
+    for (const [id, atlas] of Object.entries(atlases)) {
+      if (atlas.cellSize !== diagram.inputSize) {
+        issues.push(
+          issue(
+            'input-size-mismatch',
+            `Family "${family.id}" declares a ${diagram.inputSize}px input, but atlas "${id}" provides ${atlas.cellSize}px images.`,
+            `atlases.${id}.cellSize`,
+          ),
+        )
+      }
     }
   }
 }
@@ -423,6 +558,76 @@ function checkContaminants(
       }
     }
   }
+}
+
+/**
+ * Checks each declared tier's size and composition against the images the manifest gives it.
+ *
+ * `specs/dataset-tiers/spec.md` — a tier the pool holds no images for is accepted as a
+ * declaration, so that a tier can be shown and explained before it is authored. It becomes
+ * unreachable rather than special: no prediction artifact covers a configuration naming it
+ * and no item that opens it may carry a price, so the existing untrained and locked
+ * refusals answer for it and no new kind of refusal is introduced here.
+ *
+ * The composition is counted over the labels the tier *files* its images under rather than
+ * over their true categories, because those are the counts a student is sold and the ones
+ * the browser states. A tier that under-counts a category because it filed some of it
+ * elsewhere declares the count it filed.
+ */
+function checkTiers(
+  declaration: TaskDeclaration,
+  images: Readonly<Record<string, PoolImage>>,
+  training: readonly string[],
+  issues: ValidationIssue[],
+): Readonly<Record<DatasetTierId, readonly string[]>> {
+  const tierIds = declaration.datasets.map((tier) => tier.id)
+  const held: Record<DatasetTierId, string[]> = Object.fromEntries(
+    tierIds.map((id) => [id, [] as string[]]),
+  )
+
+  for (const id of training) {
+    const entry = images[id]?.tier
+    if (entry === undefined) continue
+    const from = tierIds.indexOf(entry)
+    if (from === -1) continue
+    // Nesting, applied once here rather than at every reader: an image entering at one
+    // tier is held by that tier and by every larger one the pool authors.
+    for (const tierId of tierIds.slice(from)) {
+      if (held[tierId] === undefined) continue
+      if (images[id]?.tierLabels?.[tierId] === undefined) continue
+      held[tierId]?.push(id)
+    }
+  }
+
+  for (const tier of declaration.datasets) {
+    const ids = held[tier.id] ?? []
+    if (ids.length === 0) continue
+
+    if (ids.length !== tier.size) {
+      issues.push(
+        issue(
+          'tier-size-mismatch',
+          `Dataset tier "${tier.id}" declares ${tier.size} photographs but the manifest assigns it ${ids.length}.`,
+          `datasets.${tier.id}.size`,
+        ),
+      )
+    }
+    for (const category of declaration.categories) {
+      const filed = ids.filter((id) => images[id]?.tierLabels?.[tier.id] === category.id).length
+      const declared = tier.composition[category.id] ?? 0
+      if (filed !== declared) {
+        issues.push(
+          issue(
+            'tier-composition-mismatch',
+            `Dataset tier "${tier.id}" declares ${declared} photographs of category "${category.id}" but files ${filed} under it.`,
+            `datasets.${tier.id}.composition.${category.id}`,
+          ),
+        )
+      }
+    }
+  }
+
+  return held
 }
 
 function checkRoles(
@@ -556,14 +761,34 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
   const truth: Record<string, CategoryId> = {}
   const order: Record<PoolSplit, string[]> = { training: [], pool: [] }
   const roles: Record<TrainingRole, string[]> = { fitted: [], heldOut: [] }
+  const tierLabels: Record<string, Readonly<Record<DatasetTierId, CategoryId>>> = {}
+
+  // How far up the declared ladder this pool actually reaches, read once before the
+  // images so that every entry is held to the same answer. A task may declare a tier
+  // whose photographs do not exist yet; such a tier holds nothing and files nothing.
+  const tierIds = declaration.datasets.map((tier) => tier.id)
+  const authored = Object.values(raw.images).reduce<number>((highest, value) => {
+    const named = isRecord(value) ? tierIds.indexOf(String(value.tier)) : -1
+    return Math.max(highest, named)
+  }, 0)
 
   for (const [id, value] of Object.entries(raw.images)) {
-    const image = readImage(id, value, atlases, categories, featureIds, issues)
+    const image = readImage(
+      id,
+      value,
+      atlases,
+      categories,
+      featureIds,
+      tierIds,
+      authored,
+      issues,
+    )
     if (image === undefined) continue
     images[id] = image
     truth[id] = image.category
     order[image.split].push(id)
     if (image.role !== undefined) roles[image.role].push(id)
+    if (image.tierLabels !== undefined) tierLabels[id] = image.tierLabels
   }
 
   if (!isRecord(raw.splits)) {
@@ -617,6 +842,7 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
   }
 
   checkRoles(raw.splits.training, roles, images, categories, issues)
+  const tiers = checkTiers(declaration, images, order.training, issues)
 
   if (issues.length > 0) return { ok: false, issues }
 
@@ -631,6 +857,8 @@ export function readPool(raw: unknown, declaration: TaskDeclaration): PoolValida
       truth,
       order: { training: order.training, pool: order.pool },
       roles: { fitted: roles.fitted, heldOut: roles.heldOut },
+      tiers,
+      tierLabels,
     },
   }
 }

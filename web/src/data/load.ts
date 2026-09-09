@@ -10,25 +10,32 @@
  * artifact is `readArtifactIndex` / `readConfigurationFile`. This module only fetches and
  * hands off.
  *
- * A task loads its declaration, its pool and its artifact *index*. It does not load any
- * configuration's predictions: those arrive when a student runs one, so choosing a
- * configuration transfers that configuration and not the others.
+ * A task loads its declaration, its pool and one *index* per declared family. It does not
+ * load any configuration's predictions or any family's model: those arrive when a student
+ * runs one, so choosing a configuration transfers that configuration and not the others,
+ * and selecting a family transfers nothing belonging to the task's other families.
  */
 
-import type { ConfigurationEntry } from '../../../src/task/artifact.js'
+import type { FamilyEntry } from '../../../src/families/index.js'
 import {
-  coverageIssue,
-  readArtifactIndex,
-  readConfigurationFile,
-  type LoadedIndex,
-} from '../../../src/task/artifactIndex.js'
+  familyCoverageIssue,
+  readFamilyStore,
+  resolveFamilyEntry,
+} from '../../../src/families/index.js'
+import type { LoadedIndex } from '../../../src/task/artifactIndex.js'
 import type { LoadedPool } from '../../../src/pool/index.js'
 import { readPool } from '../../../src/pool/index.js'
 import type { FarmDeclaration } from '../../../src/economy/index.js'
 import { validateFarmDeclaration } from '../../../src/economy/index.js'
-import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
+import type {
+  CategoryId,
+  FamilyId,
+  ModelFamilyDeclaration,
+  TaskDeclaration,
+} from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
+import { tutorialAgreementIssues } from '../../../src/tutorials/index.js'
 import type { Catalog } from '../../../src/progression/index.js'
 import {
   checkCatalogAgainstTasks,
@@ -49,16 +56,45 @@ export type Loaded<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly issues: readonly ValidationIssue[] }
 
+/**
+ * One family's store, as it was loaded: what it covers, and where each file sits.
+ *
+ * `index` is present only for a family whose predictions ship — it carries the encoding
+ * and the provenance a prediction table is read against. A family whose model ships has
+ * coverage and files and nothing else to read against, because its models carry their own
+ * numbers and are checked when they are read.
+ */
+export interface LoadedFamily {
+  readonly family: ModelFamilyDeclaration
+  /** Every configuration this family has a model for. */
+  readonly coverage: readonly string[]
+  /** Configuration identifier to the file it sits in, beside this family's index. */
+  readonly files: Readonly<Record<string, string>>
+  /** Where this family's index was fetched from; its files sit beside it. */
+  readonly indexUrl: string
+  /** The prediction artifact index, for a family whose predictions ship. */
+  readonly index?: LoadedIndex
+}
+
 /** Everything one task needs before it can be configured and run. */
 export interface LoadedTask {
   readonly declaration: TaskDeclaration
-  /** Coverage, the pool binding and the provenance — no predictions. */
-  readonly index: LoadedIndex
+  /** One entry per declared family: coverage and the pool binding, never a prediction. */
+  readonly families: Readonly<Record<FamilyId, LoadedFamily>>
   /** True category per image id, from the pool manifest, which is its only source. */
   readonly truth: Readonly<Record<string, CategoryId>>
   /** Image ids per split, as the manifest enumerates them. */
   readonly imageIds: Readonly<Record<string, readonly string[]>>
+  /** Training image ids per dataset tier, as the manifest assigns them. */
+  readonly tierImages: Readonly<Record<string, readonly string[]>>
+  /** The numbers measured of each image, for a family that evaluates its own model. */
+  readonly features: Readonly<Record<string, Readonly<Record<string, number>>>>
   readonly paths: TaskDataPaths
+}
+
+/** The family a task declares under this id, as it was loaded. */
+export function loadedFamily(task: LoadedTask, familyId: FamilyId): LoadedFamily | undefined {
+  return task.families[familyId]
 }
 
 function issue(code: string, message: string, field?: string): ValidationIssue {
@@ -152,68 +188,132 @@ export async function loadTask(declarationUrl: string): Promise<Loaded<LoadedTas
       issues: [
         issue(
           'data-unserved',
-          `Task "${declaration.id}" names pool "${declaration.pool}" and predictions "${declaration.predictions}", and this build serves at least one of them from nowhere.`,
+          `Task "${declaration.id}" names pool "${declaration.pool}" and one store per model family, and this build serves at least one of them from nowhere.`,
           declaration.id,
         ),
       ],
     }
   }
 
-  const [pool, rawIndex] = await Promise.all([
-    loadPool(paths.pool, declaration),
-    fetchJson(paths.predictions),
-  ])
+  const pool = await loadPool(paths.pool, declaration)
   if (!pool.ok) return pool
-  if (!rawIndex.ok) return rawIndex
-
-  const index = readArtifactIndex(rawIndex.value, declaration, {
+  const binding = {
     poolId: pool.value.poolId,
     schemaVersion: pool.value.schemaVersion,
     seed: pool.value.seed,
-  })
-  if (!index.ok) return { ok: false, issues: index.issues }
+  }
+
+  // Every family's index, in parallel: each is small, each is checked against this task,
+  // this family and this pool, and none of them carries a prediction or a model.
+  const loaded = await Promise.all(
+    declaration.families.map(async (family) => {
+      const url = paths.families[family.id]
+      if (url === undefined) {
+        return {
+          ok: false as const,
+          issues: [
+            issue(
+              'data-unserved',
+              `Family "${family.id}" of task "${declaration.id}" is served from nowhere.`,
+              family.id,
+            ),
+          ],
+        }
+      }
+      return readFamilyIndex(url, declaration, family, binding)
+    }),
+  )
+  const refused = loaded.find((result) => !result.ok)
+  if (refused !== undefined && !refused.ok) return refused
+
+  const families: Record<string, LoadedFamily> = {}
+  for (const result of loaded) if (result.ok) families[result.value.family.id] = result.value
 
   return {
     ok: true,
     value: {
       declaration,
-      index: index.index,
+      families,
       truth: pool.value.truth,
       imageIds: { training: pool.value.order.training, pool: pool.value.order.pool },
+      tierImages: pool.value.tiers,
+      features: Object.fromEntries(
+        Object.entries(pool.value.images).map(([id, image]) => [id, image.features]),
+      ),
       paths,
     },
   }
 }
 
 /**
- * Fetches one configuration's predictions and history.
+ * Fetches one family's index and hands it to the reader its shipped form calls for.
  *
- * Coverage is checked before anything is fetched, so a configuration no model was
- * trained for refuses as `untrained-configuration` — naming it, and distinct from an
- * invalid configuration — instead of arriving as a 404 with nothing to say.
+ * The fetch is this module's job; which reader is `src/families/`'s. Nothing here asks
+ * what a family ships, because a `FamilyStore` says the same thing whichever reader
+ * produced it — and a shell that asked would be a shell that could answer differently.
+ */
+async function readFamilyIndex(
+  url: string,
+  declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
+  pool: { readonly poolId: string; readonly schemaVersion: string; readonly seed: number },
+): Promise<Loaded<LoadedFamily>> {
+  const raw = await fetchJson(url)
+  if (!raw.ok) return raw
+
+  const read = readFamilyStore(raw.value, declaration, family, pool)
+  if (!read.ok) return { ok: false, issues: read.issues }
+  return { ok: true, value: { family, ...read.store, indexUrl: url } }
+}
+
+/**
+ * Fetches one configuration of one family, and resolves it to an entry.
+ *
+ * Coverage is checked before anything is fetched, so a configuration no model was made
+ * for refuses as `untrained-configuration` — naming the family and the identifier, and
+ * distinct from an invalid configuration — instead of arriving as a 404 with nothing to
+ * say. One request, whatever the family ships and however large the pool is.
  */
 export async function loadConfiguration(
   task: LoadedTask,
+  familyId: FamilyId,
   configurationId: string,
-): Promise<Loaded<ConfigurationEntry>> {
-  const uncovered = coverageIssue(task.index, configurationId)
+): Promise<Loaded<FamilyEntry>> {
+  const loaded = task.families[familyId]
+  if (loaded === undefined) {
+    return {
+      ok: false,
+      issues: [
+        issue(
+          'unknown-family',
+          `Task "${task.declaration.id}" declares no model family "${familyId}".`,
+          familyId,
+        ),
+      ],
+    }
+  }
+
+  const uncovered = familyCoverageIssue(loaded.family, loaded.coverage, configurationId)
   if (uncovered !== undefined) return { ok: false, issues: [uncovered] }
 
-  const record = task.index.configurations[configurationId]
-  if (record === undefined) return { ok: false, issues: [] }
+  const file = loaded.files[configurationId]
+  if (file === undefined) return { ok: false, issues: [] }
 
-  const raw = await fetchJson(configurationUrl(task.paths.predictions, record.file))
+  const raw = await fetchJson(configurationUrl(loaded.indexUrl, file))
   if (!raw.ok) return raw
 
-  const read = readConfigurationFile(
-    raw.value,
-    task.declaration,
-    task.index,
+  const resolved = resolveFamilyEntry({
+    declaration: task.declaration,
+    family: loaded.family,
     configurationId,
-    task.imageIds,
-  )
-  if (!read.ok) return { ok: false, issues: read.issues }
-  return { ok: true, value: read.entry }
+    document: raw.value,
+    imageIds: task.imageIds,
+    tierImages: task.tierImages,
+    ...(loaded.index === undefined ? {} : { index: loaded.index }),
+    features: task.features,
+  })
+  if (!resolved.ok) return { ok: false, issues: resolved.issues }
+  return { ok: true, value: resolved.entry }
 }
 
 /**
@@ -227,10 +327,15 @@ export async function loadShippedTasks(): Promise<Loaded<readonly LoadedTask[]>>
   const loaded = await Promise.all(SHIPPED_TASKS.map(loadTask))
   const failed = loaded.find((result) => !result.ok)
   if (failed !== undefined && !failed.ok) return failed
-  return {
-    ok: true,
-    value: loaded.flatMap((result) => (result.ok ? [result.value] : [])),
-  }
+  const tasks = loaded.flatMap((result) => (result.ok ? [result.value] : []))
+
+  // Checked once the tasks are in hand, because `validateDeclaration` is handed one
+  // declaration at a time and cannot see across them — while tutorial completion is
+  // recorded globally, so one id has to mean one puzzle across every task loaded.
+  const disagreeing = tutorialAgreementIssues(tasks.map((task) => task.declaration))
+  if (disagreeing.length > 0) return { ok: false, issues: disagreeing }
+
+  return { ok: true, value: tasks }
 }
 
 /**
@@ -276,7 +381,12 @@ export async function loadCatalog(
   if (references.length > 0) return { ok: false, issues: references }
 
   const coverage = Object.fromEntries(
-    tasks.map((task) => [task.declaration.id, task.index.coverage]),
+    tasks.map((task) => [
+      task.declaration.id,
+      Object.fromEntries(
+        Object.entries(task.families).map(([familyId, loaded]) => [familyId, loaded.coverage]),
+      ),
+    ]),
   )
   const untrained = checkCatalogCoverage(validated.catalog, declarations, coverage)
   if (untrained.length > 0) return { ok: false, issues: untrained }

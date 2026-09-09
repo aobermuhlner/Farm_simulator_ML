@@ -99,6 +99,44 @@ export type DecisionPolicyDeclaration =
  */
 export type PayoffTable = Readonly<Record<CategoryId, Readonly<Record<ActionId, number>>>>
 
+/**
+ * What the batch as a whole is worth, over and above what its images are worth one at a
+ * time.
+ *
+ * A payoff table prices a mistake per image, and a price list that can be reasoned about
+ * one image at a time can be hill-climbed one image at a time. A buyer does not work that
+ * way: they open the crates, find the share of them that is spoiled, and reprice the
+ * whole delivery. That is what makes a rare category worth more than the sum of its
+ * images, which is the lesson of imbalanced classification and is not expressible as a
+ * sum.
+ *
+ * Every field is general over what the task declares. Nothing here knows what the
+ * measured categories are or why delivering them is a mistake — `measures` names
+ * categories the task declares, `delivering` names actions it declares, and
+ * `task-contract` refuses a term that names anything else, that leaves no action outside
+ * the delivering ones, or that measures only categories the delivering actions were the
+ * right answer for.
+ *
+ * Optional on a task. A task whose mistakes are all priced adequately per image needs
+ * none, and one that declares none is valued exactly as though the concept did not exist.
+ */
+export interface DeliveryTerm {
+  /** The categories whose presence in a delivery is counted. At least one. */
+  readonly measures: readonly CategoryId[]
+  /** The actions that put an image into the delivery. At least one, never all of them. */
+  readonly delivering: readonly ActionId[]
+  /**
+   * The share of the delivery, at or above which the whole of it is repriced.
+   *
+   * Reached rather than exceeded: a buyer who accepts one in eight rejects the eighth.
+   */
+  readonly tolerance: number
+  /** The share at which the delivery is warned about, strictly below the tolerance. */
+  readonly warnAbove: number
+  /** What each delivered image is paid instead, once the tolerance is reached. */
+  readonly downgradedValue: number
+}
+
 /** The architectures a task can ask to have drawn. */
 export const DIAGRAM_KINDS = ['feedforward', 'cnn'] as const
 export type DiagramKind = (typeof DIAGRAM_KINDS)[number]
@@ -220,12 +258,14 @@ export interface FeatureDeclaration {
 }
 
 /**
- * How large a rule a student may ever write by hand for this task.
+ * How large a rule this task offers a student to write by hand.
  *
- * Declared here, at the maximum, rather than by whichever screen offers the rule builder:
- * the ladder guard checks that no rule within this budget out-scores the weakest shipped
- * model, and a guard checked at a smaller budget would prove nothing about the budget a
- * student eventually buys. Raising this number re-runs the guard by construction.
+ * Declared here rather than by whichever screen offers the rule builder, because the
+ * recorded position of hand-written rules against trained ones is taken at this number: a
+ * recording taken at a smaller budget would say nothing about the budget a student can
+ * actually reach. The two are coupled rather than fixed — a change that offers more nodes
+ * re-records the figures, which is what makes raising this number a decision somebody has
+ * to take deliberately instead of a screen's default.
  */
 export interface RuleBudgetDeclaration {
   /** Decision nodes, not leaves. Three nodes is a rule with three questions in it. */
@@ -236,6 +276,206 @@ export interface RuleBudgetDeclaration {
 export interface TeachingCopy {
   readonly summary: string
   readonly theory: string
+}
+
+export type DatasetTierId = string
+
+/**
+ * How faithfully a dataset tier files the images it holds.
+ *
+ * Two values, declared rather than derived. `specs/dataset-tiers/spec.md` — label quality
+ * "SHALL NOT be inferred from the tier's price, its size, its id, or whether any image
+ * currently disagrees", because a tier that ships before its images exist has no image to
+ * disagree with and would then read as checked by default. The one thing a student must be
+ * told about a cheap dataset would be the one thing that arrives last.
+ */
+export const LABEL_QUALITIES = ['checked', 'some-wrong'] as const
+export type LabelQuality = (typeof LABEL_QUALITIES)[number]
+
+/**
+ * One dataset a student can be fitting on: how many photos, of what mix, filed how well.
+ *
+ * The task's rather than the family's. The photos describe the job — they are the same
+ * photos whatever is fitted to them — while *choosing* among them is a decision a student
+ * makes per model, through the knob each family names in `datasetKnob`.
+ *
+ * `size` counts the photos the tier ends up with, not the ones it adds: membership nests,
+ * so a larger tier holds every image of every smaller one and buying photos adds to the
+ * set a student holds rather than replacing it.
+ */
+export interface DatasetTierDeclaration {
+  /** Stable id, unique within the task. Appears in a configuration identifier. */
+  readonly id: DatasetTierId
+  /** What the set is called wherever it is offered, priced or browsed. */
+  readonly label: string
+  /** Training photos held, counting the ones the smaller tiers hold too. */
+  readonly size: number
+  /** How many of them this tier files under each declared category. Keyed by category id. */
+  readonly composition: Readonly<Record<CategoryId, number>>
+  readonly labelQuality: LabelQuality
+  /**
+   * The words that state this tier's label quality to a student.
+   *
+   * Declared rather than composed by a screen, so that no screen has to know what a tier
+   * or a label quality is. It says *that* some labels are wrong and never *which*:
+   * naming them would hand over the thing a student is meant to find by looking.
+   */
+  readonly disclosure: string
+}
+
+export type FamilyId = string
+
+/**
+ * What the pipeline sends to the browser for one family.
+ *
+ * `model` and `predictions`, not `artifact` and `live`. "Live" is not a source — it is
+ * what every family except a convolutional one does; the convolutional family precomputes
+ * *because its model cannot ship*, so the real distinction is whether the pipeline sends
+ * the model itself or a table of the predictions it made. Two values and no third: a
+ * student-authored source would need one, and there is no such family.
+ */
+export const SHIPPED_FORMS = ['model', 'predictions'] as const
+export type ShippedForm = (typeof SHIPPED_FORMS)[number]
+
+/**
+ * How a family is recognised in a task's labour slot on the farm overview.
+ *
+ * Declared rather than supplied by the screen, so the farm can be read at a glance for
+ * which family is working which crop without a screen learning the word "tree".
+ */
+export interface SlotAppearance {
+  /** A short glyph, as the farm's manual labour already declares one. */
+  readonly icon: string
+  /** A word or two, short enough to sit on a card. */
+  readonly label: string
+}
+
+/**
+ * That a family records a training history, and what that history is indexed by.
+ *
+ * The axis is declared because it is not always epochs: a fitted tree indexes its growth
+ * by splits added, deliberately, so that its curve is in the same units as the network's.
+ * `web/src/screens/TrainingRun.tsx` used to write `epoch <n>` itself, which is one
+ * family's vocabulary hardcoded in a screen.
+ *
+ * A family that records no history declares no block at all, rather than declaring one
+ * with an empty axis — so "has a history" and "has an axis label" cannot disagree.
+ */
+export interface HistoryDeclaration {
+  /** What one step of the history is called, in words a student reads. */
+  readonly axis: string
+}
+
+/**
+ * Identifies one tutorial across every declaration loaded.
+ *
+ * Not the family's id and not the task's: a family id is only unique within its task, and
+ * completion is recorded once globally, so neither could be the key. Two families that
+ * declare this same id declare the same tutorial and share one completion.
+ */
+export type TutorialId = string
+
+/**
+ * The comprehension gate between owning a model family and putting it to work.
+ *
+ * Free, unlimited, and passed once. What is recorded is that it was passed and nothing
+ * else — a puzzle that records how well it was solved is a puzzle a student optimises
+ * instead of reads.
+ *
+ * `puzzle` is deliberately opaque here. The frame poses, judges, records and gates without
+ * knowing what a solution is; only the registered kind reads past `kind`. That is what
+ * lets a body be added as a leaf under `src/tutorials/` rather than as a widening of this
+ * type, which is the same bargain `DiagramDeclaration` makes for a family's drawing —
+ * except that a drawing's kinds are closed and a tutorial's are not, because the
+ * interaction *is* the lesson and cannot be data-driven.
+ */
+export interface TutorialDeclaration {
+  readonly id: TutorialId
+  /** What the puzzle is called, in words a student reads. */
+  readonly title: string
+  /** What it teaches, and the theory beside it. The family's copy is the model's. */
+  readonly teaching: TeachingCopy
+  /**
+   * What this puzzle withholds or simplifies relative to the model it teaches.
+   *
+   * Its own field rather than a passage inside `teaching.theory`, and required rather
+   * than optional. Theory sits behind a disclosure on every screen in this build and is
+   * read by whoever opens it; this is the one sentence a tutorial says about *itself*,
+   * and a student who never opened the theory would otherwise be left believing the
+   * simplification. Giving it a field makes the obligation structural for every kind that
+   * is ever added, instead of a property of one body's prose a later author can drop.
+   */
+  readonly disclosure: string
+  /** Which registered kind poses, checks and judges it. */
+  readonly kind: string
+  /** Everything past `kind`: this kind's own data, read by nothing else. */
+  readonly puzzle: unknown
+}
+
+/**
+ * One rung of the learning ladder: a kind of model a task offers.
+ *
+ * A family owns everything that is about the *model* — the knobs, the drawing, where its
+ * predictions or its model come from, and the words that explain it. The task owns
+ * everything about the *job*. The test for the split is whether two families of one task
+ * could disagree about a field: they cannot disagree about what a wormy apple is worth,
+ * and they must be able to disagree about what knobs they have.
+ *
+ * See openspec/changes/model-families/specs/model-families/spec.md.
+ */
+export interface ModelFamilyDeclaration {
+  /** Stable id, unique within its task. Scopes this family's configuration identity. */
+  readonly id: FamilyId
+  readonly label: string
+  /** Whether the pipeline ships this family's model or a table of its predictions. */
+  readonly ships: ShippedForm
+  readonly knobs: readonly KnobDeclaration[]
+  /**
+   * Which of this family's knobs selects the dataset it is fitted on.
+   *
+   * Named explicitly rather than found by convention, the same bargain `ships` makes: a
+   * family may call the knob whatever its teaching copy wants, and nothing infers the
+   * fitting set from a knob id or from which values happen to look like tier ids.
+   *
+   * Required of every family. A model is always fitted on something, and letting a family
+   * omit it would put a silent default in the one place tiers exist to make explicit — and
+   * `specs/dataset-tiers/spec.md` forbids reading the tier off what a student owns, since
+   * an identifier whose meaning moved on the day photos were bought would re-key every
+   * artifact already shipped.
+   */
+  readonly datasetKnob: KnobId
+  /** What this family is and what turning its knobs does. The task's copy is the job's. */
+  readonly teaching: TeachingCopy
+  readonly slot: SlotAppearance
+  /**
+   * Reference to this family's precomputed prediction artifact. Required of a family
+   * that ships predictions, and meaningless to one that ships its model.
+   *
+   * On the family rather than on the task: two families of one task compose the same
+   * identifier strings from different knobs, so one artifact could never serve both.
+   */
+  readonly predictions?: string
+  /**
+   * Reference to this family's shipped models, one small file per configuration.
+   * Required of a family that ships its model.
+   */
+  readonly models?: string
+  /**
+   * How to draw the architecture this family's knobs describe. Optional: a family
+   * declaring none is drawn none, rather than having one guessed for it.
+   */
+  readonly diagram?: DiagramDeclaration
+  /** Present exactly when this family records a training history. */
+  readonly history?: HistoryDeclaration
+  /**
+   * The puzzle a student passes once before this family may be put to work.
+   *
+   * Optional: a family declaring none is fielded as soon as it is owned, exactly as every
+   * family was before tutorials existed. It sits here rather than on the task because two
+   * families of one task can disagree about which lesson explains them — the same test
+   * that put the knobs, the drawing and the history here.
+   */
+  readonly tutorial?: TutorialDeclaration
 }
 
 export interface TaskDeclaration {
@@ -251,9 +491,21 @@ export interface TaskDeclaration {
   readonly policy: DecisionPolicyDeclaration
   /** Reference to the image pool this task draws from. */
   readonly pool: string
-  /** Reference to the precomputed prediction artifact. */
-  readonly predictions: string
-  readonly knobs: readonly KnobDeclaration[]
+  /**
+   * The dataset tiers the task's training split is divided into, smallest first.
+   *
+   * At least one, in ascending order of size and no two the same size, so that "the
+   * smaller tier" and "the smallest tier" each name exactly one of them — which is what
+   * the declared default of every family's dataset knob is held to.
+   */
+  readonly datasets: readonly DatasetTierDeclaration[]
+  /**
+   * The kinds of model this task offers, in the order they are presented. At least one.
+   *
+   * The knobs, the drawing and where predictions come from all live here rather than on
+   * the task, because a task offers several families and they share none of the three.
+   */
+  readonly families: readonly ModelFamilyDeclaration[]
   /** The numbers measured from each image's pixels, as a student is shown them. */
   readonly features: readonly FeatureDeclaration[]
   /** The largest hand-written rule this task will ever offer. */
@@ -263,10 +515,10 @@ export interface TaskDeclaration {
   readonly handSorting: HandSortingDeclaration
   readonly teaching: TeachingCopy
   /**
-   * How to draw the architecture the knobs describe. Optional: a task declaring none is
-   * drawn none, rather than having one guessed for it.
+   * How the batch as a whole is priced. Optional: a task declaring none is valued as the
+   * sum of its payoff entries, exactly as though the concept did not exist.
    */
-  readonly diagram?: DiagramDeclaration
+  readonly delivery?: DeliveryTerm
   /** False for a task that is announced on the farm overview but not playable. */
   readonly available: boolean
 }

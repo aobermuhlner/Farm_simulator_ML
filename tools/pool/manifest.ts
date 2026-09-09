@@ -17,6 +17,7 @@ import type { FeatureVector } from './features.js'
 import { ATLAS_GRID, cellOrigin, type AtlasPlan } from './atlas.js'
 import {
   ATLAS_PX,
+  CATEGORY_COUNTS,
   CELLS_PER_ATLAS,
   CELL_PX,
   POOL_ID,
@@ -27,6 +28,7 @@ import {
   type TrainingRole,
 } from './params.js'
 import { assertRolesCanShowTheGap, roleCounts, rolesOf } from './roles.js'
+import { assertTiersAreFittedAndValidated, tierLabelsOf, tiersOf, type TierLabels } from './tiers.js'
 
 /** How one atlas file is described to a client. */
 export interface AtlasDescriptor {
@@ -63,6 +65,25 @@ export interface ManifestImage {
   readonly atlas: string
   readonly cell: number
   readonly role?: TrainingRole
+  /**
+   * The smallest dataset tier that holds this image. Training images only.
+   *
+   * `specs/image-pool/spec.md` — membership nests, so declaring the entry tier declares
+   * the whole of it: every larger tier holds the image by construction. An evaluation-pool
+   * image carries none, because a tier is a portion of the training split and a model
+   * fitted on the harvest cannot show the gap the splits exist to teach.
+   */
+  readonly tier?: string
+  /**
+   * What each tier holding this image files it under. Training images only.
+   *
+   * A claim, not ground truth. `category` above stays the only truth in the system; this
+   * records what a dataset says, and a tier whose claim differs from the truth was
+   * labelled carelessly rather than lying about it. Labels do not nest — a checked tier
+   * may correct what a hurried one filed wrongly — so there is one entry per holding tier
+   * rather than one for the image.
+   */
+  readonly tierLabels?: TierLabels
 }
 
 /** What a split declares about itself. */
@@ -144,6 +165,15 @@ export function buildManifest(
   const roles = rolesOf(sampled)
   const counts = roleCounts(roles)
 
+  // Tiers are read the same way and for the same reason: the assignment is derived from
+  // the seed here, once, so the manifest and anything that recomputes it cannot disagree.
+  // The guard runs before a byte is written, because a tier with no held-out apple of some
+  // category draws a validation curve that reads as a curve rather than as a mistake.
+  const categories = Object.keys(CATEGORY_COUNTS.training) as PoolCategory[]
+  const tiers = tiersOf(sampled)
+  assertTiersAreFittedAndValidated(sampled, tiers, categories)
+  const tierLabels = tierLabelsOf(tiers, sampled, categories)
+
   for (const plan of plans) {
     atlases[plan.id] = {
       file: atlasFile(plan.id),
@@ -156,6 +186,19 @@ export function buildManifest(
     }
     plan.images.forEach((image, cell) => {
       const role: TrainingRole | undefined = roles[image.id]
+      const tier: string | undefined = tiers[image.id]
+      const labels: TierLabels | undefined = tierLabels[image.id]
+      // Both are the training split's alone, and both mistakes are silent if permitted: a
+      // tier on an evaluation image says a model was fitted on the harvest, and a label
+      // there says a dataset makes a claim about a picture nobody was ever sold.
+      if (image.split !== 'training' && (tier !== undefined || labels !== undefined)) {
+        throw new Error(
+          `image "${image.id}" is in split "${image.split}" but was assigned a dataset tier`,
+        )
+      }
+      if (image.split === 'training' && (tier === undefined || labels === undefined)) {
+        throw new Error(`training image "${image.id}" was assigned no dataset tier`)
+      }
       // A manifest missing one image's feature vector is refused at load, so the
       // generator refuses to write one at all: the cause is legible here and would look
       // like a runtime bug there.
@@ -171,6 +214,8 @@ export function buildManifest(
         atlas: plan.id,
         cell,
         ...(role === undefined ? {} : { role }),
+        ...(tier === undefined ? {} : { tier }),
+        ...(labels === undefined ? {} : { tierLabels: labels }),
       }
     })
   }

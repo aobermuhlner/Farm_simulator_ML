@@ -1,9 +1,8 @@
 {
   "id": "apple-harvest",
   "title": "Apple Harvest",
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "pool": "pools/apple-harvest",
-  "predictions": "artifacts/apple-harvest/predictions",
   "categories": [
     {
       "id": "red",
@@ -37,52 +36,133 @@
     "green": "crate-green",
     "wormy": "discard"
   },
-  "knobs": [
+  "datasets": [
     {
-      "kind": "choice",
-      "id": "blocks",
-      "label": "Convolutional blocks",
-      "values": [
-        2,
-        3,
-        4
-      ],
-      "default": 2,
-      "help": "How many blocks the robot's eye stacks. Each block hunts for patterns in small patches of the picture and then halves it, so a deeper stack recognises larger shapes — and has more room to memorise the training apples instead of learning what makes an apple ripe."
+      "id": "starter",
+      "label": "The photos that came with the robot",
+      "size": 200,
+      "composition": {
+        "red": 100,
+        "green": 50,
+        "wormy": 50
+      },
+      "labelQuality": "checked",
+      "disclosure": "These two hundred came in the crate with the robot, and somebody went through them one at a time before they did. What each photo is filed under is what the apple actually was."
     },
     {
-      "kind": "choice",
-      "id": "channels",
-      "label": "Patterns per block",
-      "values": [
-        8,
-        16,
-        32
-      ],
-      "default": 16,
-      "help": "How many different patterns the first block looks for, doubling in every block after it. Hunting for many patterns keeps far more detail about each training image than telling red from wormy needs."
+      "id": "bulk",
+      "label": "The job lot",
+      "size": 1000,
+      "composition": {
+        "red": 650,
+        "green": 150,
+        "wormy": 200
+      },
+      "labelQuality": "some-wrong",
+      "disclosure": "A thousand photos off a neighbour who was clearing out, filed in an afternoon by whoever was free. Most of them are right. Some of them are not, and nobody wrote down which — and the pile leans heavily towards red."
     },
     {
-      "kind": "slider",
-      "id": "regularization",
-      "label": "Loss regularization strength",
-      "min": 0,
-      "max": 3,
-      "step": 1,
-      "default": 1,
-      "help": "How hard training pushes the network towards simpler answers. At zero it is free to obsess over one perfect red apple; pushed too far it stops noticing the worm at all."
-    },
+      "id": "checked",
+      "label": "The checked set",
+      "size": 2000,
+      "composition": {
+        "red": 1000,
+        "green": 500,
+        "wormy": 500
+      },
+      "labelQuality": "checked",
+      "disclosure": "Two thousand photos, sorted twice by two different people, with every disagreement settled by cutting the apple open. What each photo is filed under is what the apple was, and the three kinds come in the proportions the orchard actually grows them."
+    }
+  ],
+  "families": [
     {
-      "kind": "choice",
-      "id": "dropout",
-      "label": "Dropout",
-      "values": [
-        0,
-        0.2,
-        0.5
+      "id": "convolutional",
+      "label": "Convolutional network",
+      "ships": "predictions",
+      "predictions": "artifacts/apple-harvest/predictions",
+      "slot": {
+        "icon": "🤖",
+        "label": "Robot eye"
+      },
+      "history": {
+        "axis": "epoch"
+      },
+      "teaching": {
+        "summary": "A stack of blocks that look at small patches of the picture and then at patches of those, so the robot can learn what a ripe apple looks like instead of being told. Its settings decide how much room it has to remember.",
+        "theory": "Each block slides a set of small pattern detectors across the image and then halves the picture, so later blocks see larger shapes made of the shapes below them. More blocks and more patterns per block mean more room to fit the training apples exactly; the regularization and dropout settings are the two ways of asking for less of that room. Which apples it is fitted to is the remaining setting, and it is a different kind of question: the others decide how closely the eye may follow what it was shown, and that one decides what it was shown. The stack cannot be sent to your browser, so every combination of its settings was fitted in advance and pressing train replays what that run recorded."
+      },
+      "knobs": [
+        {
+          "kind": "choice",
+          "id": "blocks",
+          "label": "Convolutional blocks",
+          "values": [
+            2,
+            3,
+            4
+          ],
+          "default": 2,
+          "help": "How many blocks the robot's eye stacks. Each block hunts for patterns in small patches of the picture and then halves it, so a deeper stack recognises larger shapes — and has more room to memorise the training apples instead of learning what makes an apple ripe."
+        },
+        {
+          "kind": "choice",
+          "id": "channels",
+          "label": "Patterns per block",
+          "values": [
+            8,
+            16,
+            32
+          ],
+          "default": 16,
+          "help": "How many different patterns the first block looks for, doubling in every block after it. Hunting for many patterns keeps far more detail about each training image than telling red from wormy needs."
+        },
+        {
+          "kind": "slider",
+          "id": "regularization",
+          "label": "Loss regularization strength",
+          "min": 0,
+          "max": 3,
+          "step": 1,
+          "default": 1,
+          "help": "How hard training pushes the network towards simpler answers. At zero it is free to obsess over one perfect red apple; pushed too far it stops noticing the worm at all."
+        },
+        {
+          "kind": "choice",
+          "id": "dropout",
+          "label": "Dropout",
+          "values": [
+            0,
+            0.2,
+            0.5
+          ],
+          "default": 0,
+          "help": "The fraction of the pattern detectors switched off at random during each training step, so the decision cannot lean on any single one. Another way of asking the robot to generalise rather than memorise."
+        },
+        {
+          "kind": "choice",
+          "id": "dataset",
+          "label": "Photos to learn from",
+          "values": [
+            "starter",
+            "bulk",
+            "checked"
+          ],
+          "default": "starter",
+          "help": "Which set of photographs this model is fitted on. Every other setting here changes how the robot's eye learns; this one changes what it learns from. Look at a set before you fit to it — how many of each kind it holds, and how carefully somebody filed them, is the difference between a model that has seen the orchard and one that has been misinformed about it."
+        }
       ],
-      "default": 0,
-      "help": "The fraction of the pattern detectors switched off at random during each training step, so the decision cannot lean on any single one. Another way of asking the robot to generalise rather than memorise."
+      "datasetKnob": "dataset",
+      "diagram": {
+        "kind": "cnn",
+        "blocksKnob": "blocks",
+        "channelsKnob": "channels",
+        "inputSize": 128,
+        "channelsShown": {
+          "8": 2,
+          "16": 3,
+          "32": 4
+        }
+      }
     }
   ],
   "features": [
@@ -172,10 +252,22 @@
       "discard": 0
     },
     "wormy": {
-      "crate-red": -1.5,
-      "crate-green": -1.5,
+      "crate-red": -0.5,
+      "crate-green": -0.5,
       "discard": 0
     }
+  },
+  "delivery": {
+    "measures": [
+      "wormy"
+    ],
+    "delivering": [
+      "crate-red",
+      "crate-green"
+    ],
+    "tolerance": 0.12,
+    "warnAbove": 0.09,
+    "downgradedValue": 0.05
   },
   "policy": {
     "kind": "highest-probability"
@@ -185,19 +277,8 @@
     "secondsPerImage": 60
   },
   "teaching": {
-    "summary": "Your sorting robot looks at each apple and does one of three things with it: into the red crate, into the green crate, or onto the reject heap. A ripe red in the red crate is worth the most; put that same apple in the green crate and nobody complains, you simply earn half as much. Send a green one to the red buyer and they open the crate and fine you more than the apple was ever worth. A worm in either crate is the expensive mistake, and it costs the same whichever crate it turns up in — the complaint is about the worm, not the label. Rejecting an apple earns nothing, and never costs you anything either.",
-    "theory": "The knobs below do not change the apples, only how much freedom the robot's eye had while learning. It looks at small patches of the picture at a time, block by block, so what it learns are patterns — a colour, a curve, the broken skin around a worm hole — rather than whole apples in fixed positions. Too little restraint and it learns patterns so particular that they match one training apple and nothing else. Too much and every apple flattens into \"reddish or not\", worms included. The harvest report breaks the run down by what each apple really was and where the robot put it, so you can see which mistake you made — and there is more than one to make."
-  },
-  "diagram": {
-    "kind": "cnn",
-    "blocksKnob": "blocks",
-    "channelsKnob": "channels",
-    "inputSize": 128,
-    "channelsShown": {
-      "8": 2,
-      "16": 3,
-      "32": 4
-    }
+    "summary": "Your sorting robot looks at each apple and does one of three things with it: into the red crate, into the green crate, or onto the reject heap. A ripe red in the red crate is worth the most; put that same apple in the green crate and nobody complains, you simply earn half as much. Send a green one to the red buyer and they open the crate and fine you more than the apple was ever worth. A worm in either crate is the expensive mistake, and it costs the same whichever crate it turns up in — the complaint is about the worm, not the label. Rejecting an apple earns nothing, and never costs you anything either. There is one more rule, and it is about the load rather than about any one apple: if the share of wormy apples in your crates goes over the buyer's limit, they take the whole delivery at a scrap price and every apple you sorted carefully counts for nothing. The harvest report states that share and the limit it was measured against. So a worm you wave through is not one apple lost — past a point it is the whole load.",
+    "theory": "The knobs below are of two kinds, and it is worth knowing which you are turning. Most of them change how much freedom the robot's eye had while learning: it looks at small patches of the picture at a time, block by block, so what it learns are patterns — a colour, a curve, the broken skin around a worm hole — rather than whole apples in fixed positions. Too little restraint and it learns patterns so particular that they match one training apple and nothing else. Too much and every apple flattens into \"reddish or not\", worms included. One knob is not like the others: it chooses which photographs the eye was shown at all. A model can only learn what it was given, and it has no way of knowing that what it was given was filed wrongly — it will learn the mistake as diligently as it learns the apple. The harvest report breaks the run down by what each apple really was and where the robot put it, so you can see which mistake you made — and there is more than one to make."
   },
   "available": true
 }

@@ -60,11 +60,43 @@ function screeningDeclaration(): TaskDeclaration {
       { id: 'pass', label: 'Pass' },
     ],
     categoryActions: { healthy: 'pass', diseased: 'flag' },
+    // Its own photographs, because a tier's composition is counted over the categories
+    // its task declares and this task declares two of them.
+    datasets: [
+      {
+        id: 'clinic',
+        label: 'The clinic’s own photographs',
+        size: 40,
+        composition: { healthy: 25, diseased: 15 },
+        labelQuality: 'checked',
+        disclosure: 'Every one of these was confirmed by the vet who took it.',
+      },
+    ],
+    families: appleDeclaration().families.map((family) => ({
+      ...family,
+      knobs: [
+        ...family.knobs.filter((knob) => knob.id !== family.datasetKnob),
+        {
+          kind: 'choice' as const,
+          id: 'photographs',
+          label: 'Photographs to learn from',
+          values: ['clinic'],
+          default: 'clinic',
+          help: 'Which set of photographs the screen was fitted on.',
+        },
+      ],
+      datasetKnob: 'photographs',
+    })),
     payoffs: {
       healthy: { flag: -5, pass: 0 },
       diseased: { flag: -5, pass: -500 },
     },
     policy: { kind: 'highest-probability' },
+    // No term of its own. What this file measures is the payoff table's own guarantee —
+    // that treating every image correctly out-earns every other assignment — and a batch
+    // term is not part of the table. The shipped task's own term is checked against the
+    // same guarantee below.
+    delivery: undefined,
   })
   if (!result.ok) {
     throw new Error(`the screening declaration must validate: ${result.issues[0]?.message}`)

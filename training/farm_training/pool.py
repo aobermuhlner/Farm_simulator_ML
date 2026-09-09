@@ -60,6 +60,14 @@ class PoolImage:
     atlas: str
     cell: int
     role: str | None
+    #: The smallest dataset tier holding this image. Training images only.
+    tier: str | None
+    #: What each tier holding this image files it under. Training images only.
+    #:
+    #: A claim, not ground truth. `category` above stays the only truth in the system;
+    #: this is what a dataset says, and a tier whose claim differs from it was labelled
+    #: carelessly rather than lying. Labels do not nest, so there is one per holding tier.
+    tier_labels: dict[str, str] | None
 
 
 @dataclass(frozen=True)
@@ -74,6 +82,13 @@ class Pool:
     order: dict[str, list[str]]
     #: Training image ids per role, in the same order. Not a third split.
     roles: dict[str, list[str]]
+    #: Training image ids each tier holds, in manifest order. Not a third split either.
+    #:
+    #: A tier holds an image when it files it under something, which is the nesting rule
+    #: applied once: an image entering at one tier is filed by that tier and by every
+    #: larger one the pool authors. A tier the pool holds no photographs for is absent
+    #: rather than empty, because nothing in the manifest mentions it at all.
+    tiers: dict[str, list[str]]
 
     def region_for(self, image_id: str) -> Region:
         """The pixel region an entry refers to — the rule `regionFor` applies."""
@@ -95,6 +110,43 @@ class Pool:
         if image is None:
             raise PoolError(f'image "{image_id}" is not declared by this pool')
         return image.category
+
+    def tier_label(self, tier: str, image_id: str) -> str:
+        """What one tier files an image under — what a model fitted on it is taught.
+
+        Never ground truth. `truth` above is what a harvest is scored against, and the two
+        differ exactly when a dataset was labelled carelessly, which is the lesson a
+        bought tier exists to teach.
+        """
+        image = self.images.get(image_id)
+        if image is None:
+            raise PoolError(f'image "{image_id}" is not declared by this pool')
+        label = (image.tier_labels or {}).get(tier)
+        if label is None:
+            raise PoolError(f'dataset tier "{tier}" does not hold image "{image_id}"')
+        return label
+
+    def tier_images(self, tier: str) -> list[str]:
+        """Every training image a tier holds, in manifest order."""
+        held = self.tiers.get(tier)
+        if held is None:
+            raise PoolError(
+                f'this pool holds no photographs for dataset tier "{tier}", '
+                "so nothing can be fitted on it"
+            )
+        return list(held)
+
+    def tier_role(self, tier: str, role: str) -> list[str]:
+        """A tier's fitted or held-out images: the declared role restricted to the tier.
+
+        Roles are declared once per image and independently of any tier, so a tier's
+        yardstick grows with it — a larger tier is judged against a larger held-out set
+        drawn from the same distribution rather than against a fixed one it would outrun.
+        """
+        if role not in ROLES:
+            raise PoolError(f'"{role}" is not a declared training role')
+        held = set(self.tier_images(tier))
+        return [image_id for image_id in self.roles[role] if image_id in held]
 
 
 def _require(mapping: dict, fields: tuple[str, ...], what: str) -> None:
@@ -143,6 +195,30 @@ def _read_image(image_id: str, value: dict, atlases: dict[str, Atlas]) -> PoolIm
     elif role is not None:
         raise PoolError(f'image "{image_id}" is in split "{split}" but declares training role "{role}"')
 
+    tier = value.get("tier")
+    tier_labels = value.get("tierLabels")
+    if split == "training":
+        if tier is None:
+            raise PoolError(f'training image "{image_id}" declares no dataset tier')
+        if not isinstance(tier_labels, dict) or not tier_labels:
+            raise PoolError(f'training image "{image_id}" declares no label for the tiers that hold it')
+        if tier not in tier_labels:
+            raise PoolError(
+                f'training image "{image_id}" enters at dataset tier "{tier}", which files it under nothing'
+            )
+        for named, label in tier_labels.items():
+            if not isinstance(label, str) or label == "":
+                raise PoolError(
+                    f'training image "{image_id}" is filed by dataset tier "{named}" under nothing usable'
+                )
+    elif tier is not None or tier_labels is not None:
+        # A tier on an evaluation image says a model was fitted on the harvest, which
+        # would collapse the gap the two splits exist to teach.
+        raise PoolError(
+            f'image "{image_id}" is in split "{split}" but declares dataset tier "{tier}"; '
+            "a tier is a portion of the training split alone"
+        )
+
     if value["atlas"] not in atlases:
         raise PoolError(f'image "{image_id}" names atlas "{value["atlas"]}", which the pool does not declare')
 
@@ -153,6 +229,8 @@ def _read_image(image_id: str, value: dict, atlases: dict[str, Atlas]) -> PoolIm
         atlas=value["atlas"],
         cell=value["cell"],
         role=role,
+        tier=tier,
+        tier_labels=dict(tier_labels) if isinstance(tier_labels, dict) else None,
     )
 
 
@@ -194,6 +272,7 @@ def load_pool(directory: Path) -> Pool:
     images: dict[str, PoolImage] = {}
     order: dict[str, list[str]] = {split: [] for split in SPLITS}
     roles: dict[str, list[str]] = {role: [] for role in ROLES}
+    tiers: dict[str, list[str]] = {}
 
     for image_id, value in manifest["images"].items():
         image = _read_image(image_id, value, atlases)
@@ -201,6 +280,8 @@ def load_pool(directory: Path) -> Pool:
         order[image.split].append(image_id)
         if image.role is not None:
             roles[image.role].append(image_id)
+        for tier in image.tier_labels or {}:
+            tiers.setdefault(tier, []).append(image_id)
 
     pool = Pool(
         directory=directory,
@@ -211,6 +292,7 @@ def load_pool(directory: Path) -> Pool:
         images=images,
         order=order,
         roles=roles,
+        tiers=tiers,
     )
     _check_counts(manifest, pool)
     preflight(pool)

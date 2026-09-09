@@ -8,11 +8,18 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ConfigurationEntry, PredictionArtifact } from '../../../src/task/artifact.js'
-import { coverageIssue, type LoadedIndex } from '../../../src/task/artifactIndex.js'
+import type { FamilyEntry } from '../../../src/families/index.js'
+import {
+  entryFromPredictions,
+  familyCoverageIssue,
+  resolveFamilyEntry,
+} from '../../../src/families/index.js'
+import type { PredictionArtifact } from '../../../src/task/artifact.js'
 import type { Loaded } from '../data/load.js'
+import { firstFamily } from '../../../src/task/families.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
+import { fixtureKinds, fixtureTutorial } from '../../../test/helpers/tutorials.js'
 
 const repoRoot = process.cwd()
 
@@ -73,15 +80,59 @@ export function unrelatedDeclaration(): TaskDeclaration {
     categoryActions: { healthy: 'pass', diseased: 'flag' },
     policy: { kind: 'highest-probability' },
     pool: 'pools/skin-screening',
-    predictions: 'artifacts/skin-screening.json',
-    knobs: [
+    // Its own datasets too, sized and named after nothing an apple has. A screen that
+    // renders these is rendering the declaration rather than the lesson that motivated it.
+    datasets: [
       {
-        kind: 'choice',
-        id: 'sensitivity',
-        label: 'Sensitivity',
-        values: ['low', 'high'],
-        default: 'low',
-        help: 'How readily the screen calls a patch diseased.',
+        id: 'clinic',
+        label: 'The clinic’s own photographs',
+        size: 40,
+        composition: { healthy: 25, diseased: 15 },
+        labelQuality: 'checked',
+        disclosure: 'Every one of these was confirmed by the vet who took it.',
+      },
+      {
+        id: 'archive',
+        label: 'The regional archive',
+        size: 120,
+        composition: { healthy: 90, diseased: 30 },
+        labelQuality: 'some-wrong',
+        disclosure: 'Gathered from six practices over as many years. Some of the notes contradict the photograph.',
+      },
+    ],
+    families: [
+      {
+        id: 'screen-net',
+        label: 'Screening network',
+        ships: 'predictions',
+        predictions: 'artifacts/skin-screening',
+        slot: { icon: '\u2695', label: 'Screen' },
+        history: { axis: 'pass' },
+        teaching: {
+          summary: 'A network that looks at the whole photograph at once.',
+          theory: 'Its one setting decides how readily it calls a patch diseased.',
+        },
+        knobs: [
+          {
+            kind: 'choice',
+            id: 'sensitivity',
+            label: 'Sensitivity',
+            values: ['low', 'high'],
+            default: 'low',
+            help: 'How readily the screen calls a patch diseased.',
+          },
+          {
+            kind: 'choice',
+            id: 'photographs',
+            label: 'Photographs to learn from',
+            values: ['clinic', 'archive'],
+            default: 'clinic',
+            help: 'Which set of photographs the screen was fitted on.',
+          },
+        ],
+        // Named rather than found by convention, so nothing infers the fitting set from a
+        // knob id: this family calls its dataset knob "photographs".
+        datasetKnob: 'photographs',
       },
     ],
     // Its own features, on its own scales, named after nothing an apple has: a screen
@@ -135,6 +186,7 @@ export function unrelatedArtifact(): PredictionArtifact {
   return {
     schemaVersion: '1.0.0',
     taskId: 'skin-screening',
+    familyId: 'screen-net',
     categories: ['healthy', 'diseased'],
     configurations: {
       sensitivitylow: {
@@ -195,15 +247,46 @@ export function sharedActionDeclaration(): TaskDeclaration {
     categoryActions: { local: 'van', national: 'depot', overseas: 'depot' },
     policy: { kind: 'highest-probability' },
     pool: 'pools/parcel-routing',
-    predictions: 'artifacts/parcel-routing.json',
-    knobs: [
+    datasets: [
       {
-        kind: 'choice',
-        id: 'care',
-        label: 'Care taken',
-        values: ['quick', 'careful'],
-        default: 'quick',
-        help: 'How long the sorter looks at a label before deciding.',
+        id: 'depot-scans',
+        label: 'Last month’s depot scans',
+        size: 60,
+        composition: { local: 30, national: 20, overseas: 10 },
+        labelQuality: 'checked',
+        disclosure: 'Each of these was checked against where the parcel actually went.',
+      },
+    ],
+    families: [
+      {
+        id: 'sorter',
+        label: 'Label sorter',
+        ships: 'predictions',
+        predictions: 'artifacts/parcel-routing',
+        slot: { icon: '\u{1F4E6}', label: 'Sorter' },
+        teaching: {
+          summary: 'A sorter that reads the address label off the scan.',
+          theory: 'Its one setting decides how long it looks before deciding.',
+        },
+        knobs: [
+          {
+            kind: 'choice',
+            id: 'care',
+            label: 'Care taken',
+            values: ['quick', 'careful'],
+            default: 'quick',
+            help: 'How long the sorter looks at a label before deciding.',
+          },
+          {
+            kind: 'choice',
+            id: 'scans',
+            label: 'Scans to learn from',
+            values: ['depot-scans'],
+            default: 'depot-scans',
+            help: 'Which set of scans the sorter was fitted on.',
+          },
+        ],
+        datasetKnob: 'scans',
       },
     ],
     // Different again, and a different budget: nothing may assume the apple task's.
@@ -262,36 +345,42 @@ export function sharedActionDeclaration(): TaskDeclaration {
  */
 export function diagrammedDeclaration(): TaskDeclaration {
   const base = unrelatedDeclaration()
+  const family = firstFamily(base)
   const declaration = {
     ...base,
     id: 'skin-screening-drawn',
     title: 'Skin Screening (drawn)',
-    knobs: [
-      ...base.knobs,
+    families: [
       {
-        kind: 'choice',
-        id: 'stack',
-        label: 'Stages in the stack',
-        values: [1, 3],
-        default: 1,
-        help: 'How many stages the screen puts an image through.',
-      },
-      {
-        kind: 'choice',
-        id: 'breadth',
-        label: 'Detail per stage',
-        values: ['narrow', 'wide'],
-        default: 'narrow',
-        help: 'How much detail each stage keeps.',
+        ...family,
+        knobs: [
+          ...family.knobs,
+          {
+            kind: 'choice',
+            id: 'stack',
+            label: 'Stages in the stack',
+            values: [1, 3],
+            default: 1,
+            help: 'How many stages the screen puts an image through.',
+          },
+          {
+            kind: 'choice',
+            id: 'breadth',
+            label: 'Detail per stage',
+            values: ['narrow', 'wide'],
+            default: 'narrow',
+            help: 'How much detail each stage keeps.',
+          },
+        ],
+        diagram: {
+          kind: 'feedforward',
+          layersKnob: 'stack',
+          unitsKnob: 'breadth',
+          unitsShown: { narrow: 1, wide: 5 },
+          inputsShown: 2,
+        },
       },
     ],
-    diagram: {
-      kind: 'feedforward',
-      layersKnob: 'stack',
-      unitsKnob: 'breadth',
-      unitsShown: { narrow: 1, wide: 5 },
-      inputsShown: 2,
-    },
   }
 
   const validated = validateDeclaration(declaration)
@@ -315,36 +404,42 @@ export function diagrammedDeclaration(): TaskDeclaration {
  */
 export function convolutionalDeclaration(): TaskDeclaration {
   const base = unrelatedDeclaration()
+  const family = firstFamily(base)
   const declaration = {
     ...base,
     id: 'skin-screening-convolutional',
     title: 'Skin Screening (convolutional)',
-    knobs: [
-      ...base.knobs,
+    families: [
       {
-        kind: 'choice',
-        id: 'stages',
-        label: 'Stages in the stack',
-        values: [2, 3, 4],
-        default: 3,
-        help: 'How many stages the screen puts an image through.',
-      },
-      {
-        kind: 'choice',
-        id: 'filters',
-        label: 'Filters in the first stage',
-        values: [4, 8, 16],
-        default: 8,
-        help: 'How many patterns the first stage looks for.',
+        ...family,
+        knobs: [
+          ...family.knobs,
+          {
+            kind: 'choice',
+            id: 'stages',
+            label: 'Stages in the stack',
+            values: [2, 3, 4],
+            default: 3,
+            help: 'How many stages the screen puts an image through.',
+          },
+          {
+            kind: 'choice',
+            id: 'filters',
+            label: 'Filters in the first stage',
+            values: [4, 8, 16],
+            default: 8,
+            help: 'How many patterns the first stage looks for.',
+          },
+        ],
+        diagram: {
+          kind: 'cnn',
+          blocksKnob: 'stages',
+          channelsKnob: 'filters',
+          inputSize: 64,
+          channelsShown: { '4': 2, '8': 3, '16': 4 },
+        },
       },
     ],
-    diagram: {
-      kind: 'cnn',
-      blocksKnob: 'stages',
-      channelsKnob: 'filters',
-      inputSize: 64,
-      channelsShown: { '4': 2, '8': 3, '16': 4 },
-    },
   }
 
   const validated = validateDeclaration(declaration)
@@ -366,16 +461,250 @@ export function convolutionalDeclaration(): TaskDeclaration {
  * configuration nothing was trained for, which is the one a student is most likely to
  * meet.
  */
-export function entryLoader(artifact: PredictionArtifact) {
-  return (configurationId: string): Promise<Loaded<ConfigurationEntry>> => {
-    const entry = artifact.configurations[configurationId]
-    if (entry === undefined) {
-      const issue = coverageIssue(
-        { configurations: {}, coverage: [] } as unknown as LoadedIndex,
-        configurationId,
-      )
+export function entryLoader(declaration: TaskDeclaration, ...artifacts: PredictionArtifact[]) {
+  return (familyId: string, configurationId: string): Promise<Loaded<FamilyEntry>> => {
+    const family = declaration.families.find((candidate) => candidate.id === familyId)
+    const artifact = artifacts.find((candidate) => candidate.familyId === familyId)
+    const entry = artifact?.configurations[configurationId]
+    if (family === undefined || entry === undefined) {
+      const issue =
+        family === undefined
+          ? {
+              code: 'unknown-family',
+              field: familyId,
+              message: `Task "${declaration.id}" declares no model family "${familyId}".`,
+            }
+          : familyCoverageIssue(
+              family,
+              Object.keys(artifact?.configurations ?? {}),
+              configurationId,
+            )
       return Promise.resolve({ ok: false, issues: issue === undefined ? [] : [issue] })
     }
-    return Promise.resolve({ ok: true, value: entry })
+    return Promise.resolve({ ok: true, value: entryFromPredictions(entry) })
+  }
+}
+
+/**
+ * A task declaring two model families — one that ships predictions, one that ships its
+ * model — so the abstraction is under test even though the shipped game declares one.
+ *
+ * Both families deliberately declare a knob called `depth` with the same values, so the
+ * two compose *identical* identifier strings. That is the whole point of the fixture: a
+ * lookup that resolved an identifier against the task rather than against the family
+ * would answer with the wrong family's model, and would answer with a real, plausible
+ * distribution rather than failing. Everything about family scoping is tested here.
+ *
+ * One family records a history and one records none, so the workshop is exercised both
+ * ways: a curve with a declared axis that is not epochs, and no curve at all.
+ */
+export function twoFamilyDeclaration(): TaskDeclaration {
+  const base = unrelatedDeclaration()
+  const declaration = {
+    ...base,
+    id: 'skin-screening-ladder',
+    title: 'Skin Screening (ladder)',
+    families: [
+      {
+        id: 'screen-net',
+        label: 'Screening network',
+        ships: 'predictions',
+        predictions: 'artifacts/skin-screening-ladder/screen-net',
+        slot: { icon: '⚕', label: 'Screen' },
+        history: { axis: 'sweep' },
+        teaching: {
+          summary: 'A network fitted in advance, whose predictions are shipped.',
+          theory: 'Its weights are too large to travel, so what travels is what it said.',
+        },
+        knobs: [
+          {
+            kind: 'choice',
+            id: 'depth',
+            label: 'Layers',
+            values: [1, 2],
+            default: 1,
+            help: 'How many layers the network stacks.',
+          },
+          {
+            kind: 'choice',
+            id: 'photographs',
+            label: 'Photographs to learn from',
+            values: ['clinic', 'archive'],
+            default: 'clinic',
+            help: 'Which set of photographs the network was fitted on.',
+          },
+        ],
+        datasetKnob: 'photographs',
+      },
+      {
+        id: 'cut-chain',
+        label: 'Chain of cuts',
+        ships: 'model',
+        models: 'artifacts/skin-screening-ladder/cut-chain',
+        slot: { icon: '✂', label: 'Cuts' },
+        teaching: {
+          summary: 'A handful of thresholds on the numbers measured from each photograph.',
+          theory: 'Small enough to send, so it is applied in the browser rather than looked up.',
+        },
+        knobs: [
+          {
+            kind: 'choice',
+            id: 'depth',
+            label: 'Questions',
+            values: [1, 2],
+            default: 1,
+            help: 'How many questions the chain asks before it answers.',
+          },
+          {
+            kind: 'choice',
+            id: 'photographs',
+            label: 'Photographs to learn from',
+            values: ['clinic', 'archive'],
+            default: 'clinic',
+            help: 'Which set of photographs the chain was fitted on.',
+          },
+        ],
+        datasetKnob: 'photographs',
+      },
+    ],
+  }
+
+  const validated = validateDeclaration(declaration)
+  if (!validated.ok) {
+    throw new Error(
+      `the two-family test declaration does not validate: ${validated.issues
+        .map((issue) => issue.message)
+        .join(' ')}`,
+    )
+  }
+  return validated.declaration
+}
+
+/**
+ * The same ladder, with a tutorial on the family that ships predictions.
+ *
+ * One family gated and one not, so every screen test can put the two cases side by side
+ * and none of them has to assert the ungated behaviour by its absence.
+ */
+export function tutoredLadderDeclaration(): TaskDeclaration {
+  const base = twoFamilyDeclaration()
+  const declaration = {
+    ...base,
+    families: [{ ...base.families[0], tutorial: fixtureTutorial() }, base.families[1]],
+  }
+
+  const validated = validateDeclaration(declaration, { tutorialKinds: fixtureKinds })
+  if (!validated.ok) {
+    throw new Error(
+      `the tutored ladder declaration does not validate: ${validated.issues
+        .map((issue) => issue.message)
+        .join(' ')}`,
+    )
+  }
+  return validated.declaration
+}
+
+/** The prediction-shipping family's artifact for {@link twoFamilyDeclaration}. */
+export function ladderPredictions(): PredictionArtifact {
+  return {
+    schemaVersion: '1.0.0',
+    taskId: 'skin-screening-ladder',
+    familyId: 'screen-net',
+    categories: ['healthy', 'diseased'],
+    configurations: {
+      'depth1-photographsclinic': {
+        history: [
+          { epoch: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
+          { epoch: 2, trainLoss: 0.5, valLoss: 0.6, trainAccuracy: 0.8, valAccuracy: 0.7 },
+        ],
+        predictions: {
+          training: { 'a-1': [0.9, 0.1] },
+          // Deliberately the opposite of what the chain below says about the same images,
+          // so a test can tell which family answered.
+          pool: { 'a-1': [0.9, 0.1], 'a-2': [0.9, 0.1], 'a-3': [0.9, 0.1] },
+        },
+      },
+    },
+  }
+}
+
+/** The model-shipping family's file for `depth1-photographsclinic` of {@link twoFamilyDeclaration}. */
+export function ladderModelDocument(): Record<string, unknown> {
+  return {
+    schemaVersion: '1.0.0',
+    taskId: 'skin-screening-ladder',
+    familyId: 'cut-chain',
+    configurationId: 'depth1-photographsclinic',
+    model: {
+      splits: [{ feature: 'patchArea', threshold: 10, whenAbove: [0.1, 0.9] }],
+      otherwise: [0.2, 0.8],
+    },
+  }
+}
+
+/** Measured features for the images {@link ladderPredictions} covers. */
+export function ladderFeatures(): Readonly<Record<string, Readonly<Record<string, number>>>> {
+  return {
+    'a-1': { patchArea: 2, edgeRoughness: 1.1 },
+    'a-2': { patchArea: 30, edgeRoughness: 2.4 },
+    'a-3': { patchArea: 20, edgeRoughness: 1.8 },
+  }
+}
+
+/** Image ids per split for {@link twoFamilyDeclaration}, as a pool manifest holds them. */
+export const LADDER_IMAGES: Readonly<Record<string, readonly string[]>> = {
+  training: ['a-1'],
+  pool: ['a-1', 'a-2', 'a-3'],
+}
+
+/**
+ * A `loadEntry` over both of {@link twoFamilyDeclaration}'s families.
+ *
+ * The prediction-shipping family is served from its artifact and the model-shipping one
+ * goes through the real registry, so a screen test cannot be passed a model the app
+ * itself would refuse — and the two answer differently about the same images, which is
+ * what lets a test say which family a screen actually asked.
+ */
+export function ladderLoader(declaration: TaskDeclaration) {
+  const predictions = ladderPredictions()
+  return (familyId: string, configurationId: string): Promise<Loaded<FamilyEntry>> => {
+    const family = declaration.families.find((candidate) => candidate.id === familyId)
+    if (family === undefined) {
+      return Promise.resolve({
+        ok: false,
+        issues: [
+          {
+            code: 'unknown-family',
+            field: familyId,
+            message: `Task "${declaration.id}" declares no model family "${familyId}".`,
+          },
+        ],
+      })
+    }
+
+    if (family.ships === 'predictions') {
+      const entry = predictions.configurations[configurationId]
+      if (entry === undefined) {
+        const issue = familyCoverageIssue(
+          family,
+          Object.keys(predictions.configurations),
+          configurationId,
+        )
+        return Promise.resolve({ ok: false, issues: issue === undefined ? [] : [issue] })
+      }
+      return Promise.resolve({ ok: true, value: entryFromPredictions(entry) })
+    }
+
+    const resolved = resolveFamilyEntry({
+      declaration,
+      family,
+      configurationId,
+      document: { ...ladderModelDocument(), configurationId },
+      imageIds: LADDER_IMAGES,
+      features: ladderFeatures(),
+    })
+    return Promise.resolve(
+      resolved.ok ? { ok: true, value: resolved.entry } : { ok: false, issues: resolved.issues },
+    )
   }
 }

@@ -3,6 +3,7 @@ import {
   defaultConfiguration,
   resolveConfiguration,
 } from '../src/task/configuration.js'
+import { firstFamily } from '../src/task/families.js'
 import { validateDeclaration } from '../src/task/validate.js'
 import { checkArtifactVersion, SCHEMA_VERSION_MISMATCH } from '../src/task/version.js'
 import { loadRawDeclaration } from './helpers/load-raw'
@@ -10,10 +11,11 @@ import { loadRawDeclaration } from './helpers/load-raw'
 const validated = validateDeclaration(loadRawDeclaration('apple-harvest'))
 if (!validated.ok) throw new Error('the shipped apple declaration must validate')
 const apple = validated.declaration
+const family = firstFamily(apple)
 
 describe('knob value validation', () => {
   it('resolves a configuration whose values the declaration permits', () => {
-    const result = resolveConfiguration(apple, {
+    const result = resolveConfiguration(apple, family, {
       blocks: 4,
       channels: 32,
       regularization: 2,
@@ -23,7 +25,7 @@ describe('knob value validation', () => {
   })
 
   it('rejects a choice value that is not among the knob allowed values', () => {
-    const result = resolveConfiguration(apple, { blocks: 5 })
+    const result = resolveConfiguration(apple, family, { blocks: 5 })
     expect(result.ok).toBe(false)
     if (result.ok) return
     const issue = result.issues.find((i) => i.field === 'blocks')
@@ -32,7 +34,7 @@ describe('knob value validation', () => {
   })
 
   it('rejects a slider value that sits off the declared step', () => {
-    const result = resolveConfiguration(apple, { regularization: 1.5 })
+    const result = resolveConfiguration(apple, family, { regularization: 1.5 })
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.issues.find((i) => i.field === 'regularization')?.code).toBe(
@@ -42,27 +44,27 @@ describe('knob value validation', () => {
 
   it('rejects a slider value outside the declared range', () => {
     for (const value of [-1, 4]) {
-      const result = resolveConfiguration(apple, { regularization: value })
+      const result = resolveConfiguration(apple, family, { regularization: value })
       expect(result.ok, `regularization ${value} should be refused`).toBe(false)
     }
   })
 
   it('produces no configuration for an invalid request, so no run can be scored', () => {
-    const result = resolveConfiguration(apple, { blocks: 5, regularization: 1.5 })
+    const result = resolveConfiguration(apple, family, { blocks: 5, regularization: 1.5 })
     expect(result.ok).toBe(false)
     expect(result).not.toHaveProperty('configuration')
     if (!result.ok) expect(result.issues).toHaveLength(2)
   })
 
   it('rejects a knob id the task never declared', () => {
-    const result = resolveConfiguration(apple, { learningRate: 0.1 })
+    const result = resolveConfiguration(apple, family, { learningRate: 0.1 })
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.issues.find((i) => i.code === 'unknown-knob')?.field).toBe('learningRate')
   })
 
   it('falls back to a knob declared default when the request omits it', () => {
-    const result = resolveConfiguration(apple, { blocks: 2 })
+    const result = resolveConfiguration(apple, family, { blocks: 2 })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(Object.fromEntries(result.configuration.values)).toEqual({
@@ -70,22 +72,24 @@ describe('knob value validation', () => {
       channels: 16,
       regularization: 1,
       dropout: 0,
+      dataset: 'starter',
     })
   })
 
   it('starts every knob at its declared default', () => {
-    const configuration = defaultConfiguration(apple)
+    const configuration = defaultConfiguration(apple, family)
     expect(configuration.taskId).toBe('apple-harvest')
     expect(configuration.values.map(([id]) => id)).toEqual([
       'blocks',
       'channels',
       'regularization',
       'dropout',
+      'dataset',
     ])
   })
 
   it('keeps knob values in the declared knob order', () => {
-    const result = resolveConfiguration(apple, {
+    const result = resolveConfiguration(apple, family, {
       dropout: 0.5,
       blocks: 2,
       regularization: 3,
@@ -98,6 +102,7 @@ describe('knob value validation', () => {
       'channels',
       'regularization',
       'dropout',
+      'dataset',
     ])
   })
 })
