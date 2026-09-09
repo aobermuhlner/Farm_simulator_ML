@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "taskId": "apple-harvest",
   "familyId": "convolutional",
   "categories": [
@@ -9,7 +9,7 @@
   ],
   "pool": {
     "poolId": "pools/apple-harvest",
-    "schemaVersion": "1.1.0",
+    "schemaVersion": "1.2.0",
     "seed": 855711213
   },
   "encoding": {
@@ -17,18 +17,20 @@
     "sumTolerance": 0.0015
   },
   "configurations": {
-    "blocks2-channels8-regularization1-dropout0": {
-      "file": "blocks2-channels8-regularization1-dropout0.json",
+    "blocks2-channels8-regularization1-dropout0-datasetstarter": {
+      "file": "blocks2-channels8-regularization1-dropout0-datasetstarter.json",
       "knobs": {
         "blocks": 2,
         "channels": 8,
         "regularization": 1,
-        "dropout": 0
+        "dropout": 0,
+        "dataset": "starter"
       },
+      "tier": "starter",
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "7a52f7677cca8642614bf9f00c0dc41185e716c3",
+        "revision": "5e7c6c571940e294dd20a2b2c3808edf185e3ee8",
         "dirty": false
       },
       "hyperparameters": {
@@ -57,18 +59,20 @@
       },
       "shaping": []
     },
-    "blocks2-channels16-regularization1-dropout0": {
-      "file": "blocks2-channels16-regularization1-dropout0.json",
+    "blocks2-channels16-regularization1-dropout0-datasetstarter": {
+      "file": "blocks2-channels16-regularization1-dropout0-datasetstarter.json",
       "knobs": {
         "blocks": 2,
         "channels": 16,
         "regularization": 1,
-        "dropout": 0
+        "dropout": 0,
+        "dataset": "starter"
       },
+      "tier": "starter",
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "7a52f7677cca8642614bf9f00c0dc41185e716c3",
+        "revision": "5e7c6c571940e294dd20a2b2c3808edf185e3ee8",
         "dirty": false
       },
       "hyperparameters": {
@@ -97,18 +101,20 @@
       },
       "shaping": []
     },
-    "blocks2-channels32-regularization1-dropout0": {
-      "file": "blocks2-channels32-regularization1-dropout0.json",
+    "blocks2-channels32-regularization1-dropout0-datasetstarter": {
+      "file": "blocks2-channels32-regularization1-dropout0-datasetstarter.json",
       "knobs": {
         "blocks": 2,
         "channels": 32,
         "regularization": 1,
-        "dropout": 0
+        "dropout": 0,
+        "dataset": "starter"
       },
+      "tier": "starter",
       "epochs": 40,
       "seed": 20260903,
       "pipeline": {
-        "revision": "7a52f7677cca8642614bf9f00c0dc41185e716c3",
+        "revision": "5e7c6c571940e294dd20a2b2c3808edf185e3ee8",
         "dirty": false
       },
       "hyperparameters": {

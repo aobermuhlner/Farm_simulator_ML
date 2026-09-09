@@ -37,8 +37,8 @@ the code that reads them third, and the artifacts last. Each group leaves the bu
 ## 5. Re-emit the shipped artifacts
 
 - [x] 5.1 Commit the pipeline changes before producing artifacts, as `training/README.md` requires. Verify the working tree outside `artifacts/` is clean.
-- [ ] 5.2 Re-run `uv run python -m farm_training.train` for the three shipped configurations against the 1.2.0 pool. Verify each artifact's coverage key is the old identifier plus `-datasetstarter`, that its recorded tier is `starter`, and that its per-epoch losses match the previously shipped values.
-- [ ] 5.3 Update `artifacts/apple-harvest/predictions/index.json` and confirm the ship gate passes. Verify `test/artifact-shipping.test.ts` and `test/artifacts-untouched.test.ts`.
+- [x] 5.2 Re-run `uv run python -m farm_training.train` for the three shipped configurations against the 1.2.0 pool. Verify each artifact's coverage key is the old identifier plus `-datasetstarter`, that its recorded tier is `starter`, and that its per-epoch losses match the previously shipped values.
+- [x] 5.3 Update `artifacts/apple-harvest/predictions/index.json` and confirm the ship gate passes. Verify `test/artifact-shipping.test.ts` and `test/artifacts-untouched.test.ts`.
 - [x] 5.4 Confirm the catalog cannot price untrained ground: with `bulk` and `checked` unpriced, `test/catalog-check.test.ts` accepts; adding a price to either makes it refuse naming an uncovered identifier. Verify both directions.
 
 ## 6. The browser shows what was bought
