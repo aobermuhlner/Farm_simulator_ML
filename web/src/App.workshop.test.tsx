@@ -14,6 +14,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { formatUnits, openFarm } from '../../src/economy/index.js'
 import type { SavedFarm } from '../../src/save/index.js'
+import { firstFamily } from '../../src/task/families.js'
 import { App } from './App.js'
 import { SAVE_KEY, type SaveStorage } from './data/save.js'
 import { farmDeclaration, loadsFarm } from './test-support/farm.js'
@@ -28,6 +29,9 @@ const opened = openFarm(declaration)
 
 const OPENING_BALANCE = formatUnits(opened.balance, declaration)
 const OPENING_YEAR = String(declaration.openingYear)
+/** The family the shipped apple task opens at, and the one every slot below names. */
+const FAMILY = firstFamily(appleTask.declaration).id
+
 const DEFAULT_CONFIGURATION = 'blocks2-channels16-regularization1-dropout0'
 
 function renderApp(storage: SaveStorage = memoryStorage()): SaveStorage {
@@ -77,7 +81,7 @@ describe('a model put to work stays at work', () => {
     await putToWork()
 
     expect(saved(storage).slots).toEqual({
-      [appleTask.declaration.id]: { configuration: DEFAULT_CONFIGURATION },
+      [appleTask.declaration.id]: { configuration: DEFAULT_CONFIGURATION, family: FAMILY },
     })
 
     // Opened again from the same storage: the shell is remounted from nothing but the save.
@@ -113,7 +117,7 @@ describe('a model put to work stays at work', () => {
     // Tinkering is a scratchpad; the slot is a commitment the year reads.
     expect(screen.getByTestId('at-work').textContent).toBe(DEFAULT_CONFIGURATION)
     expect(saved(storage).slots).toEqual({
-      [appleTask.declaration.id]: { configuration: DEFAULT_CONFIGURATION },
+      [appleTask.declaration.id]: { configuration: DEFAULT_CONFIGURATION, family: FAMILY },
     })
   })
 })

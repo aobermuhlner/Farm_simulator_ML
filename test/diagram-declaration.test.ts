@@ -7,22 +7,39 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { firstFamily } from '../src/task/families.js'
 import { DIAGRAM_KINDS } from '../src/task/types.js'
 import { validateDeclaration } from '../src/task/validate.js'
 import { rawCnnTask, rawFeedforwardTask } from './helpers/architectures'
 
 const feedforward = rawFeedforwardTask()
 
+/**
+ * The one family of a raw declaration — where the knobs and the diagram now live.
+ *
+ * The field path a refusal names moves with them, which is why every expectation below
+ * is written against `DRAWN` rather than against a bare `diagram`.
+ */
+function familyOf(declaration: Record<string, unknown>): Record<string, unknown> {
+  const families = declaration.families as Record<string, unknown>[]
+  const family = families[0]
+  if (family === undefined) throw new Error('the test task should declare a family')
+  return family
+}
+
+/** Where a diagram sits in a refusal's field path. */
+const DRAWN = 'families[0].diagram'
+
 /** The fully-connected task with its diagram block replaced. */
 function withDiagram(diagram: unknown): Record<string, unknown> {
   const copy: Record<string, unknown> = structuredClone(feedforward)
-  copy.diagram = diagram
+  familyOf(copy).diagram = diagram
   return copy
 }
 
 /** That task's own diagram block, with one field overridden. */
 function diagramWith(patch: Record<string, unknown>): Record<string, unknown> {
-  return { ...(structuredClone(feedforward).diagram as Record<string, unknown>), ...patch }
+  return { ...(familyOf(structuredClone(feedforward)).diagram as Record<string, unknown>), ...patch }
 }
 
 function issuesOf(input: unknown): { code: string; field?: string; message: string }[] {
@@ -39,7 +56,7 @@ function messages(input: unknown): string {
 
 /** The knob a diagram field names, from the fully-connected task. */
 function knobNamed(id: unknown): Record<string, unknown> {
-  const knobs = feedforward.knobs as Record<string, unknown>[]
+  const knobs = familyOf(feedforward).knobs as Record<string, unknown>[]
   const knob = knobs.find((candidate) => candidate.id === id)
   if (knob === undefined) throw new Error(`the task should declare knob ${String(id)}`)
   return knob
@@ -48,7 +65,7 @@ function knobNamed(id: unknown): Record<string, unknown> {
 describe('a task may declare no diagram at all', () => {
   it('accepts a declaration carrying no diagram block', () => {
     const copy: Record<string, unknown> = structuredClone(feedforward)
-    delete copy.diagram
+    delete familyOf(copy).diagram
 
     const result = validateDeclaration(copy)
 
@@ -58,12 +75,12 @@ describe('a task may declare no diagram at all', () => {
 
   it('leaves such a task with no diagram rather than a guessed one', () => {
     const copy: Record<string, unknown> = structuredClone(feedforward)
-    delete copy.diagram
+    delete familyOf(copy).diagram
 
     const result = validateDeclaration(copy)
 
     if (!result.ok) throw new Error('a declaration without a diagram should validate')
-    expect(result.declaration.diagram).toBeUndefined()
+    expect(firstFamily(result.declaration).diagram).toBeUndefined()
   })
 })
 
@@ -78,7 +95,7 @@ describe('a fully-connected declaration is validated as its own kind', () => {
   it('gives every value its width knob permits a drawn count', () => {
     const result = validateDeclaration(feedforward)
     if (!result.ok) throw new Error('the fully-connected task should validate')
-    const diagram = result.declaration.diagram
+    const diagram = firstFamily(result.declaration).diagram
     if (diagram?.kind !== 'feedforward') throw new Error('expected a feedforward diagram')
     const knob = knobNamed(diagram.unitsKnob)
     const values = knob.values as (string | number)[]
@@ -92,7 +109,7 @@ describe('a fully-connected declaration is validated as its own kind', () => {
   it('names no output count, because the declared categories already fix it', () => {
     // Two declared numbers for one thing could only disagree, and nothing would be able
     // to say which was right. The output layer is the categories, and nothing else.
-    const keys = Object.keys(feedforward.diagram as Record<string, unknown>)
+    const keys = Object.keys(familyOf(feedforward).diagram as Record<string, unknown>)
 
     expect(keys.filter((key) => /output/i.test(key))).toEqual([])
   })
@@ -100,7 +117,7 @@ describe('a fully-connected declaration is validated as its own kind', () => {
   it('names knobs it actually declares, and a known kind', () => {
     const result = validateDeclaration(feedforward)
     if (!result.ok) throw new Error('the fully-connected task should validate')
-    const diagram = result.declaration.diagram
+    const diagram = firstFamily(result.declaration).diagram
     if (diagram?.kind !== 'feedforward') throw new Error('expected a feedforward diagram')
 
     expect(DIAGRAM_KINDS).toContain(diagram.kind)
@@ -120,15 +137,15 @@ describe('an incomplete diagram block is refused, not half-used', () => {
 
       expect(
         issues.map((issue) => issue.field),
-        `omitting "diagram.${field}" should be reported`,
-      ).toContain(`diagram.${field}`)
+        `omitting "${DRAWN}.${field}" should be reported`,
+      ).toContain(`${DRAWN}.${field}`)
     }
   })
 
   it('refuses a diagram that is not an object', () => {
     const issues = issuesOf(withDiagram('feedforward'))
 
-    expect(issues.some((issue) => issue.field === 'diagram')).toBe(true)
+    expect(issues.some((issue) => issue.field === DRAWN)).toBe(true)
   })
 
   it('refuses an unknown architecture kind, naming it', () => {
@@ -147,7 +164,7 @@ describe('a diagram must agree with the knobs it names', () => {
   it('refuses a units knob the task does not declare, naming it', () => {
     const issues = issuesOf(withDiagram(diagramWith({ unitsKnob: 'nor-this-one' })))
 
-    expect(issues.some((issue) => issue.field === 'diagram.unitsKnob')).toBe(true)
+    expect(issues.some((issue) => issue.field === `${DRAWN}.unitsKnob`)).toBe(true)
     expect(issues.map((issue) => issue.message).join(' ')).toContain('"nor-this-one"')
   })
 
@@ -182,12 +199,12 @@ describe('a diagram must agree with the knobs it names', () => {
   it('refuses a unitsShown that is not an object', () => {
     const issues = issuesOf(withDiagram(diagramWith({ unitsShown: [2, 4, 8] })))
 
-    expect(issues.some((issue) => issue.field === 'diagram.unitsShown')).toBe(true)
+    expect(issues.some((issue) => issue.field === `${DRAWN}.unitsShown`)).toBe(true)
   })
 
   it('accepts a slider as the layers knob when its steps are whole', () => {
     const declaration = structuredClone(feedforward)
-    const knobs = declaration.knobs as Record<string, unknown>[]
+    const knobs = familyOf(declaration).knobs as Record<string, unknown>[]
     knobs.push({
       kind: 'slider',
       id: 'stack',
@@ -198,7 +215,7 @@ describe('a diagram must agree with the knobs it names', () => {
       default: 2,
       help: 'How many layers the stack has.',
     })
-    declaration.diagram = diagramWith({ layersKnob: 'stack' })
+    familyOf(declaration).diagram = diagramWith({ layersKnob: 'stack' })
 
     const result = validateDeclaration(declaration)
 
@@ -207,7 +224,7 @@ describe('a diagram must agree with the knobs it names', () => {
 
   it('refuses a slider width knob whose steps are not all mapped', () => {
     const declaration = structuredClone(feedforward)
-    const knobs = declaration.knobs as Record<string, unknown>[]
+    const knobs = familyOf(declaration).knobs as Record<string, unknown>[]
     knobs.push({
       kind: 'slider',
       id: 'spread',
@@ -219,7 +236,7 @@ describe('a diagram must agree with the knobs it names', () => {
       help: 'How wide the spread is.',
     })
     // 0, 0.2 and 0.4 are permitted; only two of them are given a count.
-    declaration.diagram = diagramWith({
+    familyOf(declaration).diagram = diagramWith({
       unitsKnob: 'spread',
       unitsShown: { '0': 2, '0.2': 4 },
     })
@@ -237,7 +254,7 @@ describe('a diagram must agree with the knobs it names', () => {
  */
 function withCnn(patch: Record<string, unknown> = {}): Record<string, unknown> {
   const declaration = rawCnnTask(patch)
-  const knobs = declaration.knobs as Record<string, unknown>[]
+  const knobs = familyOf(declaration).knobs as Record<string, unknown>[]
   // A block count no small input can support, for the resolution bound.
   knobs.push({
     kind: 'choice',
@@ -253,7 +270,7 @@ function withCnn(patch: Record<string, unknown> = {}): Record<string, unknown> {
 /** The convolutional diagram block, with one field removed. */
 function cnnWithout(field: string): Record<string, unknown> {
   const declaration = withCnn()
-  delete (declaration.diagram as Record<string, unknown>)[field]
+  delete (familyOf(declaration).diagram as Record<string, unknown>)[field]
   return declaration
 }
 
@@ -271,8 +288,8 @@ describe('a convolutional diagram is validated as its own kind', () => {
 
       expect(
         issues.map((issue) => issue.field),
-        `omitting "diagram.${field}" should be reported`,
-      ).toContain(`diagram.${field}`)
+        `omitting "${DRAWN}.${field}" should be reported`,
+      ).toContain(`${DRAWN}.${field}`)
     }
   })
 
@@ -280,7 +297,7 @@ describe('a convolutional diagram is validated as its own kind', () => {
     // The shipped block declares layersKnob, unitsKnob, unitsShown and inputsShown. A
     // convolutional declaration carrying none of them is complete all the same.
     const declaration = withCnn()
-    const keys = Object.keys(declaration.diagram as Record<string, unknown>)
+    const keys = Object.keys(familyOf(declaration).diagram as Record<string, unknown>)
 
     expect(keys).not.toContain('layersKnob')
     expect(keys).not.toContain('unitsKnob')
@@ -290,13 +307,13 @@ describe('a convolutional diagram is validated as its own kind', () => {
   })
 
   it('names no output count, because the declared categories already fix it', () => {
-    const keys = Object.keys(withCnn().diagram as Record<string, unknown>)
+    const keys = Object.keys(familyOf(withCnn()).diagram as Record<string, unknown>)
 
     expect(keys.filter((key) => /output/i.test(key))).toEqual([])
   })
 
   it('declares no per-block spatial size, which is derived instead', () => {
-    const keys = Object.keys(withCnn().diagram as Record<string, unknown>)
+    const keys = Object.keys(familyOf(withCnn()).diagram as Record<string, unknown>)
 
     expect(keys.filter((key) => /size/i.test(key))).toEqual(['inputSize'])
   })
@@ -304,14 +321,14 @@ describe('a convolutional diagram is validated as its own kind', () => {
   it('refuses a blocks knob the task does not declare, naming it', () => {
     const issues = issuesOf(withCnn({ blocksKnob: 'not-a-knob' }))
 
-    expect(issues.some((issue) => issue.field === 'diagram.blocksKnob')).toBe(true)
+    expect(issues.some((issue) => issue.field === `${DRAWN}.blocksKnob`)).toBe(true)
     expect(issues.map((issue) => issue.message).join(' ')).toContain('"not-a-knob"')
   })
 
   it('refuses a channels knob the task does not declare, naming it', () => {
     const issues = issuesOf(withCnn({ channelsKnob: 'nor-this-one' }))
 
-    expect(issues.some((issue) => issue.field === 'diagram.channelsKnob')).toBe(true)
+    expect(issues.some((issue) => issue.field === `${DRAWN}.channelsKnob`)).toBe(true)
     expect(issues.map((issue) => issue.message).join(' ')).toContain('"nor-this-one"')
   })
 
@@ -344,7 +361,7 @@ describe('a convolutional diagram is validated as its own kind', () => {
       const issues = issuesOf(withCnn({ inputSize: size }))
 
       expect(
-        issues.some((issue) => issue.field === 'diagram.inputSize'),
+        issues.some((issue) => issue.field === `${DRAWN}.inputSize`),
         `${size} should be refused`,
       ).toBe(true)
       expect(issues.map((issue) => issue.message).join(' ')).toContain(String(size))
@@ -387,14 +404,14 @@ describe('a convolutional diagram is validated as its own kind', () => {
     expect(issues.map((issue) => issue.message).join(' ')).toContain('"transformer"')
     expect(issues.map((issue) => issue.message).join(' ')).toContain('"cnn"')
     // Nothing is reported about the fields a known kind would have wanted.
-    expect(issues.filter((issue) => issue.field?.startsWith('diagram.'))).toHaveLength(1)
+    expect(issues.filter((issue) => issue.field?.startsWith(`${DRAWN}.`))).toHaveLength(1)
   })
 })
 
 describe('broken knobs are the cause, and stay the cause', () => {
   it('adds no diagram issue of its own when the knobs are malformed', () => {
     const declaration = structuredClone(feedforward)
-    declaration.knobs = [{ kind: 'choice', label: 'No id here', values: [1, 2], default: 1 }]
+    familyOf(declaration).knobs = [{ kind: 'choice', label: 'No id here', values: [1, 2], default: 1 }]
 
     const issues = issuesOf(declaration)
 
@@ -404,7 +421,7 @@ describe('broken knobs are the cause, and stay the cause', () => {
 
   it('adds no diagram issue when the knobs are not a list', () => {
     const declaration = structuredClone(feedforward)
-    declaration.knobs = 'four of them'
+    familyOf(declaration).knobs = 'four of them'
 
     const issues = issuesOf(declaration)
 

@@ -17,14 +17,9 @@ import {
   applyRule,
   bestRule,
   candidateThresholds,
-  ladderIssues,
   scoreActions,
-  weakestModel,
-  type ModelScore,
-  type Score,
 } from '../src/features/rules.js'
 import { readPool, type LoadedPool } from '../src/pool/index.js'
-import { chooseAction } from '../src/policy/index.js'
 import type { TaskDeclaration } from '../src/task/types.js'
 import { appleDeclaration } from './helpers/apple'
 
@@ -240,7 +235,7 @@ describe('the separation metric', () => {
   })
 })
 
-describe('no feature separates better on the harvest than on the fitted images', () => {
+describe('no feature separates better on the evaluation split than on the fitted images', () => {
   const measured = separations(apple, pool)
 
   it('reports both separations for every declared feature', () => {
@@ -249,7 +244,7 @@ describe('no feature separates better on the harvest than on the fitted images',
     )
     for (const pair of measured) {
       expect(pair.fitted).toBeGreaterThanOrEqual(0.5)
-      expect(pair.harvest).toBeGreaterThanOrEqual(0.5)
+      expect(pair.evaluation).toBeGreaterThanOrEqual(0.5)
     }
   })
 
@@ -258,9 +253,9 @@ describe('no feature separates better on the harvest than on the fitted images',
   })
 
   it('refuses an inverted feature, naming it and both figures', () => {
-    // A feature that is noise on the fitted images and separates the harvest cleanly:
-    // the student inspects their own photos, correctly concludes it is useless, and is
-    // punished for reasoning correctly.
+    // A feature that is noise on the fitted images and separates the evaluation split
+    // cleanly: the student inspects their own photos, correctly concludes it is useless,
+    // and is punished for reasoning correctly.
     const fitted = new Set(pool.roles.fitted)
     const inverted = poolWith((features, imageId) => {
       if (fitted.has(imageId)) features.redness = 0.1
@@ -270,8 +265,31 @@ describe('no feature separates better on the harvest than on the fitted images',
     expect(issues[0]?.message).toContain('redness')
   })
 
+  it('forbids evaluation above fitted, and permits fitted above evaluation', () => {
+    // The direction, named rather than merely exercised. Both pools below are inversions
+    // of one another, and only one of them is refused: a feature strong on the images a
+    // student browsed and weak on the ones they are scored over is overfitting, which is
+    // the lesson the whole pool is built around, and it must stay sayable.
+    const fitted = new Set(pool.roles.fitted)
+
+    const evaluationAhead = poolWith((features, imageId) => {
+      if (fitted.has(imageId)) features.redness = 0.1
+    })
+    const fittedAhead = poolWith((features, imageId) => {
+      if (!fitted.has(imageId)) features.redness = 0.1
+    })
+
+    const refused = checkNoInversion(apple, evaluationAhead, INVERSION_TOLERANCE)
+    expect(refused.map((issue) => issue.code)).toContain('separation-inverted')
+    expect(refused[0]?.message).toContain('better on the evaluation split')
+
+    const permitted = separations(apple, fittedAhead).find((pair) => pair.feature === 'redness')
+    expect(permitted?.fitted ?? 0).toBeGreaterThan(permitted?.evaluation ?? 1)
+    expect(checkNoInversion(apple, fittedAhead, INVERSION_TOLERANCE)).toEqual([])
+  })
+
   it('leaves the tolerance no room it does not need', () => {
-    const worst = Math.max(...measured.map((pair) => pair.harvest - pair.fitted))
+    const worst = Math.max(...measured.map((pair) => pair.evaluation - pair.fitted))
     expect(INVERSION_TOLERANCE).toBeGreaterThanOrEqual(worst)
     // Recorded so a later change can see how much room the guard had.
     expect(worst).toBeLessThan(INVERSION_TOLERANCE + 0.001)
@@ -308,74 +326,7 @@ describe('the bounded rule search', () => {
   })
 })
 
-describe('no hand rule out-scores the weakest shipped model', () => {
-  /** Every shipped configuration, scored on the harvest through the declared policy. */
-  function shippedScores(): readonly ModelScore[] {
-    const index = read('artifacts/apple-harvest/predictions/index.json') as {
-      configurations: Record<string, { file: string }>
-    }
-    return Object.entries(index.configurations).map(([configurationId, record]) => {
-      const artifact = read(`artifacts/apple-harvest/predictions/${record.file}`) as {
-        predictions: { pool: Record<string, readonly number[]> }
-      }
-      const score = scoreActions(apple, pool, pool.order.pool, (id) =>
-        chooseAction(apple, artifact.predictions.pool[id] ?? []),
-      )
-      return { configurationId, ...score }
-    })
-  }
-
-  const models = shippedScores()
-  const floor = weakestModel(models)
-  const best = bestRule(apple, pool)
-  const harvest = scoreActions(apple, pool, pool.order.pool, (id) =>
-    applyRule(best.rule, pool.images[id]?.features ?? {}),
-  )
-
-  it('scores all three shipped configurations on the harvest', () => {
-    expect(models).toHaveLength(3)
-    for (const model of models) {
-      expect(model.overall).toBeGreaterThan(0.5)
-      for (const category of apple.categories) {
-        expect(model.perCategory[category.id]).toBeTypeOf('number')
-      }
-    }
-  })
-
-  it('takes the weakest configuration overall as the floor', () => {
-    for (const model of models) expect(floor.overall).toBeLessThanOrEqual(model.overall)
-  })
-
-  it('keeps the best hand rule below that floor, overall and on every category', () => {
-    const issues = ladderIssues(apple, best.rule, harvest, floor)
-    expect(
-      issues.map((issue) => issue.message),
-      `the best hand rule is ${JSON.stringify(harvest)} against the floor ${JSON.stringify(floor)}`,
-    ).toEqual([])
-  })
-
-  it('refuses a rule that beats the floor, naming the rule, the category and both scores', () => {
-    const beats: Score = {
-      overall: 1,
-      perCategory: Object.fromEntries(apple.categories.map((category) => [category.id, 1])),
-    }
-    const issues = ladderIssues(apple, best.rule, beats, floor)
-    expect(issues.length).toBeGreaterThan(1)
-    const message = issues.map((issue) => issue.message).join(' ')
-    expect(message).toContain('wormy')
-    expect(message).toContain(floor.configurationId)
-    expect(message).toContain(best.rule.splits[0]?.feature ?? '')
-  })
-
-  it('records how much room the guard had against each shipped configuration', () => {
-    // Written down rather than merely asserted, so a later change adding a configuration
-    // can see whether it is walking into the floor.
-    for (const model of models) {
-      const margin = model.overall - harvest.overall
-      expect(
-        margin,
-        `${model.configurationId}: model ${model.overall.toFixed(3)} against hand rule ${harvest.overall.toFixed(3)}`,
-      ).toBeGreaterThanOrEqual(0)
-    }
-  })
-})
+// Where the best hand rule stands against the shipped configurations is measured and
+// recorded in `test/features-ladder.test.ts`, not refused here. See that file's header, and
+// `openspec/changes/measured-features/design.md`, for why the refusal this file used to
+// carry was replaced by a pinned recording and a rule about what may be claimed.

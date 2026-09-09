@@ -15,6 +15,7 @@
  * "Ownership is the only input to what is available".
  */
 
+import { declaredKnobs } from '../task/families.js'
 import type { TaskDeclaration } from '../task/types.js'
 import type { Catalog, CatalogItem } from './catalog.js'
 import { declaredValues, valueKey } from './knobValues.js'
@@ -37,9 +38,27 @@ export interface KnobAvailability {
   readonly values: readonly ValueAvailability[]
 }
 
+/** One declared model family, and whether a student may select it. */
+export interface FamilyAvailability {
+  readonly familyId: string
+  readonly available: boolean
+  /** The item that opens it. Present exactly when the family is locked. */
+  readonly openedBy?: CatalogItem
+}
+
 export interface TaskAvailability {
   readonly taskId: string
   readonly knobs: readonly KnobAvailability[]
+  /**
+   * Every family the task declares, in declared order, available or not.
+   *
+   * Computed here rather than read off the declaration, for the same reason a knob
+   * value's availability is: a declaration reads the same whatever a student owns, and
+   * a screen that decided for itself could disagree with the one that refuses the run.
+   * Nothing in the catalog opens a family yet, so every family is open — which is the
+   * default-open rule, not a gap.
+   */
+  readonly families: readonly FamilyAvailability[]
 }
 
 export interface Availability {
@@ -62,6 +81,10 @@ export function computeAvailability(
   const opener = new Map<string, CatalogItem>()
   for (const item of catalog.items) {
     for (const unlock of item.opens) {
+      // Growth opens no knob value, so it puts nothing in this map. Availability is
+      // therefore identical for a farm that owns a growth item once, twice or not at
+      // all — which is what keeps a repeated id from meaning anything here.
+      if (unlock.kind !== 'knob-values') continue
       for (const value of unlock.values) {
         opener.set(`${unlock.task} ${unlock.knob} ${valueKey(value)}`, item)
       }
@@ -71,7 +94,8 @@ export function computeAvailability(
   return {
     tasks: tasks.map((task) => ({
       taskId: task.id,
-      knobs: task.knobs.map((knob) => ({
+      families: task.families.map((family) => ({ familyId: family.id, available: true })),
+      knobs: declaredKnobs(task).map((knob) => ({
         knobId: knob.id,
         values: declaredValues(knob).map((value) => {
           const item = opener.get(`${task.id} ${knob.id} ${valueKey(value)}`)
@@ -91,6 +115,14 @@ export function taskAvailability(
   taskId: string,
 ): TaskAvailability | undefined {
   return availability.tasks.find((task) => task.taskId === taskId)
+}
+
+/** What one family offers, or undefined when the task declares no such family. */
+export function familyAvailability(
+  task: TaskAvailability | undefined,
+  familyId: string,
+): FamilyAvailability | undefined {
+  return task?.families.find((family) => family.familyId === familyId)
 }
 
 /** What one knob offers, or undefined when the task offers no such knob. */

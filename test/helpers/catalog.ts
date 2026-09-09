@@ -26,7 +26,7 @@ export const testFarm: FarmDeclaration = {
   precision: 2,
   openingBalance: 1000,
   openingYear: 1,
-  openingCrop: 12,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 12, piecesPerUnit: 1 },
   cropComposition: { red: 0.5, green: 0.25, wormy: 0.25 },
 }
 
@@ -70,6 +70,20 @@ export function pricedItem(overrides: Record<string, unknown> = {}): Record<stri
     copy: 'More patterns per block.',
     price: 100,
     opens: [{ kind: 'knob-values', task: 'apple-harvest', knob: 'channels', values: [8, 32] }],
+    ...overrides,
+  }
+}
+
+/** One priced item that grows the farm, buyable more than once. */
+export function landItem(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'starter-plot',
+    group: 'orchard',
+    label: 'A starter plot',
+    copy: 'Ten more units of land to bring in.',
+    price: 200,
+    repeat: 5,
+    opens: [{ kind: 'farm-land', units: 10 }],
     ...overrides,
   }
 }

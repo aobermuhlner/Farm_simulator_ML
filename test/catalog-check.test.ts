@@ -19,10 +19,20 @@ import {
   declaredValues,
   validateCatalog,
 } from '../src/progression/index.js'
+import { firstFamily } from '../src/task/families.js'
 import { appleDeclaration } from './helpers/apple.js'
-import { catalogWith, pricedItem, shippedCatalogJson, soundCatalog, testFarm, unpricedItem } from './helpers/catalog.js'
+import {
+  catalogWith,
+  landItem,
+  pricedItem,
+  shippedCatalogJson,
+  soundCatalog,
+  testFarm,
+  unpricedItem,
+} from './helpers/catalog.js'
 
 const apple = appleDeclaration()
+const family = firstFamily(apple)
 const tasks: readonly TaskDeclaration[] = [apple]
 
 /** Every identifier the shipped artifact index covers. */
@@ -112,7 +122,7 @@ describe('everything an item opens has to exist', () => {
 })
 
 describe('nothing for sale opens a configuration no model was trained for', () => {
-  const coverage = { [apple.id]: shippedCoverage() }
+  const coverage = { [apple.id]: { [family.id]: shippedCoverage() } }
 
   it('accepts a priced item whose combinations are all covered', () => {
     // `channels` is the one knob whose values are all trained, which is what makes it
@@ -161,7 +171,7 @@ describe('nothing for sale opens a configuration no model was trained for', () =
       }
     }
 
-    expect(checkCatalogCoverage(catalog, tasks, { [apple.id]: wider })).toEqual([])
+    expect(checkCatalogCoverage(catalog, tasks, { [apple.id]: { [family.id]: wider } })).toEqual([])
   })
 
   it('says nothing about an uncovered configuration no purchase opens', () => {
@@ -194,7 +204,7 @@ describe('the shipped catalog, task and artifact together', () => {
       if (task === undefined) throw new Error('the availability must cover the shipped task')
 
       let rows: (readonly [string, string | number])[][] = [[]]
-      for (const knob of apple.knobs) {
+      for (const knob of family.knobs) {
         const open = declaredValues(knob).filter((value) => {
           const entry = task.knobs
             .find((candidate) => candidate.knobId === knob.id)
@@ -205,7 +215,7 @@ describe('the shipped catalog, task and artifact together', () => {
       }
 
       for (const values of rows) {
-        const id = configurationId({ taskId: apple.id, values })
+        const id = configurationId({ taskId: apple.id, familyId: family.id, values })
         if (!covered.includes(id)) uncovered.push(`${owned.join('+') || 'nothing owned'}: ${id}`)
       }
     }
@@ -226,5 +236,45 @@ describe('the shipped catalog, task and artifact together', () => {
 
   it('validates against the shipped task’s own declarations', () => {
     expect(checkCatalogAgainstTasks(soundCatalog(shippedCatalogJson()), tasks)).toEqual([])
+  })
+})
+
+describe('growth accumulates rather than opening a thing twice', () => {
+  it('accepts two items that each grow the farm', () => {
+    // "No two items open the same thing" is about naming the one item that opens a
+    // locked value. Two items that each grow the farm open two different things, and a
+    // student who buys both gets both — so the rule has nothing to say about them.
+    const both = soundCatalog(
+      catalogWith([landItem(), landItem({ id: 'back-field', label: 'The back field' })]),
+    )
+    expect(checkCatalogAgainstTasks(both, tasks)).toEqual([])
+  })
+
+  it('accepts an item that only grows the farm, since growth is a thing opened', () => {
+    expect(messagesFor([landItem()])).toBe('')
+  })
+
+  it('is not measured against a knob default or against the trained coverage', () => {
+    // It names no task, no knob and no value, so there is nothing for either rule to
+    // resolve — and buying it cannot lead a student into an untrained configuration.
+    const catalog = soundCatalog(catalogWith([landItem(), pricedItem()]))
+    expect(checkCatalogAgainstTasks(catalog, tasks)).toEqual([])
+
+    const blamed = checkCatalogCoverage(soundCatalog(catalogWith([landItem()])), tasks, {
+      [apple.id]: { [family.id]: shippedCoverage() },
+    })
+    expect(blamed.map((issue) => issue.field)).not.toContain('starter-plot')
+  })
+
+  it('leaves what a farm may choose exactly where it was, however often it is owned', () => {
+    // `owned` is a multiset now, and the three consumers that read it all ask
+    // membership. A future consumer that starts counting has this to break.
+    const catalog = soundCatalog(catalogWith([pricedItem(), landItem()]))
+    const once = computeAvailability(catalog, tasks, ['starter-plot'])
+    const twice = computeAvailability(catalog, tasks, ['starter-plot', 'starter-plot'])
+    const never = computeAvailability(catalog, tasks, [])
+
+    expect(twice).toEqual(once)
+    expect(once).toEqual(never)
   })
 })

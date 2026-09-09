@@ -37,7 +37,7 @@ const farmDeclaration: FarmDeclaration = {
   precision: 2,
   openingBalance: 0,
   openingYear: 1,
-  openingCrop: 10,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 10, piecesPerUnit: 1 },
   cropComposition: { red: 0.55, green: 0.35, wormy: 0.1 },
 }
 
@@ -52,19 +52,24 @@ function pool(): LoadedPool {
 
 const committed = pool()
 
+/** The evaluation split, in the shape the crop draw asks for. */
+function splitOf(loaded: LoadedPool) {
+  return { imageIds: loaded.order.pool, truth: loaded.truth }
+}
+
 function farm(over: Partial<Farm> = {}, over2: Partial<FarmDeclaration> = {}): Farm {
   return { ...openFarm({ ...farmDeclaration, ...over2 }), ...over }
 }
 
 /** A crop that must draw, so a test about its contents does not restate the refusals. */
 function drawn(state: Farm = farm(), seed = 4242, task: TaskDeclaration = declaration) {
-  const draw = drawCrop(task, state, committed, seed)
+  const draw = drawCrop(task, state, splitOf(committed), seed)
   if (!draw.ok) throw new Error(`the crop was meant to draw: ${draw.issues[0]?.message}`)
   return draw.crop
 }
 
 function refusalOf(state: Farm, seed = 4242, task: TaskDeclaration = declaration) {
-  const draw = drawCrop(task, state, committed, seed)
+  const draw = drawCrop(task, state, splitOf(committed), seed)
   expect(draw.ok).toBe(false)
   return draw.ok ? [] : [...draw.issues]
 }
@@ -93,13 +98,13 @@ describe('the same farm in the same year sorts the same crop', () => {
 
   it('is drawn from the evaluation split, never from the images a model was fitted on', () => {
     const evaluation = new Set(committed.order.pool)
-    for (const image of drawn(farm({ cropSize: 60 })).presented) {
+    for (const image of drawn(farm({ land: 60 })).presented) {
       expect(evaluation.has(image.imageId), `${image.imageId} is not an evaluation image`).toBe(true)
     }
   })
 
   it('shows no image twice', () => {
-    const presented = drawn(farm({ cropSize: 60 })).presented
+    const presented = drawn(farm({ land: 60 })).presented
     expect(new Set(presented.map((image) => image.imageId)).size).toBe(presented.length)
   })
 })
@@ -107,7 +112,7 @@ describe('the same farm in the same year sorts the same crop', () => {
 describe('the mix on screen is the crop’s mix, not the pool’s', () => {
   it('follows the declared composition rather than the evaluation split’s own', () => {
     // Sixty is what one person is presented with, so these are 55%, 35% and 10% of it.
-    const counts = countsOf(drawn(farm({ cropSize: 60 })))
+    const counts = countsOf(drawn(farm({ land: 60 })))
     expect(counts).toEqual({ red: 33, green: 21, wormy: 6 })
 
     // What the split itself is made of, which is a training-data decision and not a crop.
@@ -121,7 +126,7 @@ describe('the mix on screen is the crop’s mix, not the pool’s', () => {
   })
 
   it('shows every declared category at least once, even in the first small crop', () => {
-    const counts = countsOf(drawn(farm({ cropSize: 10 })))
+    const counts = countsOf(drawn(farm({ land: 10 })))
     expect(Object.values(counts).reduce((sum, count) => sum + count, 0)).toBe(10)
     for (const category of categories) {
       expect(counts[category], `"${category}" is missing from the crop`).toBeGreaterThanOrEqual(1)
@@ -129,7 +134,7 @@ describe('the mix on screen is the crop’s mix, not the pool’s', () => {
   })
 
   it('mixes the categories rather than presenting them in declared blocks', () => {
-    const presented = drawn(farm({ cropSize: 60 })).presented
+    const presented = drawn(farm({ land: 60 })).presented
     const blocks = presented.filter(
       (image, index) => index > 0 && image.category !== presented[index - 1]?.category,
     ).length
@@ -137,7 +142,7 @@ describe('the mix on screen is the crop’s mix, not the pool’s', () => {
   })
 
   it('follows a different farm’s composition without a code change', () => {
-    const other = farm({ cropSize: 50 }, { cropComposition: { red: 0.2, green: 0.2, wormy: 0.6 } })
+    const other = farm({ land: 50 }, { cropComposition: { red: 0.2, green: 0.2, wormy: 0.6 } })
     expect(countsOf(drawn(other))).toEqual({ red: 10, green: 10, wormy: 30 })
   })
 })
@@ -149,22 +154,22 @@ describe('the crop follows the orchard', () => {
   })
 
   it('gives a grown holding more to sort', () => {
-    expect(drawn(farm({ cropSize: 40 })).presented.length).toBeGreaterThan(
-      drawn(farm({ cropSize: 10 })).presented.length,
+    expect(drawn(farm({ land: 40 })).presented.length).toBeGreaterThan(
+      drawn(farm({ land: 10 })).presented.length,
     )
   })
 })
 
 describe('what one person can get through', () => {
   it('presents a small crop entire and reports nothing unsorted', () => {
-    const crop = drawn(farm({ cropSize: 10 }))
+    const crop = drawn(farm({ land: 10 }))
     expect(crop.presented).toHaveLength(10)
     expect(crop.unsorted).toBe(0)
   })
 
   it('presents the declared limit of a large crop and names the shortfall', () => {
     const limit = declaration.handSorting.perHarvest
-    const crop = drawn(farm({ cropSize: 400 }))
+    const crop = drawn(farm({ land: 400 }))
     expect(crop.presented).toHaveLength(limit)
     expect(crop.size).toBe(400)
     expect(crop.unsorted).toBe(400 - limit)
@@ -172,22 +177,22 @@ describe('what one person can get through', () => {
 
   it('presents exactly the crop when it comes to the limit itself', () => {
     const limit = declaration.handSorting.perHarvest
-    const crop = drawn(farm({ cropSize: limit }))
+    const crop = drawn(farm({ land: limit }))
     expect(crop.presented).toHaveLength(limit)
     expect(crop.unsorted).toBe(0)
   })
 
   it('presents no more of a bigger crop than of one already past the limit', () => {
-    expect(drawn(farm({ cropSize: 4000 })).presented).toHaveLength(
-      drawn(farm({ cropSize: 400 })).presented.length,
+    expect(drawn(farm({ land: 4000 })).presented).toHaveLength(
+      drawn(farm({ land: 400 })).presented.length,
     )
   })
 })
 
 describe('a crop that cannot be presented refuses with its cause', () => {
   it('refuses a crop with no usable size, and returns no crop at all', () => {
-    for (const cropSize of [0, -1, 2.5, Number.NaN]) {
-      const issues = refusalOf(farm({ cropSize }))
+    for (const land of [0, -1, 2.5, Number.NaN]) {
+      const issues = refusalOf(farm({ land }))
       expect(issues.map((issue) => issue.code)).toContain(CROP_SIZE_MISSING)
     }
   })
@@ -209,31 +214,53 @@ describe('a crop that cannot be presented refuses with its cause', () => {
   })
 
   it('refuses a crop too small to hold one of every category, naming the one that would go', () => {
-    const issues = refusalOf(farm({ cropSize: 2 }))
+    const issues = refusalOf(farm({ land: 2 }))
     const refusal = issues.find((issue) => issue.code === CROP_TOO_SMALL)
     expect(refusal?.message).toContain('wormy')
     expect(refusal?.message).toContain('3')
   })
 
-  it('refuses a crop the evaluation split holds too few pictures for, naming the category', () => {
-    // A composition demanding more of one category than the split holds. The limit is
-    // what bounds the pictures a crop needs, so the refusal is reached through it.
+  it('presents as much as the split holds distinct pictures of, rather than refusing', () => {
+    // A composition demanding more distinct pictures of one category than the split holds.
+    // The crop is drawn all the same — it repeats pictures — and the sort is shortened to
+    // what a person can be shown without meeting the same picture twice.
     const greedy = {
       ...declaration,
       handSorting: { ...declaration.handSorting, perHarvest: 600 },
     }
-    const issues = refusalOf(
-      farm({ cropSize: 600 }, { cropComposition: { red: 0.2, green: 0.6, wormy: 0.2 } }),
+    const crop = drawn(
+      farm({ land: 600 }, { cropComposition: { red: 0.2, green: 0.6, wormy: 0.2 } }),
       4242,
       greedy,
     )
-    const refusal = issues.find((issue) => issue.code === CROP_IMAGES_EXHAUSTED)
+    expect(crop.size).toBe(600)
+    expect(new Set(crop.presented.map((piece) => piece.imageId)).size).toBe(crop.presented.length)
+    const green = crop.presented.filter((piece) => piece.category === 'green')
+    expect(green).toHaveLength(250)
+    expect(crop.presented.length).toBeLessThan(600)
+    expect(crop.unsorted).toBe(600 - crop.presented.length)
+  })
+
+  it('refuses a crop of a category the split holds no picture of, naming it', () => {
+    const draw = drawCrop(
+      declaration,
+      farm({ land: 60 }),
+      {
+        imageIds: committed.order.pool.filter((id) => committed.truth[id] !== 'green'),
+        truth: committed.truth,
+      },
+      4242,
+    )
+    expect(draw.ok).toBe(false)
+    const refusal = draw.ok
+      ? undefined
+      : draw.issues.find((issue) => issue.code === CROP_IMAGES_EXHAUSTED)
     expect(refusal?.field).toBe('green')
-    expect(refusal?.message).toContain('250')
+    expect(refusal?.message).toContain('green')
   })
 
   it('names every cause at once rather than the first', () => {
-    const issues = refusalOf(farm({ cropSize: 0 }, { cropComposition: { red: 1 } }))
+    const issues = refusalOf(farm({ land: 0 }, { cropComposition: { red: 1 } }))
     expect(issues.map((issue) => issue.code)).toEqual(
       expect.arrayContaining([CROP_SIZE_MISSING, CROP_COMPOSITION_INCOMPLETE]),
     )
@@ -257,5 +284,34 @@ describe('whole pieces out of declared shares', () => {
   it('gives a category rounded away to nothing one piece, at the largest’s expense', () => {
     // 0.02 of 10 is a fifth of a piece, which rounds to none at all.
     expect(allocate(10, [0.98, 0.02])).toEqual([9, 1])
+  })
+})
+
+describe('no picture is shown twice to a person, however often the crop repeats one', () => {
+  it('presents distinct pictures from a crop in which pictures recur', () => {
+    const crop = drawn(farm({ land: 6000 }))
+    expect(crop.recurred).toBe(true)
+
+    const shown = crop.presented.map((piece) => piece.imageId)
+    expect(new Set(shown).size).toBe(shown.length)
+    expect(shown).toHaveLength(declaration.handSorting.perHarvest)
+  })
+
+  it('draws what is presented from the crop itself rather than beside it', () => {
+    // Every picture in front of a person is a picture the crop holds, so a person sorts
+    // the year's crop rather than a sample standing in for it.
+    const crop = drawn(farm({ land: 6000 }))
+    const held = new Set(crop.pieces.map((piece) => piece.imageId))
+    for (const piece of crop.presented) {
+      expect(held.has(piece.imageId), `${piece.imageId} is not part of the crop`).toBe(true)
+    }
+  })
+
+  it('presents the year’s own mix rather than a slice off the front of the crop', () => {
+    // Two crops of very different sizes, one year: what one person is shown is the same
+    // mix in both, which is what stops the wage moving when the orchard grows.
+    const smaller = countsOf(drawn(farm({ land: 400 })))
+    const larger = countsOf(drawn(farm({ land: 6000 })))
+    expect(larger).toEqual(smaller)
   })
 })

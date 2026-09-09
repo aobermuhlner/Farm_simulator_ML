@@ -14,8 +14,9 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatUnits, openFarm } from '../../src/economy/index.js'
-import type { ConfigurationEntry } from '../../src/task/artifact.js'
+import type { FamilyEntry } from '../../src/families/index.js'
 import type { SavedFarm } from '../../src/save/index.js'
+import { firstFamily } from '../../src/task/families.js'
 import { App } from './App.js'
 import type { LoadedTask } from './data/load.js'
 import { SAVE_KEY, type SaveStorage } from './data/save.js'
@@ -24,7 +25,7 @@ import {
   unrelatedDeclaration,
   unrelatedTruth,
 } from './test-support/declarations.js'
-import { farmDeclaration, loadsFarm } from './test-support/farm.js'
+import { farmCarrying, farmDeclaration, loadsFarm } from './test-support/farm.js'
 import { appleTask as committedAppleTask, loadEntryFor, taskFrom } from './test-support/pool.js'
 import { loadsCatalog, memoryStorage, savesTo } from './test-support/progression.js'
 
@@ -33,8 +34,28 @@ afterEach(cleanup)
 const apple = committedAppleTask()
 const screening = taskFrom(unrelatedDeclaration(), unrelatedArtifact(), unrelatedTruth())
 const declaration = farmDeclaration()
+/** The farm as a two-card farm needs it: a crop declared for both cards. */
+const bothCards = farmCarrying([apple.declaration, screening.declaration])
 const FIRST_YEAR = declaration.openingYear
 const OPENING_BALANCE = formatUnits(openFarm(declaration).balance, declaration)
+/**
+ * How many pieces one person is put in front of, which is not the crop.
+ *
+ * The orchard bears far more than a pair of hands reaches, so a loop over the crop would
+ * click six thousand times at a screen that stops after sixty.
+ */
+const PRESENTED = Math.min(
+  declaration.orchard.opening * declaration.orchard.piecesPerUnit,
+  apple.declaration.handSorting.perHarvest,
+)
+
+/**
+ * How long a test that brings a crop in by hand may take.
+ *
+ * Sixty simulated clicks through the real shell outruns the default five seconds whenever
+ * the suite is busy. The test is genuinely doing sixty of everything.
+ */
+const SORTING_TIME = 60_000
 
 type Loaded<T> =
   | { readonly ok: true; readonly value: T }
@@ -44,7 +65,11 @@ function renderApp(
   over: {
     readonly tasks?: readonly LoadedTask[]
     readonly storage?: SaveStorage
-    readonly loadEntry?: (task: LoadedTask, id: string) => Promise<Loaded<ConfigurationEntry>>
+    readonly loadEntry?: (
+      task: LoadedTask,
+      familyId: string,
+      id: string,
+    ) => Promise<Loaded<FamilyEntry>>
   } = {},
 ): SaveStorage {
   const storage = over.storage ?? memoryStorage()
@@ -52,7 +77,7 @@ function renderApp(
     <App
       load={() => Promise.resolve({ ok: true as const, value: over.tasks ?? [apple] })}
       loadEntry={over.loadEntry ?? loadEntryFor}
-      loadFarm={loadsFarm()}
+      loadFarm={loadsFarm(bothCards)}
       loadShop={loadsCatalog()}
       {...savesTo(storage)}
       replayMs={0}
@@ -97,7 +122,7 @@ async function runYear(year: number): Promise<void> {
  */
 function refusingAfterTraining() {
   const served = new Set<string>()
-  return (task: LoadedTask, id: string): Promise<Loaded<ConfigurationEntry>> => {
+  return (task: LoadedTask, familyId: string, id: string): Promise<Loaded<FamilyEntry>> => {
     if (served.has(task.declaration.id)) {
       return Promise.resolve({
         ok: false as const,
@@ -107,7 +132,7 @@ function refusingAfterTraining() {
       })
     }
     served.add(task.declaration.id)
-    return loadEntryFor(task, id)
+    return loadEntryFor(task, familyId, id)
   }
 }
 
@@ -130,7 +155,7 @@ async function sortWholeCropByHand(task: LoadedTask): Promise<void> {
   await userEvent.click(await screen.findByRole('button', { name: /by hand/ }))
   await screen.findByRole('img', { name: 'The piece you are deciding about' })
   const action = task.declaration.actions[0]?.label ?? ''
-  for (let piece = 0; piece < declaration.openingCrop; piece += 1) {
+  for (let piece = 0; piece < PRESENTED; piece += 1) {
     await userEvent.click(screen.getByRole('button', { name: new RegExp(action) }))
   }
   await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
@@ -143,6 +168,14 @@ async function openReport(task: LoadedTask, year: number): Promise<void> {
     }),
   )
 }
+
+/**
+ * How the family the apple task opens at appears in a labour slot.
+ *
+ * The slot shows this rather than the configuration identifier: the farm is read at a
+ * glance for *which family* is working which crop, and the identifier is a report's job.
+ */
+const APPLE_SLOT = firstFamily(apple.declaration).slot
 
 /** What one card's slot says, from the overview. */
 function slotText(task: LoadedTask): string {
@@ -193,7 +226,7 @@ describe('a card that cannot be brought in leaves the year open', () => {
     // Still outstanding — and not offered to the student's own hands in the robot's place.
     expect(screen.getByRole('status').textContent).toContain(apple.declaration.title)
     expect(screen.queryByRole('button', { name: /by hand/ })).toBeNull()
-    expect(slotText(apple)).toContain('blocks2-channels16-regularization1-dropout0')
+    expect(slotText(apple)).toContain(APPLE_SLOT.label)
   })
 
   it('offers no way to run the year again while it is open', async () => {
@@ -264,7 +297,7 @@ describe('handing back from the refusal unblocks the year', () => {
     expect(saved(storage).lastYear?.brought[0]?.configuration).toBeUndefined()
 
     vi.unstubAllGlobals()
-  })
+  }, SORTING_TIME)
 
   it('leaves a second refused card refused and still at work by its model', async () => {
     renderApp({ tasks: [apple, screening], loadEntry: refusingAfterTraining() })
@@ -354,7 +387,7 @@ describe('a task offers the report of the year it closed', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
 
     expect(screen.getByRole('heading', { name: 'The farm' })).toBeDefined()
-    expect(slotText(apple)).toContain('blocks2-channels16-regularization1-dropout0')
+    expect(slotText(apple)).toContain(APPLE_SLOT.label)
     expect(shown('Year')).toBe(String(FIRST_YEAR + 1))
   })
 
@@ -473,7 +506,7 @@ describe('the whole loop, end to end', () => {
     await userEvent.click(await screen.findByRole('button', { name: /by hand/ }))
     await screen.findByRole('img', { name: 'The piece you are deciding about' })
     const action = apple.declaration.actions[0]?.label ?? ''
-    for (let piece = 0; piece < declaration.openingCrop; piece += 1) {
+    for (let piece = 0; piece < PRESENTED; piece += 1) {
       await userEvent.click(screen.getByRole('button', { name: new RegExp(action) }))
     }
     await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
@@ -492,7 +525,7 @@ describe('the whole loop, end to end', () => {
 
     // Year two, by a model put to work in the workshop.
     await putToWork(apple)
-    expect(slotText(apple)).toContain('blocks2-channels16-regularization1-dropout0')
+    expect(slotText(apple)).toContain(APPLE_SLOT.label)
     await runYear(FIRST_YEAR + 1)
 
     const record = saved(storage)
@@ -505,5 +538,5 @@ describe('the whole loop, end to end', () => {
     )
 
     vi.unstubAllGlobals()
-  })
+  }, SORTING_TIME)
 })

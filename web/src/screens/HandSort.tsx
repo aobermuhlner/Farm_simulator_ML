@@ -64,8 +64,15 @@ export interface HandSortProps {
    * decision is open, so a year cannot be sorted a second time for pay.
    */
   readonly outcome?: SortOutcome
-  /** Called once, with what the sort came to, when the last image is decided. */
-  readonly onSettle: (outcome: SortOutcome) => void
+  /**
+   * Called once, with what the sort came to and the crop it was, when the last image is
+   * decided.
+   *
+   * The crop goes with the outcome because the year's record is about the year: its size,
+   * its mix and whether its pictures recurred are the crop's, not the sort's, and a shell
+   * that had to fetch the crop again to record them could fetch a different one.
+   */
+  readonly onSettle: (outcome: SortOutcome, crop: CropView) => void
   /** Presents an amount in the farm's declared currency. */
   readonly formatAmount: (amount: number) => string
   /** What a purchase that would do this job costs, when the farm declares one. */
@@ -79,6 +86,11 @@ type Loading =
   | { readonly state: 'loading' }
   | { readonly state: 'loaded'; readonly crop: CropView }
   | { readonly state: 'refused'; readonly issues: readonly ValidationIssue[] }
+
+/** A share as a reader reads one: one decimal place, and no more precision than is real. */
+function percent(share: number): string {
+  return `${Math.round(share * 1000) / 10}%`
+}
 
 /** A duration as a student reads one: seconds under two minutes, minutes above. */
 export function describeSeconds(seconds: number): string {
@@ -138,7 +150,7 @@ export function HandSort({
       setDecisions(decided)
 
       if (decided.length === crop.presented.length) {
-        onSettle(measureSort(declaration, crop, crop.truth, decided))
+        onSettle(measureSort(declaration, crop, crop.truth, decided), crop)
       }
     },
     [crop, decisions, declaration, now, onSettle, settled],
@@ -190,6 +202,16 @@ export function HandSort({
   const labelOf = useMemo(
     () => new Map(declaration.categories.map((category) => [category.id, category.label])),
     [declaration.categories],
+  )
+  // The categories the buyer's term measures, named as the task declares them. Read from
+  // the declaration, so a lesson measuring something else says so through this screen.
+  const measuredLabels = useMemo(
+    () =>
+      (declaration.delivery?.measures ?? []).map(
+        (category) =>
+          declaration.categories.find((entry) => entry.id === category)?.label ?? category,
+      ),
+    [declaration],
   )
   const actionLabelOf = useMemo(
     () => new Map(declaration.actions.map((action) => [action.id, action.label])),
@@ -312,6 +334,18 @@ export function HandSort({
 
           <table className="sort-figures">
             <tbody>
+              {outcome.delivery.tolerance === undefined ? null : (
+                <tr>
+                  <th scope="row">Before the buyer’s deduction</th>
+                  <td data-gross>{formatAmount(outcome.delivery.gross)}</td>
+                </tr>
+              )}
+              {outcome.delivery.tolerance === undefined ? null : (
+                <tr>
+                  <th scope="row">The deduction</th>
+                  <td data-downgrade>{formatAmount(outcome.delivery.downgrade)}</td>
+                </tr>
+              )}
               <tr>
                 <th scope="row">Earned</th>
                 <td data-wage>{formatAmount(outcome.wage)}</td>
@@ -334,6 +368,38 @@ export function HandSort({
               </tr>
             </tbody>
           </table>
+
+          {outcome.delivery.tolerance === undefined ? null : (
+            <p className="delivery" data-delivery>
+              {outcome.delivery.delivered === 0 || outcome.delivery.share === undefined ? (
+                <>You sent the buyer nothing, so there was nothing for them to measure.</>
+              ) : (
+                <>
+                  Of the <span data-delivered>{outcome.delivery.delivered}</span> pieces you
+                  sent to the buyer, <span data-measured>{outcome.delivery.measured}</span>{' '}
+                  were {measuredLabels.join(', ')} —{' '}
+                  <span data-share>{percent(outcome.delivery.share)}</span> against a limit
+                  of <span data-tolerance>{percent(outcome.delivery.tolerance)}</span>.{' '}
+                  {outcome.delivery.downgraded ? (
+                    <strong data-downgraded>
+                      The buyer took the whole delivery at the reduced price.
+                    </strong>
+                  ) : (
+                    <span data-accepted>The delivery was accepted in full.</span>
+                  )}
+                </>
+              )}
+              {outcome.delivery.warned ? (
+                <>
+                  {' '}
+                  <strong data-warned>
+                    That is close to the limit. A little less care and the whole delivery
+                    goes at the reduced price.
+                  </strong>
+                </>
+              ) : null}
+            </p>
+          )}
 
           {outcome.unsorted === 0 ? null : (
             <p data-unsorted={outcome.unsorted}>

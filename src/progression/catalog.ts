@@ -29,7 +29,7 @@ export interface GroupDeclaration {
 }
 
 /** Kinds of thing an item can open. A kind not in this list is refused, never ignored. */
-export const UNLOCK_KINDS = ['knob-values'] as const
+export const UNLOCK_KINDS = ['knob-values', 'farm-land'] as const
 
 /** Values of one knob of one task that owning an item makes selectable. */
 export interface KnobValuesUnlock {
@@ -39,7 +39,19 @@ export interface KnobValuesUnlock {
   readonly values: readonly (string | number)[]
 }
 
-export type Unlock = KnobValuesUnlock
+/**
+ * Land the farm gains by buying the item.
+ *
+ * Growth rather than unlocking: buying it twice gives twice the land, and two items that
+ * each grow the farm open two different things. What the land bears is the farm's to
+ * declare, so nothing here says anything about a crop.
+ */
+export interface FarmLandUnlock {
+  readonly kind: 'farm-land'
+  readonly units: number
+}
+
+export type Unlock = KnobValuesUnlock | FarmLandUnlock
 
 export interface CatalogItem {
   readonly id: string
@@ -50,6 +62,11 @@ export interface CatalogItem {
   readonly copy: string
   /** What owning it opens. At least one thing, so nothing is sold that does nothing. */
   readonly opens: readonly Unlock[]
+  /**
+   * How many times it can be bought. Absent means once, which is every item that has
+   * ever been declared, so an item saying nothing about it behaves exactly as before.
+   */
+  readonly repeat?: number
   /**
    * The price in whole units of the farm's declared precision, or undefined when the
    * item is not for sale. Converted once, here, through the currency's own boundary.
@@ -174,6 +191,24 @@ function readOpens(id: string, raw: unknown, issues: ValidationIssue[]): Unlock[
         ),
       )
       usable = false
+      return
+    }
+    if (kind === 'farm-land') {
+      // Growing the farm by nothing is a purchase that does nothing, which is the same
+      // defect as an item that opens nothing at all — so it is refused, not rounded.
+      const units = entry.units
+      if (typeof units !== 'number' || !Number.isInteger(units) || units < 1) {
+        issues.push(
+          issue(
+            'malformed-entry',
+            `Item "${id}" grows the farm by ${JSON.stringify(units)}, which must be a whole amount of land of one or more.`,
+            `${where}.units`,
+          ),
+        )
+        usable = false
+        return
+      }
+      opens.push({ kind: 'farm-land', units })
       return
     }
     if (!isNonEmptyString(entry.task) || !isNonEmptyString(entry.knob)) {
@@ -335,6 +370,22 @@ function readItem(
     return undefined
   }
 
+  const repeat = raw.repeat
+  let repeatLimit: number | undefined
+  if (repeat !== undefined && repeat !== null) {
+    if (typeof repeat !== 'number' || !Number.isInteger(repeat) || repeat < 1) {
+      issues.push(
+        issue(
+          'malformed-field',
+          `Item "${id}" declares a repeat limit of ${JSON.stringify(repeat)}, which must be a whole number of one or more.`,
+          `${id}.repeat`,
+        ),
+      )
+      return undefined
+    }
+    repeatLimit = repeat
+  }
+
   const opens = readOpens(id, raw.opens, issues)
   if (opens === undefined) return undefined
   if (forSale && priceUnits === undefined) return undefined
@@ -345,6 +396,7 @@ function readItem(
     label: raw.label as string,
     copy: raw.copy as string,
     opens,
+    ...(repeatLimit === undefined ? {} : { repeat: repeatLimit }),
     ...(priceUnits === undefined ? {} : { priceUnits }),
     ...(isNonEmptyString(reason) ? { notForSaleReason: reason } : {}),
   }
@@ -440,4 +492,28 @@ export function validateCatalog(input: unknown, farm: FarmDeclaration): CatalogV
 /** The item with this id, or undefined when the catalog declares none. */
 export function itemById(catalog: Catalog, id: string): CatalogItem | undefined {
   return catalog.items.find((item) => item.id === id)
+}
+
+/** How many times this item may be bought. An item declaring no limit is bought once. */
+export function repeatLimit(item: CatalogItem): number {
+  return item.repeat ?? 1
+}
+
+/**
+ * The largest orchard the farm can reach: the declared opening plus everything the
+ * catalog could still sell towards it.
+ *
+ * Derived rather than declared, so a repeat limit and a ceiling cannot disagree. Only
+ * *priced* items count: nothing can buy an unpriced one, which is the same reading an
+ * unpriced item is already given everywhere else.
+ */
+export function maxLand(catalog: Catalog, farm: FarmDeclaration): number {
+  return catalog.items.reduce((total, item) => {
+    if (item.priceUnits === undefined) return total
+    const growth = item.opens.reduce(
+      (sum, unlock) => (unlock.kind === 'farm-land' ? sum + unlock.units : sum),
+      0,
+    )
+    return total + growth * repeatLimit(item)
+  }, farm.orchard.opening)
 }

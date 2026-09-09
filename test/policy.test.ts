@@ -36,6 +36,16 @@ const CLEARLY_WORMY = [0.05, 0.15, 0.8]
 const REDDISH_BUT_WORMY = [0.55, 0.1, 0.35]
 /** Red or green, no telling which, and almost certainly not wormy. */
 const RED_OR_GREEN = [0.45, 0.45, 0.1]
+/**
+ * Most likely red, and wormy often enough that the fine outweighs the sale.
+ *
+ * Its own distribution rather than a reuse of REDDISH_BUT_WORMY, because how far the
+ * probabilities have to part company before an asymmetric price overrides the most likely
+ * category is a function of the declared table, and this file's other tests are about
+ * rules that do not read the table at all. Held apart so a retuned table moves one
+ * constant rather than every threshold test in the suite.
+ */
+const RED_BUT_OFTEN_WORMY = [0.5, 0.05, 0.45]
 
 describe('highest-probability policy', () => {
   it('chooses the action mapped from the most probable category', () => {
@@ -181,10 +191,10 @@ describe('threshold policy', () => {
 
 describe('cost-optimal policy', () => {
   it('computes expected payoff from the distribution and the payoff table', () => {
-    // red 0.9 * 0.40 + green 0.05 * -0.30 + wormy 0.05 * -1.50 = 0.27
-    expect(expectedPayoff(COST_OPTIMAL, CLEARLY_RED, 'crate-red')).toBeCloseTo(0.27, 10)
-    // red 0.9 * 0.20 + green 0.05 * 0.20 + wormy 0.05 * -1.50 = 0.115
-    expect(expectedPayoff(COST_OPTIMAL, CLEARLY_RED, 'crate-green')).toBeCloseTo(0.115, 10)
+    // red 0.9 * 0.40 + green 0.05 * -0.30 + wormy 0.05 * -0.50 = 0.32
+    expect(expectedPayoff(COST_OPTIMAL, CLEARLY_RED, 'crate-red')).toBeCloseTo(0.32, 10)
+    // red 0.9 * 0.20 + green 0.05 * 0.20 + wormy 0.05 * -0.50 = 0.165
+    expect(expectedPayoff(COST_OPTIMAL, CLEARLY_RED, 'crate-green')).toBeCloseTo(0.165, 10)
     expect(expectedPayoff(COST_OPTIMAL, CLEARLY_RED, 'discard')).toBeCloseTo(0, 10)
   })
 
@@ -193,21 +203,21 @@ describe('cost-optimal policy', () => {
   })
 
   it('lets an asymmetric penalty override the most likely category', () => {
-    // red is the most likely category at 0.55, so highest-probability crates it as red.
-    expect(chooseAction(HIGHEST, REDDISH_BUT_WORMY)).toBe('crate-red')
-    // But 0.55 * 0.40 + 0.10 * -0.30 + 0.35 * -1.50 = -0.335, and the green crate is worse
-    // still at -0.395, so throwing it away wins.
-    expect(expectedPayoff(COST_OPTIMAL, REDDISH_BUT_WORMY, 'crate-red')).toBeCloseTo(-0.335, 10)
-    expect(expectedPayoff(COST_OPTIMAL, REDDISH_BUT_WORMY, 'crate-green')).toBeCloseTo(-0.395, 10)
-    expect(chooseAction(COST_OPTIMAL, REDDISH_BUT_WORMY)).toBe('discard')
+    // red is the most likely category at 0.50, so highest-probability crates it as red.
+    expect(chooseAction(HIGHEST, RED_BUT_OFTEN_WORMY)).toBe('crate-red')
+    // But 0.50 * 0.40 + 0.05 * -0.30 + 0.45 * -0.50 = -0.04, and the green crate is worse
+    // still at -0.115, so throwing it away wins.
+    expect(expectedPayoff(COST_OPTIMAL, RED_BUT_OFTEN_WORMY, 'crate-red')).toBeCloseTo(-0.04, 10)
+    expect(expectedPayoff(COST_OPTIMAL, RED_BUT_OFTEN_WORMY, 'crate-green')).toBeCloseTo(-0.115, 10)
+    expect(chooseAction(COST_OPTIMAL, RED_BUT_OFTEN_WORMY)).toBe('discard')
   })
 
   it('hedges into the cheaper crate rather than risking the fine', () => {
     // At (0.45, 0.45, 0.10) the model cannot tell red from green. Crating as red is worth
-    // -0.105 because a green sold as red is fined; crating as green is worth +0.03,
+    // -0.005 because a green sold as red is fined; crating as green is worth +0.13,
     // because a red sold as green merely earns less. Throwing it away is worth nothing.
-    expect(expectedPayoff(COST_OPTIMAL, RED_OR_GREEN, 'crate-red')).toBeCloseTo(-0.105, 10)
-    expect(expectedPayoff(COST_OPTIMAL, RED_OR_GREEN, 'crate-green')).toBeCloseTo(0.03, 10)
+    expect(expectedPayoff(COST_OPTIMAL, RED_OR_GREEN, 'crate-red')).toBeCloseTo(-0.005, 10)
+    expect(expectedPayoff(COST_OPTIMAL, RED_OR_GREEN, 'crate-green')).toBeCloseTo(0.13, 10)
     expect(expectedPayoff(COST_OPTIMAL, RED_OR_GREEN, 'discard')).toBeCloseTo(0, 10)
     expect(chooseAction(COST_OPTIMAL, RED_OR_GREEN)).toBe('crate-green')
   })
@@ -235,7 +245,7 @@ describe('cost-optimal policy', () => {
 
 describe('policy is live over frozen data', () => {
   it('changes the chosen action without any prediction changing', () => {
-    const chosen = [HIGHEST, COST_OPTIMAL].map((task) => chooseAction(task, REDDISH_BUT_WORMY))
+    const chosen = [HIGHEST, COST_OPTIMAL].map((task) => chooseAction(task, RED_BUT_OFTEN_WORMY))
     expect(chosen).toEqual(['crate-red', 'discard'])
   })
 

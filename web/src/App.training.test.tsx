@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { firstFamily } from '../../src/task/families.js'
 import { App } from './App.js'
 import { SHIPPED_CATALOG, SHIPPED_FARM, sourcePathFor } from './data/paths.js'
 import { farmDeclaration } from './test-support/farm.js'
@@ -29,12 +30,12 @@ const farm = farmDeclaration()
 /** Every covered configuration's committed predictions, by the file the index names. */
 function configurationFiles(): Map<string, unknown> {
   const files = new Map<string, unknown>()
-  for (const record of Object.values(task.index.configurations)) {
+  const family = firstFamily(task.declaration)
+  const directory = family.predictions ?? ''
+  for (const file of Object.values(task.families[family.id]?.files ?? {})) {
     files.set(
-      record.file,
-      JSON.parse(
-        readFileSync(join(process.cwd(), `${task.declaration.predictions}/${record.file}`), 'utf8'),
-      ) as unknown,
+      file,
+      JSON.parse(readFileSync(join(process.cwd(), `${directory}/${file}`), 'utf8')) as unknown,
     )
   }
   return files

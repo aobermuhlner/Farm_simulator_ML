@@ -16,6 +16,7 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { firstFamily } from '../../src/task/families.js'
 import type { FarmDeclaration } from '../../src/economy/index.js'
 import { formatUnits, toUnits } from '../../src/economy/index.js'
 import { measureSort } from '../../src/sorting/index.js'
@@ -38,7 +39,25 @@ const shipped = farmDeclaration()
 const manifest = appleManifest()
 const SEED = 4242
 
+/**
+ * How long a test that sorts a whole harvest may take.
+ *
+ * One of these is sixty simulated clicks through the real shell, which outruns the default
+ * five seconds whenever the suite is busy. Nothing about the app is slow; the test is
+ * genuinely doing sixty of everything, because that is what one person is presented with.
+ */
+const SORTING_TIME = 60_000
+
 const SORT_BUTTON = 'Sort this year’s crop by hand'
+
+/** Which picture is on the screen right now, by the id the stage marks it with. */
+function shownPiece(): string {
+  return (
+    document
+      .querySelector('[role="img"][data-image]')
+      ?.getAttribute('data-image') ?? ''
+  )
+}
 
 /** Runs the year from the overview and confirms it, which is what opens the labour. */
 async function runTheYear(year: number): Promise<void> {
@@ -91,8 +110,8 @@ function catalogWithRig(owned: readonly string[]) {
             {
               kind: 'knob-values',
               task: declaration.id,
-              knob: declaration.knobs[0]?.id ?? '',
-              values: [declaration.knobs[0]?.default ?? 0],
+              knob: firstFamily(declaration).knobs[0]?.id ?? '',
+              values: [firstFamily(declaration).knobs[0]?.default ?? 0],
             },
           ],
         },
@@ -175,7 +194,7 @@ describe('hand sorting is the labour whenever no model is working the card', () 
     expect(shown('Year')).toBe(String(shipped.openingYear + 1))
     await runTheYear(shipped.openingYear + 1)
     expect(await screen.findByRole('button', { name: SORT_BUTTON })).toBeTruthy()
-  })
+  }, SORTING_TIME)
 
   it('is still called for by a farm that owns what would do the job but has not set it working', async () => {
     // The defect `workshop-harvest-split` names: hand sorting used to be dropped on
@@ -244,7 +263,7 @@ describe('a completed sort is that year’s harvest', () => {
     expect(record.year).toBe(shipped.openingYear + 1)
     expect(record.balance).toBeCloseTo(shipped.openingBalance + blanket.wage, 2)
     expect(shown('Year')).toBe(String(shipped.openingYear + 1))
-  })
+  }, SORTING_TIME)
 
   it('shows that year’s outcome rather than opening another decision', async () => {
     renderApp()
@@ -253,7 +272,7 @@ describe('a completed sort is that year’s harvest', () => {
     expect(screen.queryByRole('img', { name: 'The piece you are deciding about' })).toBeNull()
     expect(document.querySelector('[data-wage]')?.textContent).toBeTruthy()
     expect(document.querySelector('[data-correct]')?.textContent).toBe(String(blanket.correct))
-  })
+  }, SORTING_TIME)
 
   it('appends exactly one record per year sorted, however many years are sorted', async () => {
     const storage = renderApp()
@@ -267,7 +286,7 @@ describe('a completed sort is that year’s harvest', () => {
       shipped.openingYear + 1,
     ])
     expect(record.year).toBe(shipped.openingYear + 2)
-  })
+  }, SORTING_TIME)
 })
 
 describe('a sort that is abandoned', () => {
@@ -305,7 +324,7 @@ describe('the sort produces no labels', () => {
     expect(text).not.toContain('imageId')
     expect(text).not.toContain('mistakes')
     expect(text).not.toContain('elapsedMs')
-  })
+  }, SORTING_TIME)
 
   it('keeps only what the year came to', async () => {
     const storage = renderApp()
@@ -318,7 +337,7 @@ describe('the sort produces no labels', () => {
       'harvest',
       'year',
     ])
-  })
+  }, SORTING_TIME)
 
   it('keeps that card’s aggregate for the closed year, and nothing finer', async () => {
     // The report on the card is rendered from this, and it cannot be recomputed: the
@@ -331,10 +350,41 @@ describe('the sort produces no labels', () => {
     expect(Object.keys(closed?.brought[0] ?? {}).sort()).toEqual([
       'counts',
       'evaluated',
+      'harvest',
       'paid',
       'task',
     ])
+    // What the harvest records is about the year, not about the student: the crop's size
+    // and mix, the arithmetic of what it paid, and nothing image by image.
+    expect(Object.keys(closed?.brought[0]?.harvest ?? {})).not.toContain('decisions')
     // No configuration is named: a person brought this crop in.
     expect(closed?.brought[0]?.configuration).toBeUndefined()
+  }, SORTING_TIME)
+})
+
+describe('a year abandoned part way is the same year when it is entered again', () => {
+  it('presents the same crop rather than drawing another one', async () => {
+    renderApp()
+    await runTheYear(shipped.openingYear)
+    await userEvent.click(await screen.findByRole('button', { name: SORT_BUTTON }))
+    await screen.findByRole('img', { name: 'The piece you are deciding about' })
+
+    const first = shownPiece()
+    const label = declaration.actions[0]?.label ?? ''
+    for (let index = 0; index < 3; index += 1) {
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+    }
+    const fourth = shownPiece()
+    expect(fourth).not.toBe(first)
+
+    // Away, and back again. The year has not closed, so nothing has been paid and nothing
+    // has advanced — and leaving must not be a way to be given a crop one likes better.
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
+    expect(shown('Year')).toBe(String(shipped.openingYear))
+    await userEvent.click(await screen.findByRole('button', { name: SORT_BUTTON }))
+    await screen.findByRole('img', { name: 'The piece you are deciding about' })
+
+    expect(shownPiece()).toBe(first)
+    expect(crop.presented[0]?.imageId).toBe(first)
   })
 })

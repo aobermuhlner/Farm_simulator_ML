@@ -13,6 +13,7 @@ import {
   bringIn,
   closeYear,
   credit,
+  cropSize,
   debit,
   openFarm,
   openYear,
@@ -26,7 +27,7 @@ const declaration: FarmDeclaration = {
   precision: 2,
   openingBalance: 0,
   openingYear: 1,
-  openingCrop: 10,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 10, piecesPerUnit: 1 },
   cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
@@ -208,18 +209,27 @@ describe('a bad year is a bad year, never a failure', () => {
   })
 })
 
-describe('the crop the farm bears is state, not a constant', () => {
-  it('opens at the declared crop', () => {
-    expect(openFarm(declaration).cropSize).toBe(declaration.openingCrop)
+describe('the land the farm holds is state, not a constant', () => {
+  it('opens at the declared opening land', () => {
+    expect(openFarm(declaration).land).toBe(declaration.orchard.opening)
+  })
+
+  it('bears the crop that land bears, rather than a separately declared size', () => {
+    expect(cropSize(openFarm(declaration))).toBe(
+      declaration.orchard.opening * declaration.orchard.piecesPerUnit,
+    )
   })
 
   it('opens at whatever the declaration says, so a bigger holding starts bigger', () => {
-    const larger = openFarm({ ...declaration, openingCrop: declaration.openingCrop * 4 })
-    expect(larger.cropSize).toBeGreaterThan(openFarm(declaration).cropSize)
+    const larger = openFarm({
+      ...declaration,
+      orchard: { ...declaration.orchard, opening: declaration.orchard.opening * 4 },
+    })
+    expect(cropSize(larger)).toBeGreaterThan(cropSize(openFarm(declaration)))
   })
 
-  it('survives a harvest, because a crop does not shrink by being brought in', () => {
-    const grown = { ...openFarm(declaration), cropSize: 400 }
-    expect(recordHarvest(grown, toUnits(12, 2)).cropSize).toBe(400)
+  it('survives a harvest, because land does not shrink by its crop being brought in', () => {
+    const grown = { ...openFarm(declaration), land: 400 }
+    expect(recordHarvest(grown, toUnits(12, 2)).land).toBe(400)
   })
 })

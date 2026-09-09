@@ -4,11 +4,22 @@
   "precision": 2,
   "openingBalance": 2000,
   "openingYear": 1,
-  "openingCrop": 10,
+  "orchard": {
+    "label": "Orchard",
+    "unit": "trees",
+    "opening": 100,
+    "piecesPerUnit": 60
+  },
   "cropComposition": {
     "red": 0.55,
     "green": 0.35,
     "wormy": 0.1
+  },
+  "yearVariation": {
+    "wormy": {
+      "min": 0.07,
+      "max": 0.14
+    }
   },
   "manualLabour": {
     "icon": "✋",

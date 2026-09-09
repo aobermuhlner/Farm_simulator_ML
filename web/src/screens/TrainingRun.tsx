@@ -1,10 +1,10 @@
 /**
- * The training run, played back epoch by epoch.
+ * The training run, played back one step of its history at a time.
  *
  * Nothing is trained here. The configuration's run happened once, in the training
  * pipeline, and every number on this screen was measured then: the two losses and the
- * two accuracies of each epoch come straight out of the stored history. The animation
- * decides *when* a student sees each epoch, never what it says — so a student who reads
+ * two accuracies of each step come straight out of the stored history. The animation
+ * decides *when* a student sees each step, never what it says — so a student who reads
  * the source finds a replay, which is what the screen claims to be.
  *
  * Playing it out over seconds rather than printing the last row is the lesson: the shape
@@ -15,15 +15,32 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TrainingEpoch } from '../../../src/task/artifact.js'
 
-/** How long a replay takes, whatever the epoch count. Short enough to run again. */
+/** How long a replay takes, whatever the history's length. Short enough to run again. */
 export const REPLAY_MS = 5_000
+
+/**
+ * What a step of a history is called when nothing declares a name for it.
+ *
+ * Generic on purpose. It is not any family's word — a family that records a history
+ * declares what its axis is called and that is what is shown; this is what a caller with
+ * no declaration in hand gets, the same way an undefined availability locks nothing.
+ */
+export const DEFAULT_AXIS = 'step'
 
 export interface TrainingRunProps {
   readonly history: readonly TrainingEpoch[]
+  /**
+   * What one step of this history is called, as the family declares it.
+   *
+   * Declared rather than written here: a fitted tree indexes its growth by splits added,
+   * and a screen that said otherwise would put one family's vocabulary on every family's
+   * curve.
+   */
+  readonly axis?: string
   readonly configurationId: string
   /** Overridden by tests, which have no reason to wait out an animation. */
   readonly durationMs?: number
-  /** Called once the last epoch is on screen. */
+  /** Called once the last step is on screen. */
   readonly onFinished?: () => void
 }
 
@@ -42,26 +59,27 @@ function loss(value: number): string {
 }
 
 /**
- * Drives the replay clock: the number of epochs on screen, from one to all of them.
+ * Drives the replay clock: the number of history steps on screen, from one to all.
  *
- * One timer step per epoch, rather than a frame loop reading a clock. The epoch is the
+ * One timer tick per recorded step, rather than a frame loop reading a clock. The step is
+ * the
  * unit a student is watching — the figures change with it and nothing between two
- * epochs is known — and a whole-number step is the same run on every machine. The
+ * length is known — and a whole-number tick is the same run on every machine. The
  * progress bar smooths the step in CSS, which is where smoothing belongs.
  *
  * A duration of zero puts the whole history up at once, which is how tests see it.
  */
-function useReplay(epochs: number, durationMs: number, onFinished?: () => void): number {
+function useReplay(steps: number, durationMs: number, onFinished?: () => void): number {
   const [shown, setShown] = useState(1)
   // Held in a ref so a caller passing a fresh closure each render does not restart the run.
   const finished = useRef(onFinished)
   finished.current = onFinished
 
   useEffect(() => {
-    // A history of no epochs is a refusal the artifact reader makes, not something to
+    // An empty history is a refusal the family's own reader makes, not something to
     // animate — but the screen must not sit on a run that can never end, so it ends.
-    if (epochs <= 1 || durationMs <= 0) {
-      setShown(epochs)
+    if (steps <= 1 || durationMs <= 0) {
+      setShown(steps)
       finished.current?.()
       return
     }
@@ -72,17 +90,17 @@ function useReplay(epochs: number, durationMs: number, onFinished?: () => void):
       () => {
         at += 1
         setShown(at)
-        if (at >= epochs) {
+        if (at >= steps) {
           clearInterval(timer)
           finished.current?.()
         }
       },
-      Math.max(1, Math.round(durationMs / epochs)),
+      Math.max(1, Math.round(durationMs / steps)),
     )
     return () => clearInterval(timer)
-  }, [epochs, durationMs])
+  }, [steps, durationMs])
 
-  return Math.min(shown, epochs)
+  return Math.min(shown, steps)
 }
 
 interface Series {
@@ -91,9 +109,9 @@ interface Series {
   readonly values: readonly number[]
 }
 
-function x(epoch: number, epochs: number): number {
-  if (epochs <= 1) return PAD.left + INNER_WIDTH
-  return PAD.left + ((epoch - 1) / (epochs - 1)) * INNER_WIDTH
+function x(step: number, steps: number): number {
+  if (steps <= 1) return PAD.left + INNER_WIDTH
+  return PAD.left + ((step - 1) / (steps - 1)) * INNER_WIDTH
 }
 
 function y(value: number, ceiling: number): number {
@@ -113,14 +131,16 @@ function Chart({
   series,
   ceiling,
   shown,
-  epochs,
+  steps,
+  axis,
   format,
 }: {
   readonly title: string
   readonly series: readonly Series[]
   readonly ceiling: number
   readonly shown: number
-  readonly epochs: number
+  readonly steps: number
+  readonly axis: string
   readonly format: (value: number) => string
 }) {
   const ticks = [0, 0.5, 1]
@@ -151,7 +171,7 @@ function Chart({
             </g>
           ))}
           <text className="axis" x={PAD.left + INNER_WIDTH} y={HEIGHT - 5}>
-            {`epoch ${epochs}`}
+            {`${axis} ${steps}`}
           </text>
           <text className="axis start" x={PAD.left} y={HEIGHT - 5}>
             1
@@ -165,11 +185,11 @@ function Chart({
             <g key={line.id} className={`series ${line.id}`}>
               <polyline
                 points={drawn
-                  .map((value, index) => `${x(index + 1, epochs)},${y(value, ceiling)}`)
+                  .map((value, index) => `${x(index + 1, steps)},${y(value, ceiling)}`)
                   .join(' ')}
               />
               {head === undefined ? null : (
-                <circle className="head" cx={x(shown, epochs)} cy={y(head, ceiling)} r={2.6} />
+                <circle className="head" cx={x(shown, steps)} cy={y(head, ceiling)} r={2.6} />
               )}
             </g>
           )
@@ -181,14 +201,15 @@ function Chart({
 
 export function TrainingRun({
   history,
+  axis = DEFAULT_AXIS,
   configurationId,
   durationMs = REPLAY_MS,
   onFinished,
 }: TrainingRunProps) {
-  const epochs = history.length
-  const shown = useReplay(epochs, durationMs, onFinished)
+  const steps = history.length
+  const shown = useReplay(steps, durationMs, onFinished)
   const current = history[shown - 1]
-  const running = shown < epochs
+  const running = shown < steps
 
   if (current === undefined) return null
 
@@ -208,19 +229,19 @@ export function TrainingRun({
         figure below was measured while that model was fitted.
       </p>
 
-      <div className="epoch-line">
-        <span className="epoch-count" data-testid="training-epoch">
-          Epoch {shown} of {epochs}
+      <div className="step-line">
+        <span className="step-count" data-testid="training-step">
+          {axis} {shown} of {steps}
         </span>
-        <span className="epoch-bar" aria-hidden="true">
-          <span className="epoch-bar-fill" style={{ inlineSize: `${(shown / epochs) * 100}%` }} />
+        <span className="step-bar" aria-hidden="true">
+          <span className="step-bar-fill" style={{ inlineSize: `${(shown / steps) * 100}%` }} />
         </span>
       </div>
 
       <p role="status" className="visually-hidden">
         {running
-          ? `Epoch ${shown} of ${epochs}.`
-          : `Training finished after ${epochs} epochs. Accuracy on held-out images ${percentage(current.valAccuracy)}.`}
+          ? `${axis} ${shown} of ${steps}.`
+          : `Training finished at ${axis} ${steps}. Accuracy on held-out images ${percentage(current.valAccuracy)}.`}
       </p>
 
       <dl className="live-figures">
@@ -251,7 +272,8 @@ export function TrainingRun({
           ]}
           ceiling={worstLoss}
           shown={shown}
-          epochs={epochs}
+          steps={steps}
+          axis={axis}
           format={loss}
         />
         <Chart
@@ -262,7 +284,8 @@ export function TrainingRun({
           ]}
           ceiling={1}
           shown={shown}
-          epochs={epochs}
+          steps={steps}
+          axis={axis}
           format={percentage}
         />
       </div>

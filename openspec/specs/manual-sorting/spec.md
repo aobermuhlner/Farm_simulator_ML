@@ -49,6 +49,13 @@ No part of the crop SHALL be paid for on the strength of decisions made about ot
 This is what makes hand sorting stop being worth doing as the orchard grows: it is bounded by
 one person while the crop is not, so a growing share of the harvest is left on the ground.
 
+The apples presented SHALL be distinct photographs, no matter how often a photograph recurs
+in the crop as a whole. A person is asked to judge each apple on its picture, and the same
+picture returning is a different question — whether they remember what they answered — so
+the part of the crop a person is shown is drawn from photographs not yet used. This bounds
+what one person can be asked to sort at what the pool holds, which is far above what one
+person reaches anyway.
+
 #### Scenario: A small crop is sorted entire
 - **WHEN** the crop is smaller than the declared number one person can sort
 - **THEN** every apple of the crop is presented
@@ -68,45 +75,9 @@ one person while the crop is not, so a growing share of the harvest is left on t
 - **WHEN** two crops of different sizes, both beyond that declared number, are sorted with identical decisions
 - **THEN** both pay the same wage
 
-### Requirement: The crop follows the orchard, and is drawn from its declared composition
-
-The number of apples in a year's crop SHALL be read from the state of the farm, opening at the
-size the farm declares and growing as the orchard does, so that the crop a student sorts is
-the crop the farm actually bears. The category of each apple SHALL follow the
-crop's declared category composition rather than the composition of the pool the pictures come
-from, allocated to whole apples so that the categories sum to the crop.
-
-Pictures SHALL be taken from the evaluation split of the task's pool, no image SHALL appear
-twice in one crop, and every declared category SHALL be represented at least once.
-
-The crop SHALL be a deterministic function of the farm's identity and the year, so a student
-who leaves and returns is shown the same apples in the same order, and no crop can be redrawn
-by abandoning it.
-
-#### Scenario: A bigger orchard is more apples to sort
-- **WHEN** the farm's orchard grows between one year and the next
-- **THEN** the crop presented for the later year holds more apples
-
-#### Scenario: The mix on screen is the crop's mix
-- **WHEN** a crop is drawn for a composition that differs from the evaluation split's
-- **THEN** each category's share of the apples follows the crop's declared composition
-- **AND** it does not follow that category's share of the evaluation split
-
-#### Scenario: Every category is on screen at least once
-- **WHEN** a crop is drawn
-- **THEN** each declared category appears at least once
-
-#### Scenario: No apple is shown twice
-- **WHEN** a crop is drawn
-- **THEN** every apple in it is a distinct image of the evaluation split
-
-#### Scenario: Leaving and returning presents the same crop
-- **WHEN** a student abandons a sort part-way and enters hand sorting again in the same year
-- **THEN** the same apples are presented in the same order
-
-#### Scenario: A new year draws a new crop
-- **WHEN** the farm advances a year
-- **THEN** that year's apples are drawn again rather than repeated from the previous year
+#### Scenario: No picture is shown twice to a person
+- **WHEN** a crop in which photographs recur is presented for hand sorting
+- **THEN** every apple presented is a distinct photograph
 
 ### Requirement: One apple at a time, with nothing on screen but its picture
 
@@ -191,10 +162,14 @@ accuracy figure SHALL NOT be the only outcome reported.
 
 ### Requirement: The wage is the declared payoff table over the apples actually sorted
 
-The wage SHALL be the sum, over every apple the student decided, of the declared payoff entry
-for that apple's true category and the action chosen for it. The summary SHALL also state what
-the same apples would have paid had each been given the action its category maps to. No bonus,
-penalty or modifier the declaration does not contain SHALL be introduced here.
+The wage SHALL be the value of what the student delivered: the sum, over every apple the
+student decided, of the declared payoff entry for that apple's true category and the action
+chosen for it, less whatever the task's declared delivery term takes off that sum. The term
+SHALL be measured over the apples the student decided and SHALL apply to a person's crates
+exactly as it applies to a robot's — the co-op buys apples, not labour. The summary SHALL
+also state what the same apples would have paid had each been given the action its category
+maps to. No bonus, penalty or modifier the declaration does not contain SHALL be introduced
+here.
 
 #### Scenario: Mistakes are priced by kind
 - **WHEN** two students make the same number of correct decisions but distribute their mistakes across different actions
@@ -208,6 +183,15 @@ penalty or modifier the declaration does not contain SHALL be introduced here.
 - **WHEN** a payoff entry in the task declaration is changed
 - **THEN** the wage for the same decisions changes accordingly
 - **AND** no term the declaration does not contain contributes to it
+
+#### Scenario: A person's crates face the same co-op
+- **WHEN** a student's decisions put a share of a measured category into delivering actions that reaches the declared tolerance
+- **THEN** the wage is downgraded on the same terms a robot's delivery would be
+- **AND** the summary states the measured share and the tolerance
+
+#### Scenario: A careful sort is not downgraded
+- **WHEN** a student's decisions keep the measured share below the declared tolerance
+- **THEN** the wage is the payoff sum over the apples decided
 
 ### Requirement: The wage depends on the decisions, never on their speed
 

@@ -1,6 +1,7 @@
 {
   "schemaVersion": "1.1.0",
   "taskId": "apple-harvest",
+  "familyId": "convolutional",
   "categories": [
     "red",
     "green",

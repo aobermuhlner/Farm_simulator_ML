@@ -16,6 +16,7 @@ import {
   UNTRAINED_CONFIGURATION,
   type PoolBinding,
 } from '../src/task/artifactIndex.js'
+import { firstFamily } from '../src/task/families.js'
 import { appleDeclaration } from './helpers/apple'
 import { committedManifest } from './helpers/pool'
 
@@ -38,8 +39,10 @@ const imageIds = {
     .map(([id]) => id),
 }
 
+const family = firstFamily(apple)
+
 function read<T>(name: string): T {
-  return JSON.parse(readFileSync(`${repoRoot}${apple.predictions}/${name}`, 'utf8')) as T
+  return JSON.parse(readFileSync(`${repoRoot}${family.predictions ?? ''}/${name}`, 'utf8')) as T
 }
 
 function copy<T>(value: T): T {
@@ -53,13 +56,13 @@ const rawFile = read<Record<string, unknown>>(`${DEFAULT_ID}.json`)
 function indexIssues(mutate: (draft: Record<string, any>) => void) {
   const draft = copy(rawIndex)
   mutate(draft)
-  const result = readArtifactIndex(draft, apple, binding)
+  const result = readArtifactIndex(draft, apple, family, binding)
   if (result.ok) throw new Error('expected the index to be refused')
   return result.issues
 }
 
 function loadedIndex() {
-  const result = readArtifactIndex(copy(rawIndex), apple, binding)
+  const result = readArtifactIndex(copy(rawIndex), apple, family, binding)
   if (!result.ok) throw new Error(result.issues.map((entry) => entry.message).join(' '))
   return result.index
 }
@@ -94,7 +97,7 @@ describe('the committed artifact reads', () => {
 
 describe('the pool an artifact is bound to', () => {
   it('refuses a differently seeded pool, naming both seeds', () => {
-    const result = readArtifactIndex(copy(rawIndex), apple, { ...binding, seed: 999 })
+    const result = readArtifactIndex(copy(rawIndex), apple, family, { ...binding, seed: 999 })
     if (result.ok) throw new Error('expected a refusal')
     expect(result.issues.some((entry) => entry.code === 'artifact-pool-mismatch')).toBe(true)
     expect(messages(result.issues)).toContain('999')
@@ -103,7 +106,7 @@ describe('the pool an artifact is bound to', () => {
 
   it('refuses a pool of another id or schema version', () => {
     for (const override of [{ poolId: 'pools/elsewhere' }, { schemaVersion: '9.9.9' }]) {
-      const result = readArtifactIndex(copy(rawIndex), apple, { ...binding, ...override })
+      const result = readArtifactIndex(copy(rawIndex), apple, family, { ...binding, ...override })
       if (result.ok) throw new Error('expected a refusal')
       expect(result.issues.some((entry) => entry.code === 'artifact-pool-mismatch')).toBe(true)
     }
@@ -165,7 +168,7 @@ describe('provenance', () => {
     draft.configurations[DEFAULT_ID].shaping = [
       { step: 'sharpen-worms', configurations: [DEFAULT_ID] },
     ]
-    const result = readArtifactIndex(draft, apple, binding)
+    const result = readArtifactIndex(draft, apple, family, binding)
     if (!result.ok) throw new Error(messages(result.issues))
     expect(result.index.configurations[DEFAULT_ID]?.shaping).toHaveLength(1)
   })

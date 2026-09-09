@@ -6,10 +6,10 @@
  * lesson stays a data change. These constants are the single place that knows the
  * mapping; `vite.config.ts` serves and copies from the same table.
  *
- * A task's pool and its prediction artifact are *derived* from the declaration rather
- * than listed beside it. The declaration already names both (`pool`, `predictions`), and
- * a second copy here could disagree with it — which is how a build ends up browsing one
- * pool and scoring another.
+ * A task's pool and each family's store are *derived* from the declaration rather than
+ * listed beside them. The declaration already names both — `pool` on the task, and
+ * `predictions` or `models` on each family — and a second copy here could disagree with
+ * it, which is how a build ends up browsing one pool and scoring another.
  */
 
 /** URL mount to repo-relative source directory. */
@@ -44,12 +44,16 @@ export interface PoolPaths {
  * One `pool` entry, not two. The images a student browses and the images a run is scored
  * over are the same pool by construction here, which is a requirement of
  * `prediction-artifacts` and cheaper to keep true in the type than in review.
+ *
+ * One entry per declared family, because each family has its own store and nothing
+ * belonging to one may be fetched for another — which is also what keeps selecting a
+ * family from transferring the whole ladder.
  */
 export interface TaskDataPaths {
   readonly declaration: string
   readonly pool: PoolPaths
-  /** The artifact index; one file per configuration sits beside it. */
-  readonly predictions: string
+  /** Family id to that family's index; one file per configuration sits beside it. */
+  readonly families: Readonly<Record<string, string>>
 }
 
 /**
@@ -99,9 +103,9 @@ export function dataUrlFor(sourcePath: string): string | undefined {
   return undefined
 }
 
-/** The artifact file a configuration record names, beside its index. */
-export function configurationUrl(predictionsUrl: string, file: string): string {
-  return `${predictionsUrl.slice(0, predictionsUrl.lastIndexOf('/'))}/${file}`
+/** The file a configuration record names, beside the index that listed it. */
+export function configurationUrl(indexUrl: string, file: string): string {
+  return `${indexUrl.slice(0, indexUrl.lastIndexOf('/'))}/${file}`
 }
 
 /**
@@ -113,14 +117,30 @@ export function configurationUrl(predictionsUrl: string, file: string): string {
  */
 export function taskDataPaths(
   declarationUrl: string,
-  declaration: { readonly pool: string; readonly predictions: string },
+  declaration: {
+    readonly pool: string
+    readonly families: readonly {
+      readonly id: string
+      readonly predictions?: string
+      readonly models?: string
+    }[]
+  },
 ): TaskDataPaths | undefined {
   const pool = dataUrlFor(declaration.pool)
-  const predictions = dataUrlFor(declaration.predictions)
-  if (pool === undefined || predictions === undefined) return undefined
+  if (pool === undefined) return undefined
+
+  const families: Record<string, string> = {}
+  for (const family of declaration.families) {
+    // Whichever the family names — the declaration's own `ships` decides which it has,
+    // and the validator has already refused a family carrying neither.
+    const directory = dataUrlFor(family.predictions ?? family.models ?? '')
+    if (directory === undefined) return undefined
+    families[family.id] = `${directory}/index.json`
+  }
+
   return {
     declaration: declarationUrl,
     pool: { manifest: `${pool}/manifest.json`, atlases: pool },
-    predictions: `${predictions}/index.json`,
+    families,
   }
 }

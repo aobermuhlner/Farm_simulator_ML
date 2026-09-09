@@ -17,6 +17,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { credit, formatUnits, openFarm, recordHarvest, toUnits } from '../../src/economy/index.js'
 import { SAVE_SCHEMA_VERSION, serializeSave, type GameState } from '../../src/save/index.js'
+import { firstFamily } from '../../src/task/families.js'
 import { App } from './App.js'
 import { SAVE_KEY, STORAGE_UNAVAILABLE, type SaveStorage } from './data/save.js'
 import { farmDeclaration, loadsFarm } from './test-support/farm.js'
@@ -90,9 +91,12 @@ describe('progress is written as it changes', () => {
     )
     await userEvent.selectOptions(screen.getByLabelText('Patterns per block'), '32')
 
-    expect((stored(storage).knobs as Record<string, unknown>)[appleTask.declaration.id]).toMatchObject({
-      channels: 32,
-    })
+    // Per family, because a knob id belongs to a family: tuning one must not disturb
+    // another's values, and two families may well declare a knob under the same name.
+    const perTask = (stored(storage).knobs as Record<string, Record<string, unknown>>)[
+      appleTask.declaration.id
+    ]
+    expect(perTask?.[firstFamily(appleTask.declaration).id]).toMatchObject({ channels: 32 })
   })
 
   it('waits on no page-unload event to do it', async () => {
@@ -126,6 +130,8 @@ describe('returning opens the farm that was left', () => {
       seed: 99,
       owned: ['starter-plot'],
       knobs: {},
+      families: {},
+      tutorials: [],
       slots: {},
     }
     const storage = memoryStorage({ [SAVE_KEY]: serializeSave(played) })

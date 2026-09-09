@@ -6,7 +6,7 @@
  * rate testable without a renderer or a stopwatch.
  */
 
-export type { Crop, CropDraw, CropImage } from './crop.js'
+export type { Crop, CropDraw, CropImage, CropSplit } from './crop.js'
 export {
   allocate,
   CROP_COMPOSITION_INCOMPLETE,
@@ -15,6 +15,7 @@ export {
   CROP_SIZE_MISSING,
   CROP_TOO_SMALL,
   drawCrop,
+  drawShares,
 } from './crop.js'
 
 export type { Decision, Mistake, SortOutcome, Throughput } from './tally.js'

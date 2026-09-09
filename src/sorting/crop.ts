@@ -1,22 +1,27 @@
 /**
  * Drawing the year's crop.
  *
- * Two questions are kept apart here, and keeping them apart is the whole point of the
- * module. *What is in the crop* is the farm's declared composition; *which pictures show
- * it* is the evaluation split of the task's pool. The pool over-represents a rare
- * category on purpose so a model can learn it, and a crop shaped like a training set
- * would make nonsense of every later rule about what a harvest contains.
+ * Three questions are kept apart here, and keeping them apart is the whole point of the
+ * module. *How much* is the farm's, and grows as the land does. *What is in it* is the
+ * farm's declared composition, moved for that one year by whatever ranges the farm
+ * declares it varies within. *Which pictures show it* is the evaluation split of the
+ * task's pool. The pool over-represents a rare category on purpose so a model can learn
+ * it, and a crop shaped like a training set would make nonsense of every later rule about
+ * what a harvest contains.
  *
  * The draw is a pure function of the farm's identity, the year, and the declared numbers.
- * A student who abandons a sort and comes back is shown the same pictures in the same
- * order, so leaving is never a way to redraw a crop one does not like.
+ * A student who abandons a year and comes back is given the same crop, so leaving is
+ * never a way to redraw a year one does not like — and neither is it a way to reroll the
+ * weather, because the year's composition comes off the same stream before any picture
+ * does.
  *
- * The composition is allocated over the images *presented*, not over the whole crop.
- * Those are the same thing whenever one person can get through the crop, which is the
- * case the first harvests are. Past that point the allocation still has to guarantee one
- * image of every declared category — the requirement holds of any crop that is drawn —
- * and it must not need a distinct picture for an image nobody will ever see: a crop of
- * ten thousand would otherwise exhaust the pool over apples left on the ground.
+ * The crop is the whole year's, not the part of it one person reaches: a model at work is
+ * scored over all of it. That is why photographs recur. A crop of six thousand cannot be
+ * drawn from a thousand distinct pictures, so each category's pictures are dealt out in
+ * whole passes and the remainder is taken from a shuffle — every picture used before any
+ * is used again. `presented` is the separate, smaller question of what one pair of hands
+ * is shown, and that stays distinct, because the same picture returning asks a person
+ * whether they remember what they answered rather than what the apple is.
  *
  * Every failure refuses and names its cause. There is no partial crop: half a harvest
  * scored as a whole one is exactly the plausible-looking wrong number the refusals in
@@ -24,7 +29,7 @@
  */
 
 import type { Farm } from '../economy/index.js'
-import type { LoadedPool } from '../pool/index.js'
+import { cropSize } from '../economy/index.js'
 import type { CategoryId, TaskDeclaration } from '../task/types.js'
 import type { ValidationIssue } from '../task/validate.js'
 import { streamFor } from './random.js'
@@ -37,8 +42,23 @@ export const CROP_COMPOSITION_INCOMPLETE = 'crop-composition-incomplete'
 export const CROP_COMPOSITION_MISSING = 'crop-composition-missing'
 /** The crop cannot hold one piece of every declared category. */
 export const CROP_TOO_SMALL = 'crop-too-small'
-/** The evaluation split holds too few images of a category to show the crop. */
+/** The evaluation split holds no picture at all of a category the crop needs. */
 export const CROP_IMAGES_EXHAUSTED = 'crop-images-exhausted'
+
+/**
+ * The pictures a crop may be drawn from: the evaluation split, and what each one is.
+ *
+ * Narrower than a loaded pool on purpose. Drawing a crop needs the split's image ids and
+ * their true categories and nothing else — no atlases, no geometry, no manifest — and the
+ * shell already holds exactly that per task. Asking for a whole pool here would make the
+ * automated harvest fetch a manifest it has no other use for.
+ */
+export interface CropSplit {
+  /** Image ids of the evaluation split, in the order the manifest enumerates them. */
+  readonly imageIds: readonly string[]
+  /** True category per image id. */
+  readonly truth: Readonly<Record<string, CategoryId>>
+}
 
 /** One piece of the crop: a picture, and what it really is. */
 export interface CropImage {
@@ -49,10 +69,18 @@ export interface CropImage {
 export interface Crop {
   /** How many pieces the year's crop holds, whether or not anyone reaches them. */
   readonly size: number
-  /** The images presented for a decision, in the order they are presented. */
+  /** Every piece of the year's crop, mixed. A picture may appear more than once. */
+  readonly pieces: readonly CropImage[]
+  /** The pieces presented for a decision by hand, in the order they are presented. */
   readonly presented: readonly CropImage[]
   /** Pieces of the crop nobody gets to. Zero when the crop was sorted entire. */
   readonly unsorted: number
+  /** How many pieces of each declared category this year drew, in declared order. */
+  readonly composition: Readonly<Record<CategoryId, number>>
+  /** True when some picture stands for more than one piece of the crop. */
+  readonly recurred: boolean
+  /** How many distinct pictures the evaluation split holds, per declared category. */
+  readonly held: Readonly<Record<CategoryId, number>>
 }
 
 export type CropDraw =
@@ -103,6 +131,65 @@ export function allocate(total: number, shares: readonly number[]): number[] {
 }
 
 /**
+ * The share of the crop each category holds this year, in declared order.
+ *
+ * A category the farm declares a range for takes its share from inside that range. The
+ * rest keep the ratio their declared shares have to one another and divide whatever is
+ * left, so a wetter year leaves proportionally less of everything else rather than taking
+ * it all out of one neighbour.
+ *
+ * Drawn from the year's own stream, and drawn *first*, before any picture is chosen: the
+ * weather is a property of the year rather than of which photographs happened to come up.
+ */
+export function drawShares(
+  categories: readonly CategoryId[],
+  composition: Readonly<Record<string, number>>,
+  variation: Readonly<Record<string, { readonly min: number; readonly max: number }>> | undefined,
+  next: () => number,
+): number[] {
+  const shares = categories.map((category) => {
+    const range = variation?.[category]
+    if (range === undefined) return undefined
+    return range.min + next() * (range.max - range.min)
+  })
+
+  const taken = shares.reduce((sum: number, share) => sum + (share ?? 0), 0)
+  const holdingWeight = categories.reduce(
+    (sum, category, index) => (shares[index] === undefined ? sum + (composition[category] ?? 0) : sum),
+    0,
+  )
+  const remainder = Math.max(1 - taken, 0)
+
+  return categories.map((category, index) => {
+    const drawn = shares[index]
+    if (drawn !== undefined) return drawn
+    // Nothing left over, or nothing to divide it by: fall back on the declared share, and
+    // let `allocate` normalise. The farm's validator refuses the declarations that get
+    // here, so this is the belt to that braces rather than a case play reaches.
+    if (holdingWeight <= 0 || remainder <= 0) return composition[category] ?? 0
+    return (remainder * (composition[category] ?? 0)) / holdingWeight
+  })
+}
+
+/**
+ * `wanted` pieces drawn from `held` pictures, using every picture before reusing any.
+ *
+ * Each picture appears `floor(wanted / held)` times, and the `wanted mod held` left over
+ * are taken from a shuffle. So no picture appears more than `ceil(wanted / held)` times,
+ * and none appears twice while another appears once — which is what *the whole split
+ * before it repeats* asks for, stated as an invariant rather than as an intention.
+ */
+function deal(held: readonly string[], wanted: number, shuffle: (of: readonly string[]) => string[]): string[] {
+  const passes = Math.floor(wanted / held.length)
+  const remainder = wanted % held.length
+
+  const drawn: string[] = []
+  for (let pass = 0; pass < passes; pass += 1) drawn.push(...shuffle(held))
+  drawn.push(...shuffle(held).slice(0, remainder))
+  return drawn
+}
+
+/**
  * The year's crop for one task, or the reasons it cannot be drawn.
  *
  * `seed` is the farm's own, drawn once when the farm was opened and kept for its life;
@@ -111,12 +198,12 @@ export function allocate(total: number, shares: readonly number[]): number[] {
 export function drawCrop(
   declaration: TaskDeclaration,
   farm: Farm,
-  pool: LoadedPool,
+  split: CropSplit,
   seed: number,
 ): CropDraw {
   const issues: ValidationIssue[] = []
 
-  const size = farm.cropSize
+  const size = cropSize(farm)
   if (!Number.isInteger(size) || size < 1) {
     issues.push(
       issue(
@@ -158,68 +245,128 @@ export function drawCrop(
 
   if (issues.length > 0) return { ok: false, issues }
 
-  const perHarvest = declaration.handSorting.perHarvest
-  const presentedCount = Math.min(size, perHarvest)
-
-  if (presentedCount < categories.length) {
+  if (size < categories.length) {
     // Which category goes missing is not arbitrary: the smallest share is the one whole
     // pieces run out on, and naming it says what the crop would have to hold to be shown.
     const absent = [...categories].sort(
-      (a, b) => (composition[a] ?? 0) - (composition[b] ?? 0) || categories.indexOf(a) - categories.indexOf(b),
+      (a, b) =>
+        (composition[a] ?? 0) - (composition[b] ?? 0) || categories.indexOf(a) - categories.indexOf(b),
     )[0]
     return {
       ok: false,
       issues: [
         issue(
           CROP_TOO_SMALL,
-          `A crop of ${presentedCount} cannot hold one of each of the ${categories.length} categories this task declares, so "${String(absent)}" would be absent from it.`,
+          `A crop of ${size} cannot hold one of each of the ${categories.length} categories this task declares, so "${String(absent)}" would be absent from it.`,
           'cropSize',
         ),
       ],
     }
   }
 
-  const counts = allocate(
-    presentedCount,
-    categories.map((category) => composition[category] as number),
-  )
-
   const stream = streamFor(seed, farm.year)
+  const shares = drawShares(
+    categories,
+    composition,
+    farm.declaration.yearVariation,
+    () => stream.next(),
+  )
+  const counts = allocate(size, shares)
+
+  // What one pair of hands reaches, as its own allocation of the same year's shares. It
+  // has to be the year's mix rather than a slice off the front of the crop, because the
+  // wage must not move when the orchard grows past what one person can sort — two crops
+  // of different sizes sorted the same way pay the same, and a sampled mix would not.
+  const perHarvest = Math.min(size, declaration.handSorting.perHarvest)
+  const targets = allocate(perHarvest, shares)
+
   const available = new Map<CategoryId, string[]>()
   for (const category of categories) available.set(category, [])
-  for (const imageId of pool.order.pool) {
-    available.get(pool.truth[imageId] ?? '')?.push(imageId)
+  for (const imageId of split.imageIds) {
+    available.get(split.truth[imageId] ?? '')?.push(imageId)
   }
 
   const drawn: CropImage[] = []
+  const held: Record<CategoryId, number> = {}
+  const composed: Record<CategoryId, number> = {}
+  let recurred = false
+
   categories.forEach((category, index) => {
     const wanted = counts[index] ?? 0
-    const held = available.get(category) ?? []
-    if (held.length < wanted) {
+    const pictures = available.get(category) ?? []
+    held[category] = pictures.length
+    composed[category] = wanted
+    // Every declared category has to reach the crop, and a category the split holds no
+    // picture of cannot reach it at any size. That is the only count that still refuses:
+    // a category the split holds too *few* pictures of no longer does, because the crop
+    // repeats them.
+    if (pictures.length === 0) {
       issues.push(
         issue(
           CROP_IMAGES_EXHAUSTED,
-          `The evaluation split holds ${held.length} images of "${category}", and this crop needs ${wanted}.`,
+          `The evaluation split holds no image of "${category}", and this crop needs ${wanted} of them.`,
           category,
         ),
       )
       return
     }
-    // Shuffled and taken from the front, so no image appears twice in one crop.
-    for (const imageId of stream.shuffle(held).slice(0, wanted)) {
+    // What one person is shown must be distinct pictures, so their share of this category
+    // is bounded by how many the split holds. That bound is far above what one pair of
+    // hands reaches against any real pool; it is here so a small one shortens the sort
+    // rather than refusing the crop a model could have brought in perfectly well.
+    targets[index] = Math.min(targets[index] ?? 0, pictures.length)
+    if (wanted > pictures.length) recurred = true
+    for (const imageId of deal(pictures, wanted, (of) => stream.shuffle(of))) {
       drawn.push({ imageId, category })
     }
   })
 
   if (issues.length > 0) return { ok: false, issues }
 
+  // Shuffled so the categories arrive mixed rather than in declared blocks.
+  const pieces = stream.shuffle(drawn)
+
+  // The pieces themselves, in the crop's own order, taken until each category's share of
+  // what one person reaches is filled and skipping any picture already put in front of
+  // them. So a person sorts the crop rather than a sample standing in for it, and never
+  // sees one picture twice however often the crop repeats it.
+  const quota = new Map(categories.map((category, index) => [category, targets[index] ?? 0]))
+  const reachable = targets.reduce((sum, count) => sum + count, 0)
+  const presented: CropImage[] = []
+  const shown = new Set<string>()
+  for (const piece of pieces) {
+    if (presented.length >= reachable) break
+    if (shown.has(piece.imageId)) continue
+    const left = quota.get(piece.category) ?? 0
+    if (left <= 0) continue
+    quota.set(piece.category, left - 1)
+    shown.add(piece.imageId)
+    presented.push(piece)
+  }
+  // Whole pieces are allocated twice, over the crop and over what one person reaches, and
+  // the two roundings can leave a category wanting one more piece than the crop drew of
+  // it. The shortfall is made up from the crop in its own order rather than left short:
+  // the count presented is what the task declares, and a crop one piece light would be
+  // paid as a whole one.
+  if (presented.length < reachable) {
+    for (const piece of pieces) {
+      if (presented.length >= reachable) break
+      if (shown.has(piece.imageId)) continue
+      shown.add(piece.imageId)
+      presented.push(piece)
+    }
+  }
+
   return {
     ok: true,
     crop: {
       size,
-      // Shuffled again so the categories arrive mixed rather than in declared blocks.
-      presented: stream.shuffle(drawn),
-      unsorted: size - presentedCount,
+      pieces,
+      presented,
+      unsorted: size - presented.length,
+      composition: composed,
+      recurred,
+      held,
     },
   }
 }

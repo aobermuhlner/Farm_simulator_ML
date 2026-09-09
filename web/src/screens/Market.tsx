@@ -29,6 +29,20 @@ export interface MarketProps {
   readonly refusal?: readonly ValidationIssue[]
 }
 
+/**
+ * How much of a repeatable item has been bought and how much is left, or nothing at all
+ * for an item the catalog permits once.
+ *
+ * Shown so a student can see what is left to earn towards rather than discovering the
+ * limit by reaching it. An item at its limit says what it gave; it is never presented as
+ * unaffordable, because no amount of money would obtain another one.
+ */
+function tallyNote(entry: MarketItem): string | undefined {
+  if (entry.limit === 1) return undefined
+  if (entry.remaining === 0) return `All ${entry.limit} bought`
+  return `${entry.held} of ${entry.limit} bought, ${entry.remaining} to go`
+}
+
 /** What an item's state says about it, in words the catalog does not supply. */
 function stateNote(entry: MarketItem, formatPrice: (units: number) => string): string {
   if (entry.state === 'owned') return 'Owned'
@@ -60,6 +74,11 @@ export function Market({ view, formatPrice, onBuy, onBack, refusal }: MarketProp
               <li key={entry.item.id} className={`market-item ${entry.state}`}>
                 <h3>{entry.item.label}</h3>
                 <p className="shop-copy">{entry.item.copy}</p>
+                {tallyNote(entry) === undefined ? null : (
+                  <p className="market-tally" data-testid={`tally-${entry.item.id}`}>
+                    {tallyNote(entry)}
+                  </p>
+                )}
                 <p className="market-state" data-testid={`state-${entry.item.id}`}>
                   {stateNote(entry, formatPrice)}
                 </p>

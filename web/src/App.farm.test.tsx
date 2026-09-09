@@ -8,17 +8,26 @@
  * free however much is done in it — `App.workshop.test.tsx` holds that half.
  */
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { firstFamily } from '../../src/task/families.js'
 import type { Farm } from '../../src/economy/index.js'
 import { credit, formatUnits, openFarm, toUnits } from '../../src/economy/index.js'
 import { App } from './App.js'
 import { FarmBar } from './components/FarmBar.js'
 import { farmDeclaration, loadsFarm } from './test-support/farm.js'
-import { loadsCatalog, memoryStorage, savesTo, soundCatalog } from './test-support/progression.js'
-import { declaredValues } from '../../src/progression/index.js'
+import {
+  loadsCatalog,
+  memoryStorage,
+  repeatShopCatalog,
+  savesTo,
+  soundCatalog,
+} from './test-support/progression.js'
+import { declaredValues, UNLOCK_KINDS } from '../../src/progression/index.js'
 import { STORAGE_UNAVAILABLE } from './data/save.js'
 
 /** What the storage edge reports when the browser will not keep anything. */
@@ -26,12 +35,20 @@ const refusedStorage = {
   code: STORAGE_UNAVAILABLE,
   message: 'This browser would not keep this change, so progress is not being kept this session.',
 }
-import { appleTask as committedAppleTask, loadEntryFor } from './test-support/pool.js'
+import {
+  appleCrop,
+  appleManifest,
+  appleTask as committedAppleTask,
+  farmSorting,
+  loadEntryFor,
+} from './test-support/pool.js'
 
 afterEach(cleanup)
 
 const appleTask = committedAppleTask()
 const declaration = farmDeclaration()
+/** The crop the shipped orchard opens at: its land times what a unit of it bears. */
+const OPENING_CROP = declaration.orchard.opening * declaration.orchard.piecesPerUnit
 const opened = openFarm(declaration)
 
 /** The declared opening balance as the bar presents it. */
@@ -142,7 +159,7 @@ describe('a farm declaring something else', () => {
       precision: 0,
       openingBalance: 40,
       openingYear: 11,
-      openingCrop: 6,
+      orchard: { label: 'Orchard', unit: 'trees', opening: 6, piecesPerUnit: 1 },
       cropComposition: { sound: 0.75, spoiled: 0.25 },
     }
     renderApp(loadsFarm(other))
@@ -347,7 +364,7 @@ describe('only closing a year moves money', () => {
 describe('what the farm owns does not decide who works', () => {
   /** A catalog whose every row opens one knob outright, and which the farm owns already. */
   function ownsEverything() {
-    const items = appleTask.declaration.knobs.map((knob) => ({
+    const items = firstFamily(appleTask.declaration).knobs.map((knob) => ({
       id: `opens-${knob.id}`,
       group: 'toolshed',
       label: `Everything ${knob.id} offers`,
@@ -391,5 +408,185 @@ describe('what the farm owns does not decide who works', () => {
     expect(screen.getByRole('status').textContent).toContain(appleTask.declaration.title)
     expect(shown('Year')).toBe(OPENING_YEAR)
     expect(shown('Balance')).toBe(OPENING_BALANCE)
+  })
+})
+
+/**
+ * One crop per task per year, whatever labour brings it in.
+ *
+ * The claim is not that two screens show the same number; it is that the automated
+ * harvest and the sorting stage are handed the output of one draw. So the report of a
+ * model-worked year is checked against the crop `loadCrop` would hand a pair of hands for
+ * that same farm and that same year — which is what the sorting stage is given, and the
+ * only thing it is given.
+ */
+describe('one crop, two labours', () => {
+  const SEED = 4242
+
+  function renderSeeded(): void {
+    render(
+      <App
+        load={() => Promise.resolve({ ok: true as const, value: [appleTask] })}
+        loadEntry={loadEntryFor}
+        loadFarm={loadsFarm()}
+        loadShop={loadsCatalog()}
+        drawSeed={() => SEED}
+        {...savesTo(memoryStorage())}
+        replayMs={0}
+      />,
+    )
+  }
+
+  it('brings a model’s year in over the crop a pair of hands would have been given', async () => {
+    renderSeeded()
+    await playYear(declaration.openingYear)
+    await openReport(declaration.openingYear)
+
+    // The crop the sorting stage draws for the same farm at the same year, through the
+    // same projection the shell fetches it by.
+    const byHand = appleCrop(farmSorting(OPENING_CROP), SEED)
+    const stated = document.querySelector('[data-crop-size]') as HTMLElement
+
+    expect(stated.getAttribute('data-crop-size')).toBe(String(byHand.size))
+    expect(byHand.size).toBe(OPENING_CROP)
+    for (const [category, count] of Object.entries(byHand.composition)) {
+      expect(stated.textContent, `"${category}" is not the crop the hands would sort`).toContain(
+        String(count),
+      )
+    }
+  })
+
+  it('scores the model over the crop rather than over the pool', async () => {
+    renderSeeded()
+    await playYear(declaration.openingYear)
+    await openReport(declaration.openingYear)
+
+    // The crop is six times the pool, so a run scored over the pool would say a thousand.
+    const configuration = document.querySelector('.configuration') as HTMLElement
+    expect(configuration.textContent).toContain(String(OPENING_CROP))
+    expect(appleTask.imageIds.pool?.length).toBeLessThan(OPENING_CROP)
+  })
+
+  it('draws a new crop for the following year rather than repeating this one', async () => {
+    renderSeeded()
+    await playYear(declaration.openingYear)
+    await userEvent.click(await screen.findByRole('button', { name: /Run year/ }))
+    await userEvent.click(
+      within(screen.getByRole('region', { name: 'Run the year' })).getByRole('button', {
+        name: /Run year/,
+      }),
+    )
+    await openReport(declaration.openingYear + 1)
+
+    const second = document.querySelector('[data-crop-size]') as HTMLElement
+    const firstYear = appleCrop(farmSorting(OPENING_CROP), SEED)
+    const secondYear = appleCrop(
+      { ...farmSorting(OPENING_CROP), year: declaration.openingYear + 1 },
+      SEED,
+    )
+    expect(secondYear.composition).not.toEqual(firstYear.composition)
+    for (const [category, count] of Object.entries(secondYear.composition)) {
+      expect(second.textContent, `"${category}" is not the second year's crop`).toContain(
+        String(count),
+      )
+    }
+  })
+})
+
+describe('the orchard is on every screen of an opened farm', () => {
+  /** The land the shipped-shaped orchard can reach through `repeatShopCatalog`. */
+  const REACH = declaration.orchard.opening + 5 * 20
+  const HELD = `${declaration.orchard.opening} / ${REACH} ${declaration.orchard.unit}`
+
+  function renderWithLand() {
+    return renderApp(loadsFarm(), loadsCatalog(repeatShopCatalog()))
+  }
+
+  it('shows the land held, the land it could reach, and the declared unit', async () => {
+    renderWithLand()
+    await screen.findByRole('heading', { name: 'The farm' })
+    expect(shown(declaration.orchard.label)).toBe(HELD)
+  })
+
+  it('is on the overview, the market, a run and a report', async () => {
+    renderWithLand()
+    await screen.findByRole('heading', { name: 'The farm' })
+    expect(shown(declaration.orchard.label)).toBe(HELD)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go to the market' }))
+    expect(shown(declaration.orchard.label)).toBe(HELD)
+    await userEvent.click(screen.getByRole('button', { name: /back/i }))
+
+    await openTask()
+    await putToWork()
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
+    await runYear(declaration.openingYear)
+    expect(shown(declaration.orchard.label)).toBe(HELD)
+
+    await openReport(declaration.openingYear)
+    expect(screen.getByRole('region', { name: 'Run report' })).toBeDefined()
+    expect(shown(declaration.orchard.label)).toBe(HELD)
+  })
+
+  it('follows a purchase: the land shown rises, the land it could reach does not', async () => {
+    renderWithLand()
+    await screen.findByRole('heading', { name: 'The farm' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go to the market' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Buy / }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+    expect(shown(declaration.orchard.label)).toBe(
+      `${declaration.orchard.opening + 20} / ${REACH} ${declaration.orchard.unit}`,
+    )
+  })
+
+  it('shows the land held alone where no catalog gives a maximum', async () => {
+    // A limit invented for a farm nothing can sell land to would state a ceiling that
+    // nothing declared — so the figure is shown on its own instead.
+    renderApp()
+    await screen.findByRole('heading', { name: 'The farm' })
+
+    expect(shown(declaration.orchard.label)).toBe(
+      `${declaration.orchard.opening} ${declaration.orchard.unit}`,
+    )
+    expect(shown(declaration.orchard.label)).not.toContain('/')
+  })
+
+  it('names no unit of land and no word for the orchard of its own', async () => {
+    // Both words come from the declaration, so the same screens present a farm measured
+    // in something other than trees. The source-level guard is in
+    // `no-task-specific-code.test.tsx`; this is the rendered half of it.
+    renderWithLand()
+    await screen.findByRole('heading', { name: 'The farm' })
+
+    const bar = screen.getByRole('region', { name: 'Farm status' })
+    expect(bar.textContent).toContain(declaration.orchard.label)
+    expect(bar.textContent).toContain(declaration.orchard.unit)
+  })
+
+  it('offers nothing anywhere that would sell, return or shrink the orchard', async () => {
+    renderWithLand()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    for (const word of [/sell/i, /refund/i, /return the/i, /shrink/i, /fell/i]) {
+      expect(screen.queryByRole('button', { name: word }), String(word)).toBeNull()
+    }
+  })
+})
+
+describe('the shell stores what a purchase returned and names no unlock kind', () => {
+  it('takes the farm and the ownership `buyItem` gave back, whatever it opened', async () => {
+    // Growth is applied inside `buyItem`, so the shell has nothing to branch on: it
+    // stores the farm it was handed. A screen that knew what growth was would be a
+    // second place for the rule to live, and to disagree.
+    const source = readFileSync(join(process.cwd(), 'web/src/App.tsx'), 'utf8')
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+    for (const kind of UNLOCK_KINDS) {
+      expect(code, `App.tsx names the unlock kind "${kind}"`).not.toContain(kind)
+    }
+    expect(code).toContain('bought.farm')
+    expect(code).toContain('bought.owned')
   })
 })

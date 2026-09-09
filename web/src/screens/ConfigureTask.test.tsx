@@ -8,17 +8,19 @@ import {
   unrelatedArtifact,
   unrelatedDeclaration,
 } from '../test-support/declarations.js'
+import { firstFamily } from '../../../src/task/families.js'
 import { ConfigureTask } from './ConfigureTask.js'
 
 afterEach(cleanup)
 
 const apple = appleDeclaration()
+const appleFamily = firstFamily(apple)
 
 function renderApple() {
   return render(
     <ConfigureTask
       declaration={apple}
-      loadEntry={entryLoader(appleArtifact())}
+      loadEntry={entryLoader(apple, appleArtifact())}
       replayMs={0}
       onBack={() => {}}
       onPutToWork={() => {}}
@@ -58,14 +60,14 @@ describe('the configuration screen renders from knob declarations', () => {
   it('renders one control per declared knob, labelled as declared', () => {
     renderApple()
 
-    for (const knob of apple.knobs) {
+    for (const knob of appleFamily.knobs) {
       expect(screen.getByLabelText(knob.label), `no control for ${knob.id}`).toBeDefined()
     }
   })
 
   it('offers a choice knob exactly its declared values', () => {
     renderApple()
-    const blocks = apple.knobs.find((knob) => knob.id === 'blocks')
+    const blocks = appleFamily.knobs.find((knob) => knob.id === 'blocks')
     if (blocks?.kind !== 'choice') throw new Error('the depth knob is expected to be a choice')
 
     const options = within(knobSelect(blocks.label)).getAllByRole('option')
@@ -77,7 +79,7 @@ describe('the configuration screen renders from knob declarations', () => {
 
   it('gives a slider knob its declared min, max and step', () => {
     renderApple()
-    const slider = apple.knobs.find((knob) => knob.kind === 'slider')
+    const slider = appleFamily.knobs.find((knob) => knob.kind === 'slider')
     if (slider?.kind !== 'slider') throw new Error('the apple task is expected to declare a slider')
 
     const input = screen.getByLabelText(slider.label)
@@ -91,7 +93,7 @@ describe('the configuration screen renders from knob declarations', () => {
   it('seeds every knob at its declared default', () => {
     renderApple()
 
-    for (const knob of apple.knobs) {
+    for (const knob of appleFamily.knobs) {
       const control = screen.getByLabelText(knob.label) as HTMLInputElement | HTMLSelectElement
       const shown =
         knob.kind === 'choice' ? knob.values[Number(control.value)] : Number(control.value)
@@ -104,13 +106,13 @@ describe('the configuration screen renders from knob declarations', () => {
     render(
       <ConfigureTask
         declaration={other}
-        loadEntry={entryLoader(unrelatedArtifact())}
+        loadEntry={entryLoader(other, unrelatedArtifact())}
         replayMs={0}
         onBack={() => {}}
       />,
     )
 
-    for (const knob of other.knobs) {
+    for (const knob of firstFamily(other).knobs) {
       expect(screen.getByLabelText(knob.label)).toBeDefined()
     }
   })
@@ -120,7 +122,7 @@ describe('knob help', () => {
   it('offers help on every rendered knob and shows the declared copy', async () => {
     renderApple()
 
-    for (const knob of apple.knobs) {
+    for (const knob of appleFamily.knobs) {
       const affordance = screen.getByText(`What does ${knob.label} do?`)
       await userEvent.click(affordance)
       expect(screen.getByText(knob.help), `${knob.id} help copy missing`).toBeDefined()
@@ -187,7 +189,7 @@ describe('putting a model to work', () => {
     render(
       <ConfigureTask
         declaration={apple}
-        loadEntry={entryLoader(appleArtifact())}
+        loadEntry={entryLoader(apple, appleArtifact())}
         replayMs={0}
         onBack={() => {}}
         onPutToWork={onPutToWork}
@@ -198,7 +200,8 @@ describe('putting a model to work', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Put this model to work' }))
 
     expect(onPutToWork).toHaveBeenCalledOnce()
-    expect(onPutToWork.mock.calls[0]?.[0]).toBe('blocks2-channels16-regularization1-dropout0')
+    expect(onPutToWork.mock.calls[0]?.[0]).toBe(appleFamily.id)
+    expect(onPutToWork.mock.calls[0]?.[1]).toBe('blocks2-channels16-regularization1-dropout0')
   })
 
   it('withdraws the offer as soon as a knob moves, because that model is no longer made', async () => {
@@ -227,10 +230,13 @@ describe('a task already at work', () => {
     render(
       <ConfigureTask
         declaration={apple}
-        loadEntry={entryLoader(appleArtifact())}
+        loadEntry={entryLoader(apple, appleArtifact())}
         replayMs={0}
         onBack={() => {}}
-        atWork="blocks3-channels32-regularization1-dropout0"
+        atWork={{
+          family: appleFamily.id,
+          configurationId: 'blocks3-channels32-regularization1-dropout0',
+        }}
         onPutToWork={() => {}}
         onHandBack={onHandBack}
       />,
@@ -325,7 +331,7 @@ describe('leaving the task', () => {
     render(
       <ConfigureTask
         declaration={apple}
-        loadEntry={entryLoader(appleArtifact())}
+        loadEntry={entryLoader(apple, appleArtifact())}
         onBack={onBack}
       />,
     )

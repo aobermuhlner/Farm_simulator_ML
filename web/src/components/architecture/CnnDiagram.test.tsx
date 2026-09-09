@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveArchitecture } from '../../../../src/task/diagram.js'
+import { firstFamily } from '../../../../src/task/families.js'
 import type { ChoiceKnob } from '../../../../src/task/types.js'
 import {
   appleDeclaration,
@@ -21,26 +22,27 @@ import { CnnDiagram } from './CnnDiagram.js'
 afterEach(cleanup)
 
 const task = convolutionalDeclaration()
+const family = firstFamily(task)
 const SOURCE = join(process.cwd(), 'web/src/components/architecture/CnnDiagram.tsx')
 
 const DIAGRAM = (() => {
-  if (task.diagram?.kind !== 'cnn') throw new Error('the test task should declare a cnn')
-  return task.diagram
+  if (family.diagram?.kind !== 'cnn') throw new Error('the test task should declare a cnn')
+  return family.diagram
 })()
 
 function choiceKnob(knobId: string): ChoiceKnob {
-  const knob = task.knobs.find((candidate) => candidate.id === knobId)
+  const knob = family.knobs.find((candidate) => candidate.id === knobId)
   if (knob?.kind !== 'choice') throw new Error(`${knobId} is expected to be a choice knob`)
   return knob
 }
 
 function defaults(): Record<string, string | number> {
-  return Object.fromEntries(task.knobs.map((knob) => [knob.id, knob.default]))
+  return Object.fromEntries(family.knobs.map((knob) => [knob.id, knob.default]))
 }
 
 /** Renders the drawing for the convolutional task at some knob values. */
 function draw(overrides: Readonly<Record<string, string | number>> = {}): HTMLElement {
-  const architecture = resolveArchitecture(task, { ...defaults(), ...overrides })
+  const architecture = resolveArchitecture(task, family, { ...defaults(), ...overrides })
   if (architecture?.kind !== 'cnn') throw new Error('these values should resolve')
   const { container } = render(<CnnDiagram architecture={architecture} />)
   return container
@@ -294,7 +296,8 @@ describe('the classifier head', () => {
     const apple = appleDeclaration()
     const architecture = resolveArchitecture(
       apple,
-      Object.fromEntries(apple.knobs.map((knob) => [knob.id, knob.default])),
+      firstFamily(apple),
+      Object.fromEntries(firstFamily(apple).knobs.map((knob) => [knob.id, knob.default])),
     )
     if (architecture?.kind !== 'cnn') throw new Error('the shipped task should resolve as a cnn')
 
@@ -313,7 +316,7 @@ describe('the drawing as a labelled graphic', () => {
 
     expect(name).toContain(`${String(deepest)} blocks`)
     for (let block = 0; block < Number(deepest); block += 1) {
-      const channels = Number(task.knobs.find((knob) => knob.id === DIAGRAM.channelsKnob)?.default) * 2 ** block
+      const channels = Number(family.knobs.find((knob) => knob.id === DIAGRAM.channelsKnob)?.default) * 2 ** block
       expect(name, `channels of block ${block}`).toContain(String(channels))
     }
     expect(name).toContain(`${last} by ${last}`)
@@ -338,7 +341,7 @@ describe('what the drawing may not know', () => {
     const container = draw()
 
     for (const knobId of [DIAGRAM.blocksKnob, DIAGRAM.channelsKnob]) {
-      const label = task.knobs.find((knob) => knob.id === knobId)?.label
+      const label = family.knobs.find((knob) => knob.id === knobId)?.label
       if (label === undefined) throw new Error(`no label for ${knobId}`)
       expect(container.textContent).toContain(label)
     }
@@ -348,7 +351,7 @@ describe('what the drawing may not know', () => {
     const source = readFileSync(SOURCE, 'utf8')
     const apple = appleDeclaration()
 
-    for (const knob of [...task.knobs, ...apple.knobs]) {
+    for (const knob of [...family.knobs, ...firstFamily(apple).knobs]) {
       expect(source, `the component names "${knob.id}"`).not.toMatch(
         new RegExp(`['"\`]${knob.id}['"\`]`),
       )

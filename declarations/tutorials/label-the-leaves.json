@@ -1,0 +1,28 @@
+{
+  "id": "first-tree-leaves",
+  "title": "Say what each leaf is for",
+  "teaching": {
+    "summary": "The questions on this tree are already written. What is missing is what its answers mean: drop one apple into each empty leaf to say what that leaf is for, then test it against nine real apples out of the training set.",
+    "theory": "A tree asks one question at a time. An apple goes in at the top, follows the first branch whose question it answers yes to, and comes to rest in exactly one leaf — and that leaf is the tree's answer for it. Nothing else about the apple matters: two apples that answer every question the same way get the same verdict, however different they look to you. That is what makes a tree readable, and it is also where one can be honestly wrong. If the numbers a tree asks about do not separate what you care about, no labelling of its leaves can rescue it."
+  },
+  "disclosure": "The two questions this tree asks were given to you. Choosing the questions — which measurement to cut, and where to cut it — is the whole of what fitting a tree is, and the model this lesson introduces chooses its own.",
+  "kind": "label-the-leaves",
+  "puzzle": {
+    "questions": [
+      { "feature": "darkSpotArea", "threshold": 0.0205 },
+      { "feature": "redness", "threshold": 0.4513 }
+    ],
+    "items": [
+      { "image": "t-006", "category": "wormy", "features": { "darkSpotArea": 0.0559, "redness": 0.4692 } },
+      { "image": "t-013", "category": "wormy", "features": { "darkSpotArea": 0.0559, "redness": 0.4688 } },
+      { "image": "t-134", "category": "wormy", "features": { "darkSpotArea": 0.0612, "redness": 0.4934 } },
+      { "image": "t-025", "category": "red", "features": { "darkSpotArea": 0, "redness": 0.5202 } },
+      { "image": "t-163", "category": "red", "features": { "darkSpotArea": 0, "redness": 0.5191 } },
+      { "image": "t-043", "category": "red", "features": { "darkSpotArea": 0, "redness": 0.5181 } },
+      { "image": "t-074", "category": "wormy", "features": { "darkSpotArea": 0, "redness": 0.4954 } },
+      { "image": "t-016", "category": "green", "features": { "darkSpotArea": 0, "redness": -0.4191 } },
+      { "image": "t-193", "category": "green", "features": { "darkSpotArea": 0, "redness": -0.4426 } }
+    ],
+    "mark": 8
+  }
+}

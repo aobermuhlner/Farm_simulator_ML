@@ -12,6 +12,8 @@ import { describe, expect, it } from 'vitest'
 import { DATA_MOUNTS, sourcePathFor } from '../web/src/data/paths.js'
 import { SHIPPED_FARM } from '../web/src/data/paths.js'
 import {
+  cropSize,
+  openFarm,
   OPTIONAL_FARM_FIELDS,
   REQUIRED_FARM_FIELDS,
   validateFarmDeclaration,
@@ -33,7 +35,7 @@ function sound(): Record<string, unknown> {
     precision: 2,
     openingBalance: 1500,
     openingYear: 4,
-    openingCrop: 24,
+    orchard: { label: 'Orchard', unit: 'trees', opening: 24, piecesPerUnit: 1 },
     cropComposition: { sound: 0.8, spoiled: 0.2 },
   }
 }
@@ -123,10 +125,105 @@ describe('a farm declaration that cannot be trusted', () => {
   })
 })
 
-describe('the crop the farm bears', () => {
-  it('opens at about ten pieces in the shipped declaration', () => {
+describe('the orchard the farm declares', () => {
+  it('opens at the orchard the shipped declaration bears', () => {
+    // A hundred trees at sixty pieces each, which is what `Game_design.md` §4.5 quotes and
+    // what every earnings figure in this repository is set against. It is also well above
+    // the floor the draw guard sets — `harvest-scoring/design.md`, decision 7 — below which
+    // which photographs were drawn would decide a year more than the model does.
     const parsed = shippedFarmJson() as Record<string, unknown>
-    expect(parsed.openingCrop).toBe(10)
+    const orchard = parsed.orchard as Record<string, unknown>
+
+    expect(orchard.opening).toBe(100)
+    expect(orchard.piecesPerUnit).toBe(60)
+    expect((orchard.opening as number) * (orchard.piecesPerUnit as number)).toBe(6000)
+    expect(orchard.unit).toBe('trees')
+    expect(orchard.label).toBe('Orchard')
+  })
+
+  it('is what the opened farm bears, rather than a separately declared size', () => {
+    const validated = validateFarmDeclaration(shippedFarmJson())
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    expect(cropSize(openFarm(validated.declaration))).toBe(6000)
+  })
+
+  it('states the size of the crop in no declared field, so nothing can disagree', () => {
+    // Two statements about one fact, with nothing able to say which is right when a later
+    // edit makes them differ. The crop is derived; only the land is declared.
+    const fields = [...REQUIRED_FARM_FIELDS, ...OPTIONAL_FARM_FIELDS] as readonly string[]
+    expect(fields).not.toContain('openingCrop')
+    expect(fields).not.toContain('cropSize')
+    expect(fields).toContain('orchard')
+    expect(Object.keys(shippedFarmJson() as Record<string, unknown>)).not.toContain('openingCrop')
+  })
+
+  it('refuses an orchard whose land is not a whole number of one or more', () => {
+    for (const opening of [0, -4, 2.5, '10', null]) {
+      const validated = validateFarmDeclaration({
+        ...sound(),
+        orchard: { ...(sound().orchard as Record<string, unknown>), opening },
+      })
+      expect(validated.ok, `land of ${JSON.stringify(opening)} was accepted`).toBe(false)
+      if (validated.ok) continue
+      expect(validated.issues.map((issue) => issue.field)).toContain('orchard.opening')
+    }
+  })
+
+  it('refuses an orchard whose yield per unit is not a whole number of one or more', () => {
+    for (const piecesPerUnit of [0, -4, 2.5, '10', null]) {
+      const validated = validateFarmDeclaration({
+        ...sound(),
+        orchard: { ...(sound().orchard as Record<string, unknown>), piecesPerUnit },
+      })
+      expect(validated.ok, `a yield of ${JSON.stringify(piecesPerUnit)} was accepted`).toBe(false)
+      if (validated.ok) continue
+      expect(validated.issues.map((issue) => issue.field)).toContain('orchard.piecesPerUnit')
+    }
+  })
+
+  it('refuses an orchard with no name for itself or for a unit of its land', () => {
+    for (const field of ['label', 'unit'] as const) {
+      for (const value of ['', '   ', 7, null]) {
+        const validated = validateFarmDeclaration({
+          ...sound(),
+          orchard: { ...(sound().orchard as Record<string, unknown>), [field]: value },
+        })
+        expect(validated.ok, `${field} of ${JSON.stringify(value)} was accepted`).toBe(false)
+        if (validated.ok) continue
+        expect(validated.issues.map((issue) => issue.field)).toContain(`orchard.${field}`)
+      }
+    }
+  })
+
+  it('names each faulty field of the orchard rather than the orchard as a whole', () => {
+    const validated = validateFarmDeclaration({
+      ...sound(),
+      orchard: { label: 'Orchard', unit: '', opening: 2.5, piecesPerUnit: 60 },
+    })
+    expect(validated.ok).toBe(false)
+    if (validated.ok) return
+    const fields = validated.issues.map((issue) => issue.field)
+    expect(fields).toContain('orchard.unit')
+    expect(fields).toContain('orchard.opening')
+    expect(fields).not.toContain('orchard.piecesPerUnit')
+  })
+
+  it('refuses a farm declaring no orchard rather than assuming a size for it', () => {
+    const validated = validateFarmDeclaration(fieldsOf(sound(), 'orchard'))
+    expect(validated.ok).toBe(false)
+    if (validated.ok) return
+    expect(validated.issues.map((issue) => issue.field)).toContain('orchard')
+    expect(validated.issues.map((issue) => issue.code)).toContain('missing-field')
+  })
+
+  it('refuses an orchard that is not an object, naming the field', () => {
+    for (const orchard of ['big', 100, []]) {
+      const validated = validateFarmDeclaration({ ...sound(), orchard })
+      expect(validated.ok, `an orchard of ${JSON.stringify(orchard)} was accepted`).toBe(false)
+      if (validated.ok) continue
+      expect(validated.issues.map((issue) => issue.field)).toContain('orchard')
+    }
   })
 
   it('declares what the shipped crop is made of, in shares that come to one', () => {
@@ -134,17 +231,6 @@ describe('the crop the farm bears', () => {
     const composition = parsed.cropComposition as Record<string, number>
     expect(Object.keys(composition).length).toBeGreaterThan(1)
     expect(Object.values(composition).reduce((total, share) => total + share, 0)).toBeCloseTo(1, 9)
-  })
-
-  it('refuses an opening crop that is not a whole number of one or more', () => {
-    for (const openingCrop of [0, -4, 2.5, '10', null]) {
-      const validated = validateFarmDeclaration({ ...sound(), openingCrop })
-      expect(validated.ok, `an opening crop of ${JSON.stringify(openingCrop)} was accepted`).toBe(
-        false,
-      )
-      if (validated.ok) continue
-      expect(validated.issues.map((issue) => issue.field)).toContain('openingCrop')
-    }
   })
 
   it('refuses a missing composition rather than leaving it to be guessed at', () => {
@@ -246,5 +332,102 @@ describe('how the farm’s own labour is shown in a slot', () => {
       if (validated.ok) continue
       expect(validated.issues.map((issue) => issue.field).join(' ')).toContain('manualLabour')
     }
+  })
+})
+
+describe('how the crop’s composition varies from year to year', () => {
+  /** The sound declaration with a variation range patched onto it. */
+  function varying(variation: unknown): Record<string, unknown> {
+    return { ...sound(), yearVariation: variation }
+  }
+
+  function issuesOf(input: Record<string, unknown>): { code: string; field?: string; message: string }[] {
+    const result = validateFarmDeclaration(input)
+    expect(result.ok).toBe(false)
+    return result.ok ? [] : [...result.issues]
+  }
+
+  it('is optional: a farm declaring none opens with the same crop every year', () => {
+    expect(validateFarmDeclaration(sound()).ok).toBe(true)
+    expect(OPTIONAL_FARM_FIELDS).toContain('yearVariation')
+  })
+
+  it('accepts a range containing the category’s declared share', () => {
+    const result = validateFarmDeclaration(varying({ spoiled: { min: 0.15, max: 0.3 } }))
+    expect(result.ok ? [] : result.issues).toEqual([])
+  })
+
+  it('refuses a range that does not contain the declared share, naming the category', () => {
+    for (const range of [{ min: 0.25, max: 0.4 }, { min: 0.05, max: 0.15 }]) {
+      const issues = issuesOf(varying({ spoiled: range }))
+      const refusal = issues.find((issue) => issue.code === 'year-variation-excludes-declared')
+      expect(refusal?.field, JSON.stringify(range)).toBe('yearVariation.spoiled')
+      expect(refusal?.message).toContain('spoiled')
+    }
+  })
+
+  it('refuses a range reaching zero or one, naming the category', () => {
+    for (const range of [{ min: 0, max: 0.3 }, { min: 0.15, max: 1 }, { min: -0.1, max: 0.3 }]) {
+      const issues = issuesOf(varying({ spoiled: range }))
+      const refusal = issues.find((issue) => issue.code === 'year-variation-out-of-range')
+      expect(refusal?.field, JSON.stringify(range)).toBe('yearVariation.spoiled')
+      expect(refusal?.message).toContain('spoiled')
+    }
+  })
+
+  it('refuses a range that runs downwards', () => {
+    const issues = issuesOf(varying({ spoiled: { min: 0.3, max: 0.15 } }))
+    expect(issues.map((issue) => issue.field)).toContain('yearVariation.spoiled')
+  })
+
+  it('refuses an upper bound leaving no room for another declared category', () => {
+    // Two categories, one of which may take the whole crop in its wettest year: the other
+    // is then a category the crop must hold one of and has no share to hold it with.
+    const issues = issuesOf({
+      ...sound(),
+      cropComposition: { sound: 0.2, spoiled: 0.8 },
+      yearVariation: { spoiled: { min: 0.7, max: 0.999 } },
+    })
+    const refusal = issues.find((issue) => issue.code === 'year-variation-crowds-out')
+    expect(refusal?.field).toBe('yearVariation.spoiled')
+    expect(refusal?.message).toContain('sound')
+    // Measured against the crop the declared opening land bears, which is the smallest
+    // the orchard ever is — and the message names that derived figure, not a declared one.
+    const orchard = sound().orchard as { opening: number; piecesPerUnit: number }
+    expect(refusal?.message).toContain(String(orchard.opening * orchard.piecesPerUnit))
+  })
+
+  it('measures the crowd-out against the land times the yield, not against the land', () => {
+    // The same declared ranges against the same land, bearing sixty pieces a unit rather
+    // than one: a crop sixty times larger leaves every category a whole piece to hold.
+    const orchard = sound().orchard as Record<string, unknown>
+    const roomy = validateFarmDeclaration({
+      ...sound(),
+      orchard: { ...orchard, piecesPerUnit: 60 },
+      cropComposition: { sound: 0.2, spoiled: 0.8 },
+      yearVariation: { spoiled: { min: 0.7, max: 0.999 } },
+    })
+    expect(roomy.ok).toBe(true)
+  })
+
+  it('refuses a range for a category the crop is not made of, naming it', () => {
+    const issues = issuesOf(varying({ bruised: { min: 0.1, max: 0.2 } }))
+    const refusal = issues.find((issue) => issue.code === 'unknown-category')
+    expect(refusal?.field).toBe('yearVariation.bruised')
+    expect(refusal?.message).toContain('bruised')
+  })
+
+  it('refuses a range that is not a pair of numbers, naming the category', () => {
+    for (const range of [{ min: 0.1 }, 'wide', { min: 'a', max: 'b' }]) {
+      const issues = issuesOf(varying({ spoiled: range }))
+      expect(issues.map((issue) => issue.field), JSON.stringify(range)).toContain(
+        'yearVariation.spoiled',
+      )
+    }
+  })
+
+  it('refuses a variation that is not an object at all', () => {
+    const issues = issuesOf(varying([{ min: 0.1, max: 0.2 }]))
+    expect(issues.map((issue) => issue.field)).toContain('yearVariation')
   })
 })

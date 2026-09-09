@@ -16,6 +16,7 @@ import { blockChannels, blockSizes } from '../src/task/cnn.js'
 import { lookupConfiguration, type PredictionArtifact } from '../src/task/artifact.js'
 import { configurationId } from '../src/task/configId.js'
 import { defaultConfiguration } from '../src/task/configuration.js'
+import { firstFamily } from '../src/task/families.js'
 import { appleDeclaration } from './helpers/apple'
 import { committedManifest } from './helpers/pool'
 
@@ -66,8 +67,10 @@ interface ConfigurationFile {
   readonly predictions: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>>
 }
 
+const family = firstFamily(apple)
+
 function readArtifactFile<T>(name: string): T {
-  return JSON.parse(readFileSync(`${repoRoot}${apple.predictions}/${name}`, 'utf8')) as T
+  return JSON.parse(readFileSync(`${repoRoot}${family.predictions ?? ''}/${name}`, 'utf8')) as T
 }
 
 const index = readArtifactFile<ArtifactIndex>('index.json')
@@ -119,22 +122,23 @@ describe('coverage', () => {
   })
 
   it('covers the configuration the declared defaults resolve to', () => {
-    const id = configurationId(defaultConfiguration(apple))
+    const id = configurationId(defaultConfiguration(apple, family))
     expect(Object.keys(index.configurations)).toContain(id)
   })
 
   it('resolves a covered configuration through the reading contract', () => {
-    const id = configurationId(defaultConfiguration(apple))
+    const id = configurationId(defaultConfiguration(apple, family))
     const file = files.get(id)
     if (file === undefined) throw new Error(`no file for ${id}`)
 
     const artifact: PredictionArtifact = {
       schemaVersion: index.schemaVersion,
       taskId: index.taskId,
+      familyId: family.id,
       categories: index.categories,
       configurations: { [id]: { history: file.history, predictions: file.predictions as never } },
     }
-    const lookup = lookupConfiguration(apple, defaultConfiguration(apple), artifact)
+    const lookup = lookupConfiguration(apple, family, defaultConfiguration(apple, family), artifact)
     expect(lookup.ok).toBe(true)
   })
 
@@ -229,7 +233,7 @@ describe('provenance', () => {
   it.each([...files.keys()])('%s records what produced it', (id) => {
     const record = index.configurations[id]!
     expect(record.knobs).toBeDefined()
-    expect(Object.keys(record.knobs).sort()).toEqual(apple.knobs.map((knob) => knob.id).sort())
+    expect(Object.keys(record.knobs).sort()).toEqual(family.knobs.map((knob) => knob.id).sort())
     expect(record.epochs).toBeGreaterThan(0)
     expect(Number.isFinite(record.seed)).toBe(true)
     expect(record.hyperparameters).toBeDefined()
@@ -238,7 +242,7 @@ describe('provenance', () => {
 
   it.each([...files.keys()])('%s resolves to the identifier its knobs claim', (id) => {
     const record = index.configurations[id]!
-    const values = apple.knobs.map(
+    const values = family.knobs.map(
       (knob) => [knob.id, record.knobs[knob.id]] as [string, string | number],
     )
     expect(configurationId({ values } as never)).toBe(id)
@@ -263,7 +267,7 @@ describe('provenance', () => {
 describe('the recorded architecture is the declared one', () => {
   it.each([...files.keys()])('%s matches the arithmetic the app draws from', (id) => {
     const record = index.configurations[id]!
-    const diagram = apple.diagram
+    const diagram = family.diagram
     if (diagram === undefined || diagram.kind !== 'cnn') throw new Error('the task declares no cnn')
 
     const blocks = Number(record.knobs[diagram.blocksKnob])

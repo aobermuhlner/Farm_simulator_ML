@@ -11,6 +11,14 @@ import { resolve } from 'node:path'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TrainingEpoch } from '../../../src/task/artifact.js'
+
+/**
+ * What one step of this history is called, as a family would declare it.
+ *
+ * Supplied rather than assumed: the screen writes no term of its own, so a test that did
+ * not hand it one would be testing the generic fallback instead of the declared word.
+ */
+const AXIS = 'epoch'
 import { TrainingRun } from './TrainingRun.js'
 
 afterEach(cleanup)
@@ -30,6 +38,7 @@ function renderRun(durationMs: number, onFinished?: () => void) {
   return render(
     <TrainingRun
       history={history()}
+      axis={AXIS}
       configurationId="blocks2-channels16"
       durationMs={durationMs}
       onFinished={onFinished}
@@ -53,7 +62,7 @@ describe('what the finished run shows', () => {
     renderRun(0)
     const last = history()[history().length - 1]!
 
-    expect(screen.getByTestId('training-epoch').textContent).toBe('Epoch 5 of 5')
+    expect(screen.getByTestId('training-step').textContent).toBe(`${AXIS} 5 of 5`)
     expect(screen.getByTestId('training-accuracy').textContent).toBe('82.5%')
     expect(screen.getByTestId('training-accuracy-fitted').textContent).toBe('96.0%')
     expect(screen.getByTestId('training-loss').textContent).toBe(last.trainLoss.toFixed(3))
@@ -90,7 +99,7 @@ describe('the run as it plays', () => {
   it('opens on the first epoch rather than the last', () => {
     renderRun(5_000)
 
-    expect(screen.getByTestId('training-epoch').textContent).toBe('Epoch 1 of 5')
+    expect(screen.getByTestId('training-step').textContent).toBe(`${AXIS} 1 of 5`)
     expect(screen.getByTestId('training-accuracy').textContent).toBe('30.0%')
     for (const chart of charts()) expect(drawnPoints(chart, 'fitted')).toBe(1)
   })
@@ -99,7 +108,7 @@ describe('the run as it plays', () => {
     renderRun(60)
 
     await waitFor(() =>
-      expect(screen.getByTestId('training-epoch').textContent).toBe('Epoch 5 of 5'),
+      expect(screen.getByTestId('training-step').textContent).toBe(`${AXIS} 5 of 5`),
     )
     expect(screen.getByRole('heading', { name: 'Training finished' })).toBeDefined()
   })
@@ -115,7 +124,7 @@ describe('the run as it plays', () => {
   it('announces its progress to a reader who cannot see the curves', () => {
     renderRun(5_000)
 
-    expect(screen.getByRole('status').textContent).toContain('Epoch 1 of 5')
+    expect(screen.getByRole('status').textContent).toContain(`${AXIS} 1 of 5`)
   })
 })
 

@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAvailability, knobAvailability, taskAvailability } from '../../../src/progression/index.js'
 import { formatUnits } from '../../../src/economy/index.js'
 import type { ChoiceKnob, SliderKnob } from '../../../src/task/types.js'
+import { firstFamily } from '../../../src/task/families.js'
 import { KnobControl } from './KnobControl.js'
 import { appleDeclaration } from '../test-support/declarations.js'
 import { farmDeclaration } from '../test-support/farm.js'
@@ -53,7 +54,7 @@ function valuesFor(knobId: string, owned: readonly string[]) {
 }
 
 function knobNamed(id: string) {
-  const knob = apple.knobs.find((candidate) => candidate.id === id)
+  const knob = firstFamily(apple).knobs.find((candidate) => candidate.id === id)
   if (knob === undefined) throw new Error(`the task declares no knob ${id}`)
   return knob
 }

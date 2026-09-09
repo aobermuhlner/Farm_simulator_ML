@@ -170,6 +170,36 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
   outline-offset: -4px;
   font-weight: 700;
 }
+/*
+ * The arithmetic of what the buyer paid: a gross, a deduction, and what was left.
+ *
+ * Narrow, so three figures read as a sum rather than as a table of results, and the last
+ * row set apart because it is the figure the year is remembered by.
+ */
+.earnings-arithmetic { max-width: 26rem; }
+.earnings-arithmetic td { width: 8rem; }
+.earnings-arithmetic tr:last-child th, .earnings-arithmetic tr:last-child td {
+  border-top-width: 2px;
+  font-size: 1.15rem;
+}
+
+/*
+ * The line the buyer's measurement is stated on, and the year's own condition.
+ *
+ * Set off from the table above it because both are about the batch rather than about any
+ * one cell of it — a share measured over the whole delivery, and a crop the student did
+ * not choose. The warning inside the line inherits the emphasis its `<strong>` carries;
+ * nothing here colours a distinction that is not also carried by the words.
+ */
+.delivery {
+  border-left: 3px solid var(--line);
+  padding-left: 0.8rem;
+  max-width: 46rem;
+}
+.year-crop { margin-top: 1.5rem; }
+.year-crop h3 { margin-bottom: 0.4rem; }
+.year-crop p { max-width: 46rem; font-size: 0.95rem; }
+
 .provenance, .staleness { font-size: 0.9rem; border-top: 1px dashed var(--line); padding-top: 0.6rem; }
 
 .training > h2 { margin-bottom: 0.25rem; }
@@ -322,10 +352,10 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 
 .replay-note { font-size: 0.85rem; color: color-mix(in srgb, var(--ink) 68%, transparent); margin: 0 0 0.9rem; }
 
-.epoch-line { display: flex; align-items: center; gap: 0.75rem; }
-.epoch-count { font-variant-numeric: tabular-nums; font-size: 0.9rem; white-space: nowrap; }
+.step-line { display: flex; align-items: center; gap: 0.75rem; }
+.step-count { font-variant-numeric: tabular-nums; font-size: 0.9rem; white-space: nowrap; }
 
-.epoch-bar {
+.step-bar {
   flex: 1;
   block-size: 0.5rem;
   border-radius: 0.25rem;
@@ -333,7 +363,7 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
   overflow: hidden;
 }
 
-.epoch-bar-fill {
+.step-bar-fill {
   display: block;
   block-size: 100%;
   background: var(--accent);
@@ -413,7 +443,7 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 @media (prefers-reduced-motion: reduce) {
   .training-run.running > h2::after,
   .training-run.finished .headline dd { animation: none; }
-  .epoch-bar-fill { transition: none; }
+  .step-bar-fill { transition: none; }
 }
 
 .farm-bar {
@@ -445,6 +475,15 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 .farm-bar .farm-summary dd { color: color-mix(in srgb, var(--ink) 75%, transparent); }
 
 /* Locked knob values: shown beside the control, greyed, naming what opens each. */
+/* The family picker. Locked rungs are greyed where they sit, never removed. */
+.family-picker { border: 0; padding: 0; margin: 0 0 1rem; }
+.family-picker > legend { font-weight: 600; padding: 0; }
+.family-picker ul { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.family-picker button { font: inherit; cursor: pointer; padding: 0.35rem 0.7rem; border: 1px solid var(--line); border-radius: 0.4rem; background: none; }
+.family-picker button[aria-pressed='true'] { border-color: var(--accent); font-weight: 600; }
+.family-picker .locked button { color: var(--line); cursor: not-allowed; }
+.family-summary { margin-top: 0; }
+
 .locked-values { list-style: none; margin: 0.15rem 0 0; padding: 0; font-size: 0.85rem; }
 .locked-values > .locked { color: var(--line); }
 .locked-values .locked-value { font-weight: 600; }
@@ -459,6 +498,7 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 }
 .market-item > h3 { margin: 0 0 0.25rem; }
 .market-item .shop-copy { margin: 0 0 0.35rem; }
+.market-item .market-tally { margin: 0 0 0.35rem; font-size: 0.85rem; opacity: 0.8; }
 .market-item .market-state { margin: 0 0 0.5rem; font-weight: 600; }
 .market-item.saving, .market-item.not-for-sale { color: var(--line); }
 .market-item.owned .market-state { color: var(--accent); }
@@ -520,6 +560,75 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 .hand-sort .sort-tallies td, .hand-sort .sort-figures td { font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .hand-sort .sort-summary { margin-top: 1.2rem; }
+.hand-sort .delivery {
+  border-left: 3px solid var(--line);
+  padding-left: 0.8rem;
+  max-width: 46rem;
+}
 .hand-sort .breakdown { border-collapse: collapse; margin-bottom: 1rem; }
 .hand-sort .breakdown th, .hand-sort .breakdown td { border: 1px solid var(--line); padding: 0.35rem 0.6rem; }
 .hand-sort .breakdown td { text-align: end; font-variant-numeric: tabular-nums; }
+
+/*
+ * The leaf-labelling puzzle. Layout only: every colour it draws is one of the palette's
+ * tokens, because a literal down here is a colour `palette.test.tsx` cannot see — and this
+ * screen is the one where choosing between two categories *is* the interaction, so the
+ * declared label beside each picture is what carries the distinction rather than the hue.
+ */
+.tutorial-disclosure {
+  margin: 1rem 0 0;
+  padding-inline-start: 0.8rem;
+  border-inline-start: 3px solid var(--line);
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--ink) 78%, transparent);
+}
+
+.leaf-tree { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.8rem; }
+
+.leaf-branch { border-inline-start: 2px solid var(--line); padding-inline-start: 0.9rem; }
+
+.leaf-question { margin: 0 0 0.35rem; font-variant-numeric: tabular-nums; }
+
+.leaf-answer { color: color-mix(in srgb, var(--ink) 65%, transparent); }
+
+.leaf-slot { display: grid; gap: 0.5rem; justify-items: start; }
+
+.leaf {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: center;
+  min-inline-size: 8rem;
+  min-block-size: 4rem;
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.leaf:hover { border-color: var(--accent); }
+
+.leaf-reached {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 0.5rem;
+}
+
+.leaf-reached > li { display: grid; gap: 0.15rem; justify-items: center; }
+
+.leaf-value { display: block; font-variant-numeric: tabular-nums; }
+
+.leaf-tray {
+  list-style: none;
+  margin: 1.2rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.tray-item { display: grid; gap: 0.25rem; justify-items: center; cursor: grab; }
+
+.tray-item[aria-pressed='true'] { border-color: var(--accent); font-weight: 600; }
+
+.leaf-controls { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.2rem; }

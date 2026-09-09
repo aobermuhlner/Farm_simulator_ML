@@ -15,6 +15,8 @@
  * the farm's whole units belongs to `src/economy/`, and doing it here would make two.
  */
 
+import type { DeliveryValuation } from '../scoring/delivery.js'
+import { valueDelivery } from '../scoring/delivery.js'
 import type { ActionId, CategoryId, TaskDeclaration } from '../task/types.js'
 import type { Crop } from './crop.js'
 
@@ -57,10 +59,20 @@ export interface SortOutcome {
   /** Count per declared true category and declared action, every combination present. */
   readonly counts: Readonly<Record<CategoryId, Readonly<Record<ActionId, number>>>>
   readonly mistakes: readonly Mistake[]
-  /** What the decisions actually made came to, under the declared payoff table. */
+  /**
+   * What the decisions actually made came to: the payoff sum, less whatever the task's
+   * declared delivery term took off it.
+   *
+   * The term applies to a person's crates exactly as it applies to a robot's, because the
+   * buyer is buying apples rather than labour. A careless sort that puts too large a share
+   * of a measured category into the crates is downgraded on the same terms and by the same
+   * function.
+   */
   readonly wage: number
   /** What those same images would have paid, each given the action its category calls for. */
   readonly faultless: number
+  /** The arithmetic behind the wage: the gross, the tolerance, the share, the downgrade. */
+  readonly delivery: DeliveryValuation
   readonly throughput: Throughput
 }
 
@@ -92,6 +104,9 @@ export function measureSort(
   decisions: readonly Decision[],
 ): SortOutcome {
   const counts = emptyCounts(declaration)
+  // What the same pieces would have been counted as under a faultless sort, so the
+  // comparison figure passes through the delivery term rather than round it.
+  const faultlessCounts = emptyCounts(declaration)
   const mistakes: Mistake[] = []
   let correct = 0
   let wage = 0
@@ -121,6 +136,8 @@ export function measureSort(
     if (called === undefined) {
       throw new Error(`Task "${declaration.id}" maps category "${category}" to no action.`)
     }
+    const faultlessRow = faultlessCounts[category]
+    if (faultlessRow !== undefined) faultlessRow[called] = (faultlessRow[called] ?? 0) + 1
 
     const paid = declaration.payoffs[category]?.[decision.action]
     const best = declaration.payoffs[category]?.[called]
@@ -142,6 +159,13 @@ export function measureSort(
 
   const decided = decisions.length
 
+  // The same valuation the automated harvest goes through, over the pieces the student
+  // decided. A faultless sort is valued the same way rather than as a bare payoff sum, so
+  // the two figures on the summary are comparable — one of them being priced by a rule the
+  // other escaped is exactly the footnote this screen exists without.
+  const delivery = valueDelivery(declaration, { earnings: wage, counts })
+  const perfect = valueDelivery(declaration, { earnings: faultless, counts: faultlessCounts })
+
   return {
     size: crop.size,
     decided,
@@ -151,8 +175,9 @@ export function measureSort(
     correct,
     counts,
     mistakes,
-    wage,
-    faultless,
+    wage: delivery.paid,
+    faultless: perfect.paid,
+    delivery,
     throughput: {
       seconds,
       perMinute: seconds > 0 ? (decided * 60) / seconds : 0,

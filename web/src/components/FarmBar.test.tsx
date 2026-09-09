@@ -22,7 +22,7 @@ const declaration: FarmDeclaration = {
   precision: 2,
   openingBalance: 2000,
   openingYear: 3,
-  openingCrop: 10,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 10, piecesPerUnit: 1 },
   cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
@@ -33,7 +33,7 @@ const other: FarmDeclaration = {
   precision: 0,
   openingBalance: 40,
   openingYear: 11,
-  openingCrop: 6,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 6, piecesPerUnit: 1 },
   cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 

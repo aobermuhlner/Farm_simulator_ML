@@ -27,8 +27,63 @@ It is last because it is the most expensive change in the project. New cultivars
 pixels, which mean a new pool and a full retrain of every shipped configuration. §9 says
 do it once and never twice; anything else that needs pixels should be batched into it.
 
+## The wall is already gone, and it was measured — 2026-09-09
+
+Recorded during the `fitted-tree-tutorial` explore session, because that change had to know
+whether the feature set behaves the way the copy says it does. It does not. This is the
+number this change now has to aim at, and it is much harder than the one
+`test/features-ladder.test.ts` records.
+
+**`spotCount > 0` separates wormy apples perfectly.** Every wormy apple in
+`pools/apple-harvest/manifest.json` has at least one off-colour patch — 15 with one, 35 with
+two on the browsable split; 116 and 134 on the evaluation pool. No red or green apple has
+any. So the two-split chain `spotCount > 0.5 -> discard; redness > 0.4513 -> crate-red;
+otherwise crate-green` scores:
+
+```
+  rule                                           fitted(160)   pool(1000)
+  ---------------------------------------------  -----------   ----------
+  pinned "best rule" in features-ladder.test.ts     1.000         0.825
+  darkSpotArea > 0.0205 / redness > 0.4513          1.000         0.892
+  spotCount    > 0.5    / redness > 0.4513          1.000         0.986
+  widest shipped network (blocks2-channels32)         -           0.786
+```
+
+Measured by replaying the shipped manifest against the same semantics `scoreActions` uses;
+the replication reproduces the pinned `0.825 / 0.972 / 1.000 / 0.356` exactly, which is what
+makes the other two rows trustworthy.
+
+Four consequences, in the order they matter:
+
+- **§2's "why the feature-based models must hit a real wall" has no wall.** A two-split hand
+  rule at 98.6% leaves nothing for the fitted tree, the forest or the network to be better
+  at. The plateau this change is supposed to author does not need creating on top of a 0.825
+  baseline; it needs creating against a feature that is currently flawless.
+- **`bestRule`'s tie-break decides between rules that differ by sixteen points.** All three
+  rows above score 1.000 on the fitted 160, so the search's answer is settled by
+  depth-first discovery order, which favours the earliest declared feature — `redness`. Its
+  own doc comment claims *"ties break towards the rule found first, which is the shortest"*,
+  and it returned a three-split rule while a two-split rule tied. Whatever this change does
+  to the pool, the recording is measuring an arbitrary member of a tie.
+- **The recorded ladder position understates the rule by an order of magnitude.** *The best
+  hand rule is ahead of every shipped network* is true, but the honest gap is 0.986 against
+  0.786, not 0.825 against 0.786.
+- **`spotCount`'s declared help copy is not supported by the data.** It says *"a worm that is
+  the same colour as the apple around it is not counted either"*. No wormy apple in the pool
+  is ever uncounted. Under §1.1 that is the game describing a contamination it does not have.
+
+Whether this is one change or several is not decided here. It is recorded on this stub
+because this is the change §2 names as the one that fixes the wall, and none of the four can
+be fixed without touching pixels.
+
 ## What Changes
 
+- **The wall has to be authored against `spotCount`, not just against colour and shape.** See
+  the section above: the current feature set contains a flawless wormy detector, so a
+  heirloom ceiling authored around redness and texture would leave the tree at 98.6% on
+  ordinary apples and prove nothing. Either the cultivars have to make patch-counting
+  genuinely unreliable, or `spotCount` has to become the contaminated measurement its own
+  help copy already claims it is.
 - Heirloom cultivars separable by eye but not by any summary statistic we measure: the
   same mean colour, size and roundness, differing only in whether the blush runs in
   lengthwise stripes or scattered speckles. An axis-aligned split on redness, size or

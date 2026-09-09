@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { layersOf, resolveArchitecture } from '../../../../src/task/diagram.js'
+import { firstFamily } from '../../../../src/task/families.js'
 import type { ChoiceKnob, TaskDeclaration } from '../../../../src/task/types.js'
 import { diagrammedDeclaration } from '../../test-support/declarations.js'
 import { FeedforwardDiagram } from './FeedforwardDiagram.js'
@@ -10,17 +11,18 @@ import { FeedforwardDiagram } from './FeedforwardDiagram.js'
 afterEach(cleanup)
 
 const drawn = diagrammedDeclaration()
+const family = firstFamily(drawn)
 const repoRoot = process.cwd()
 const SOURCE = join(repoRoot, 'web/src/components/architecture/FeedforwardDiagram.tsx')
 
 function diagramOf(declaration: TaskDeclaration) {
-  const diagram = declaration.diagram
+  const diagram = firstFamily(declaration).diagram
   if (diagram?.kind !== 'feedforward') throw new Error('the task should declare a feedforward diagram')
   return diagram
 }
 
 function choiceKnob(knobId: string): ChoiceKnob {
-  const knob = drawn.knobs.find((candidate) => candidate.id === knobId)
+  const knob = family.knobs.find((candidate) => candidate.id === knobId)
   if (knob?.kind !== 'choice') throw new Error(`${knobId} is expected to be a choice knob`)
   return knob
 }
@@ -35,12 +37,12 @@ const broadestValues = () => choiceKnob(DIAGRAM.unitsKnob).values
 const broadest = broadestValues()[broadestValues().length - 1] ?? 1
 
 function defaults(): Record<string, string | number> {
-  return Object.fromEntries(drawn.knobs.map((knob) => [knob.id, knob.default]))
+  return Object.fromEntries(family.knobs.map((knob) => [knob.id, knob.default]))
 }
 
 /** Renders the diagram for the fully-connected task at some knob values. */
 function draw(overrides: Readonly<Record<string, string | number>> = {}): HTMLElement {
-  const architecture = resolveArchitecture(drawn, { ...defaults(), ...overrides })
+  const architecture = resolveArchitecture(drawn, family, { ...defaults(), ...overrides })
   if (architecture?.kind !== 'feedforward') throw new Error('these values should resolve')
   const { container } = render(<FeedforwardDiagram architecture={architecture} />)
   return container
@@ -114,7 +116,7 @@ describe('the layers drawn', () => {
 describe('the connections', () => {
   it('fully connects each adjacent pair of layers and nothing else', () => {
     for (const depth of choiceKnob(DIAGRAM.layersKnob).values) {
-      const architecture = resolveArchitecture(drawn, {
+      const architecture = resolveArchitecture(drawn, family, {
         ...defaults(),
         [DIAGRAM.layersKnob]: depth,
       })
@@ -211,7 +213,7 @@ describe('what the copy says about the drawing', () => {
     const container = draw()
 
     for (const knobId of [DIAGRAM.layersKnob, DIAGRAM.unitsKnob]) {
-      const label = drawn.knobs.find((knob) => knob.id === knobId)?.label
+      const label = family.knobs.find((knob) => knob.id === knobId)?.label
       if (label === undefined) throw new Error(`no label for ${knobId}`)
       expect(container.textContent).toContain(label)
     }
@@ -220,7 +222,7 @@ describe('what the copy says about the drawing', () => {
   it('names no knob id in the component source', () => {
     const source = readFileSync(SOURCE, 'utf8')
 
-    for (const knob of drawn.knobs) {
+    for (const knob of family.knobs) {
       expect(source, `the component names "${knob.id}"`).not.toMatch(
         new RegExp(`['"\`]${knob.id}['"\`]`),
       )

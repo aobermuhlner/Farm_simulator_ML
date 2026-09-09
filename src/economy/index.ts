@@ -11,6 +11,9 @@ export type {
   FarmDeclaration,
   FarmValidation,
   ManualLabourDeclaration,
+  OrchardDeclaration,
+  ShareRange,
+  YearVariation,
 } from './declaration.js'
 export {
   OPTIONAL_FARM_FIELDS,
@@ -21,13 +24,14 @@ export { formatUnits, toAmount, toUnits } from './amounts.js'
 export type { Farm, FarmChange, Movement, YearRecord } from './farm.js'
 export {
   credit,
+  cropSize,
   debit,
   INSUFFICIENT_FUNDS,
   movementsThisYear,
   openFarm,
   recordHarvest,
 } from './farm.js'
-export type { ClosedYear, CropBroughtIn, YearInProgress } from './year.js'
+export type { ClosedYear, CropBroughtIn, HarvestFigures, YearInProgress } from './year.js'
 export {
   bringIn,
   broughtIn,

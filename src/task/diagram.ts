@@ -19,7 +19,12 @@
 
 import { blockChannels, blockSizes } from './cnn.js'
 import { resolveConfiguration } from './configuration.js'
-import type { CnnDiagram, FeedforwardDiagram, TaskDeclaration } from './types.js'
+import type {
+  CnnDiagram,
+  FeedforwardDiagram,
+  ModelFamilyDeclaration,
+  TaskDeclaration,
+} from './types.js'
 
 /** A fully-connected architecture, ready to draw. */
 export interface ResolvedFeedforward {
@@ -84,9 +89,9 @@ export interface ResolvedCnn {
 
 export type ResolvedArchitecture = ResolvedFeedforward | ResolvedCnn
 
-/** Declared label of a knob, or nothing when the task does not declare it. */
-function labelOf(declaration: TaskDeclaration, knobId: string): string | undefined {
-  return declaration.knobs.find((knob) => knob.id === knobId)?.label
+/** Declared label of a knob, or nothing when the family does not declare it. */
+function labelOf(family: ModelFamilyDeclaration, knobId: string): string | undefined {
+  return family.knobs.find((knob) => knob.id === knobId)?.label
 }
 
 /** A value that is a count of something: whole and at least one. */
@@ -108,22 +113,24 @@ function isCount(value: unknown): value is number {
  */
 export function resolveArchitecture(
   declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
   values: Readonly<Record<string, unknown>>,
 ): ResolvedArchitecture | undefined {
-  const diagram = declaration.diagram
+  const diagram = family.diagram
   if (diagram === undefined) return undefined
 
-  const resolved = resolveConfiguration(declaration, values)
+  const resolved = resolveConfiguration(declaration, family, values)
   if (!resolved.ok) return undefined
 
   const selected = new Map(resolved.configuration.values)
   return diagram.kind === 'feedforward'
-    ? resolveFeedforward(declaration, diagram, selected)
-    : resolveCnn(declaration, diagram, selected)
+    ? resolveFeedforward(declaration, family, diagram, selected)
+    : resolveCnn(declaration, family, diagram, selected)
 }
 
 function resolveFeedforward(
   declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
   diagram: FeedforwardDiagram,
   selected: ReadonlyMap<string, string | number>,
 ): ResolvedFeedforward | undefined {
@@ -138,8 +145,8 @@ function resolveFeedforward(
   const units = diagram.unitsShown[String(unitsValue)]
   if (!isCount(units)) return undefined
 
-  const layersLabel = labelOf(declaration, diagram.layersKnob)
-  const unitsLabel = labelOf(declaration, diagram.unitsKnob)
+  const layersLabel = labelOf(family, diagram.layersKnob)
+  const unitsLabel = labelOf(family, diagram.unitsKnob)
   if (layersLabel === undefined || unitsLabel === undefined) return undefined
 
   return {
@@ -164,6 +171,7 @@ function resolveFeedforward(
  */
 function resolveCnn(
   declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
   diagram: CnnDiagram,
   selected: ReadonlyMap<string, string | number>,
 ): ResolvedCnn | undefined {
@@ -179,8 +187,8 @@ function resolveCnn(
   const drawnDepth = diagram.channelsShown[String(channelsValue)]
   if (!isCount(drawnDepth)) return undefined
 
-  const blocksLabel = labelOf(declaration, diagram.blocksKnob)
-  const channelsLabel = labelOf(declaration, diagram.channelsKnob)
+  const blocksLabel = labelOf(family, diagram.blocksKnob)
+  const channelsLabel = labelOf(family, diagram.channelsKnob)
   if (blocksLabel === undefined || channelsLabel === undefined) return undefined
 
   const channels = blockChannels(channelsValue, blocksValue)

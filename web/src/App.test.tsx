@@ -8,7 +8,7 @@ import {
   unrelatedDeclaration,
   unrelatedTruth,
 } from './test-support/declarations.js'
-import { loadsFarm } from './test-support/farm.js'
+import { farmCarrying, loadsFarm } from './test-support/farm.js'
 import { loadsCatalog, memoryStorage, savesTo } from './test-support/progression.js'
 import { appleTask as committedAppleTask, loadEntryFor, taskFrom } from './test-support/pool.js'
 import { App } from './App.js'
@@ -22,6 +22,8 @@ const screeningTask: LoadedTask = taskFrom(
   unrelatedArtifact(),
   unrelatedTruth(),
 )
+/** A farm that declares a crop for the card the screens have never seen. */
+const bothCards = farmCarrying([screeningTask.declaration])
 
 function loads(...tasks: readonly LoadedTask[]) {
   return () => Promise.resolve({ ok: true as const, value: tasks })
@@ -37,7 +39,7 @@ function renderApp(...tasks: readonly LoadedTask[]) {
     <App
       load={loads(...tasks)}
       loadEntry={loadEntryFor}
-      loadFarm={loadsFarm()}
+      loadFarm={loadsFarm(bothCards)}
       loadShop={loadsCatalog()}
       {...savesTo(memoryStorage())}
       replayMs={0}
@@ -126,7 +128,7 @@ describe('the year loop', () => {
             issues: [{ code: 'data-unreachable', message: 'Could not fetch the declaration.' }],
           })
         }
-        loadFarm={loadsFarm()}
+        loadFarm={loadsFarm(bothCards)}
       />,
     )
 

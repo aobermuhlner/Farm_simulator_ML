@@ -8,10 +8,17 @@ import {
   knobAvailability,
   taskAvailability,
 } from '../../src/progression/index.js'
+import { firstFamily } from '../../src/task/families.js'
+import { SHIPPED_FORMS } from '../../src/task/types.js'
 import { KnobControl } from './components/KnobControl.js'
 import { HandSort } from './screens/HandSort.js'
 import { measureSort } from '../../src/sorting/index.js'
-import { appleDeclaration, unrelatedDeclaration } from './test-support/declarations.js'
+import {
+  appleDeclaration,
+  tutoredLadderDeclaration,
+  unrelatedDeclaration,
+} from './test-support/declarations.js'
+import { TUTORIAL_BODIES } from './components/tutorial/TutorialBody.js'
 import { farmDeclaration } from './test-support/farm.js'
 import { cropOf, loadsCrop } from './test-support/pool.js'
 import { shippedCatalog, soundCatalog } from './test-support/progression.js'
@@ -62,7 +69,22 @@ const farm = farmDeclaration()
  * The name is matched whole. Its individual words are not the farm's to reserve: a farm
  * called anything with "Farm" in it would otherwise outlaw the word on the overview.
  */
-const SUPPLIED_FACTS: readonly SummaryFact[] = []
+const SUPPLIED_FACTS: readonly SummaryFact[] = [
+  { label: farm.orchard.label, value: `${farm.orchard.opening} ${farm.orchard.unit}` },
+]
+
+/**
+ * What the farm calls its orchard and a unit of its land.
+ *
+ * The bar is supplied "Orchard: 300 / 600 trees" from these two words, so a farm whose
+ * land is measured in hectares of vines presents through the same screen unchanged. A
+ * screen that wrote either out would fail here.
+ *
+ * The declaration's *field* is called `orchard`, and that is schema rather than
+ * vocabulary — reading `declaration.orchard` is how a screen gets at data it does not
+ * know the words of, which is the opposite of the offence this file is about.
+ */
+const DECLARED_ORCHARD_WORDS = [farm.orchard.label, farm.orchard.unit]
 
 /**
  * The farm's own labour, as its declaration presents it.
@@ -75,11 +97,17 @@ const DECLARED_LABOUR_WORDS = [farm.manualLabour?.icon, farm.manualLabour?.label
   (word): word is string => word !== undefined,
 )
 
+// Deduplicated, because a word can be declared twice over — the orchard's own label is
+// both its declared name and the label of the fact the bar is supplied — and a word
+// listed twice would be reported twice for one offence.
 const DECLARED_FARM_WORDS = [
-  farm.name,
-  farm.currency,
-  ...DECLARED_LABOUR_WORDS,
-  ...SUPPLIED_FACTS.map((fact) => fact.label),
+  ...new Set([
+    farm.name,
+    farm.currency,
+    ...DECLARED_LABOUR_WORDS,
+    ...DECLARED_ORCHARD_WORDS,
+    ...SUPPLIED_FACTS.map((fact) => fact.label),
+  ]),
 ]
 
 /** Reports every declared word that appears in a source's rendered strings. */
@@ -142,8 +170,50 @@ const DECLARED_IDS = [
   apple.id,
   ...apple.categories.map((category) => category.id),
   ...apple.actions.map((action) => action.id),
-  ...apple.knobs.map((knob) => knob.id),
+  ...apple.families.flatMap((family) => family.knobs.map((knob) => knob.id)),
   ...apple.features.map((feature) => feature.id),
+]
+
+/** Every id a model family declares — none may appear in the screens. */
+const DECLARED_FAMILY_IDS = apple.families.map((family) => family.id)
+
+/**
+ * Reports a screen that reads a family's shipped form and compares it to one.
+ *
+ * Matched as `ships` beside a supported form rather than as the bare word, and that is
+ * the same allowance the farm's name already gets: "model" and "predictions" are ordinary
+ * words in this codebase — a labour slot holds a *model*, a loader fetches *predictions* —
+ * and they are not the family's to reserve. What is forbidden is a screen deciding
+ * anything from which of the two a family declares, and that is what this finds.
+ *
+ * The supported forms come from the type rather than from what this task happens to
+ * declare: a screen that had learned only the form nothing ships would slip past a list
+ * built from the declaration.
+ */
+function shippedFormLeaks(text: string): string[] {
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  return SHIPPED_FORMS.filter((form) =>
+    new RegExp(`ships[^\\n]{0,40}['"\`]${form}['"\`]|['"\`]${form}['"\`][^\\n]{0,40}ships`).test(code),
+  )
+}
+
+/**
+ * Every word a model family declares: its label, how it appears in a labour slot, and
+ * what its history's axis is called.
+ *
+ * The workshop, the picker, the slot and the report are all produced from these, so a
+ * screen that wrote any of them out would render a second family wrongly and this would
+ * be the only thing that noticed.
+ */
+const DECLARED_FAMILY_WORDS = [
+  ...new Set(
+    apple.families.flatMap((family) => [
+      family.label,
+      family.slot.icon,
+      family.slot.label,
+      ...(family.history === undefined ? [] : [family.history.axis]),
+    ]),
+  ),
 ]
 
 /**
@@ -205,13 +275,16 @@ describe('the shell contains no task-specific code paths', () => {
   })
 
   it('branches on no declared category or action anywhere in the screens', () => {
+    // "orchard" is deliberately not in this list: it is the name of a field of the farm
+    // declaration now, and reading `declaration.orchard` is how a screen reaches data
+    // whose words it does not know. What the farm *calls* its orchard and a unit of its
+    // land is checked as declared farm vocabulary instead — see DECLARED_ORCHARD_WORDS.
     const vocabulary = [
       ...apple.categories.map((category) => category.label),
       ...apple.actions.map((action) => action.label),
       'apple',
       'Apple',
       'wormy',
-      'orchard',
     ]
     const offences: string[] = []
 
@@ -225,11 +298,95 @@ describe('the shell contains no task-specific code paths', () => {
   })
 })
 
+describe('the shell contains no family-specific code paths', () => {
+  it('has a family vocabulary to check', () => {
+    // The shipped task declares one family today, so the check would be vacuous if it
+    // were built from nothing: it has to carry that family's id, its label, its slot and
+    // the term its history is indexed by.
+    expect(DECLARED_FAMILY_IDS).toContain(firstFamily(apple).id)
+    expect([...SHIPPED_FORMS].length).toBe(2)
+    expect(DECLARED_FAMILY_WORDS.length).toBeGreaterThan(2)
+    for (const word of DECLARED_FAMILY_WORDS) expect(word.trim()).not.toBe('')
+  })
+
+  it('names no family id', () => {
+    const offences: string[] = []
+    for (const file of screenSources()) {
+      for (const id of idLeaks(readFileSync(file, 'utf8'), DECLARED_FAMILY_IDS)) {
+        offences.push(`${relative(repoRoot, file)} names "${id}"`)
+      }
+    }
+    expect(offences).toEqual([])
+  })
+
+  it('branches on no shipped form', () => {
+    // Which reader, which evaluator and which store a family gets are all decided in
+    // `src/families/`, from what the family declares. A screen never asks.
+    const offences: string[] = []
+    for (const file of screenSources()) {
+      for (const form of shippedFormLeaks(readFileSync(file, 'utf8'))) {
+        offences.push(`${relative(repoRoot, file)} branches on "${form}"`)
+      }
+    }
+    expect(offences).toEqual([])
+  })
+
+  it('names no label, slot icon, slot label or axis label a family declares', () => {
+    const offences: string[] = []
+    for (const file of screenSources()) {
+      const text = readFileSync(file, 'utf8')
+      for (const word of [
+        ...labelLeaks(text, DECLARED_FAMILY_WORDS),
+        // The icon is a glyph rather than a word, so a boundary match would miss it.
+        ...leaks(text, DECLARED_FAMILY_WORDS.filter((word) => !/\w/.test(word))),
+      ]) {
+        offences.push(`${relative(repoRoot, file)} contains "${word}"`)
+      }
+    }
+    expect(offences).toEqual([])
+  })
+
+  it('catches a family id written into a screen', () => {
+    const id = firstFamily(apple).id
+    expect(idLeaks(`if (family.id === '${id}') return null`, DECLARED_FAMILY_IDS)).toContain(id)
+  })
+
+  it('catches a screen branching on what a family ships', () => {
+    const pasted = `const table = family.ships === 'predictions' ? fetchTable() : undefined`
+    expect(shippedFormLeaks(pasted)).toContain('predictions')
+  })
+
+  it('is not fooled by an ordinary use of either word', () => {
+    // A labour slot holds a model and a loader fetches predictions. Neither is a family
+    // saying what it ships, and neither may be outlawed by this rule.
+    const ordinary = `if (labour.kind === 'model') return labour.model
+const table = await fetchJson(paths.predictions)`
+    expect(shippedFormLeaks(ordinary)).toEqual([])
+  })
+
+  it('catches a family’s declared label pasted into a picker', () => {
+    const label = firstFamily(apple).label
+    expect(labelLeaks(`<button>${label}</button>`, DECLARED_FAMILY_WORDS)).toContain(label)
+  })
+
+  it('catches a family’s declared axis label pasted into a curve', () => {
+    const axis = firstFamily(apple).history?.axis ?? ''
+    expect(labelLeaks(`<span>${axis} 12 of 40</span>`, DECLARED_FAMILY_WORDS)).toContain(axis)
+  })
+
+  it('is not fooled by a family word that only appears in a comment', () => {
+    const label = firstFamily(apple).label
+    expect(labelLeaks(`// the rung is ${label}\nexport const x = 1\n`, DECLARED_FAMILY_WORDS)).toEqual([])
+  })
+})
+
 describe('the shell contains no farm-specific code paths', () => {
   it('has a farm vocabulary to check', () => {
     expect(DECLARED_FARM_WORDS.length).toBeGreaterThan(1)
     expect(DECLARED_FARM_WORDS).toContain(farm.currency)
     expect(DECLARED_FARM_WORDS).toContain(farm.name)
+    expect(DECLARED_FARM_WORDS).toContain(farm.orchard.label)
+    expect(DECLARED_FARM_WORDS).toContain(farm.orchard.unit)
   })
 
   it('names no word the farm declares', () => {
@@ -382,7 +539,7 @@ export const x = 1
 
 describe('no screen names an unlock condition', () => {
   it('pairs no item id with a knob id anywhere in the screens', () => {
-    const knobIds = apple.knobs.map((knob) => knob.id)
+    const knobIds = apple.families.flatMap((family) => family.knobs.map((knob) => knob.id))
     const itemIds = catalog.items.map((item) => item.id)
     const offences: string[] = []
 
@@ -407,7 +564,7 @@ describe('no screen names an unlock condition', () => {
     // A catalog sharing nothing with the shipped one. If the opener's label and price
     // reach the screen, they were read from the value rather than written into a
     // component — which is the only way a market for another farm can render here.
-    const knob = apple.knobs[0]
+    const knob = firstFamily(apple).knobs[0]
     if (knob === undefined) throw new Error('the task must declare a knob')
     const other = soundCatalog({
       schemaVersion: '1.0.0',
@@ -551,6 +708,7 @@ describe('the engine stays framework-free', () => {
       ['economy', 3],
       ['progression', 5],
       ['save', 1],
+      ['tutorials', 1],
     ] as const) {
       expect(
         engineFiles.filter((file) => relative(repoRoot, file).split(/[\\/]/).includes(module))
@@ -559,5 +717,165 @@ describe('the engine stays framework-free', () => {
       ).toBeGreaterThanOrEqual(least)
     }
     expect(offences.map((file) => relative(repoRoot, file))).toEqual([])
+  })
+})
+
+describe('the orchard is presented in the farm’s own words', () => {
+  it('reserves what the farm calls its orchard and a unit of its land', () => {
+    expect(DECLARED_ORCHARD_WORDS).toEqual([farm.orchard.label, farm.orchard.unit])
+    for (const word of DECLARED_ORCHARD_WORDS) expect(word.trim()).not.toBe('')
+  })
+
+  it('catches a screen that wrote either of them out', () => {
+    const pasted = `const bar = <dd>{\`${farm.orchard.opening} ${farm.orchard.unit}\`}</dd>`
+    expect(leaks(pasted, DECLARED_FARM_WORDS)).toEqual([farm.orchard.unit])
+
+    const labelled = `const heading = <h2>${farm.orchard.label}</h2>`
+    expect(leaks(labelled, DECLARED_FARM_WORDS)).toEqual([farm.orchard.label])
+  })
+
+  it('is supplied to the bar rather than named by it', () => {
+    // The fact the bar is supplied carries the declared label; nothing in the component
+    // knows the word. This is the first change to supply one, and the list above is
+    // built from that supply so it grows with the changes that add to it.
+    expect(SUPPLIED_FACTS.map((fact) => fact.label)).toContain(farm.orchard.label)
+  })
+})
+
+/**
+ * The tutorial frame, which is under the family rule and is the one thing beside a
+ * family's drawing that a body may break.
+ *
+ * The bargain `model-tutorials` strikes is narrow and worth holding to: a body may name
+ * the one family it teaches, because in a tutorial the interaction *is* the lesson and
+ * cannot be data-driven. Everything that opens, presents, judges, records and gates must
+ * name none — otherwise the exemption swallows the rule.
+ */
+const TUTORIAL_FRAME = ['components/tutorial/Tutorial.tsx', 'components/tutorial/TutorialBody.tsx']
+
+/** A family's vocabulary from a task the screens have never seen, tutorial and all. */
+const tutoredLadder = tutoredLadderDeclaration()
+const LADDER_FAMILY_IDS = tutoredLadder.families.map((family) => family.id)
+const LADDER_TUTORIAL_KIND =
+  tutoredLadder.families.flatMap((family) => (family.tutorial === undefined ? [] : [family.tutorial.kind]))[0] ??
+  ''
+const LADDER_FAMILY_WORDS = [
+  ...new Set(
+    tutoredLadder.families.flatMap((family) => [
+      family.label,
+      family.slot.icon,
+      family.slot.label,
+      ...(family.history === undefined ? [] : [family.history.axis]),
+    ]),
+  ),
+]
+
+describe('the tutorial frame names no family', () => {
+  it('has a frame to check, and it is among the screens', () => {
+    const scanned = screenSources().map((file) => relative(webSrc, file).split(sep).join('/'))
+
+    for (const file of TUTORIAL_FRAME) expect(scanned).toContain(file)
+  })
+
+  it('has a tutored family to check it against', () => {
+    const tutorials = tutoredLadder.families.map((family) => family.tutorial?.id).filter(Boolean)
+
+    expect(tutorials).toHaveLength(1)
+    expect(LADDER_FAMILY_IDS.length).toBeGreaterThan(1)
+    expect(LADDER_FAMILY_WORDS.length).toBeGreaterThan(2)
+  })
+
+  it('names no family id and no family word, of the apple task or of a task it has never seen', () => {
+    const offences: string[] = []
+    for (const file of TUTORIAL_FRAME) {
+      const text = readFileSync(join(webSrc, file), 'utf8')
+      for (const id of idLeaks(text, [...DECLARED_FAMILY_IDS, ...LADDER_FAMILY_IDS])) {
+        offences.push(`${file} names "${id}"`)
+      }
+      for (const word of labelLeaks(text, [...DECLARED_FAMILY_WORDS, ...LADDER_FAMILY_WORDS])) {
+        offences.push(`${file} contains "${word}"`)
+      }
+    }
+
+    expect(offences).toEqual([])
+  })
+
+  it('reads no task declaration, so the vocabulary reaches only the checker', () => {
+    // A kind's checker is handed the task declaration, deliberately, so it can refuse a
+    // puzzle naming a category the task does not declare. The frame is not: a declaration
+    // in here would be a declaration something above a body could branch on, and the
+    // shortest route to that is having one in hand.
+    for (const file of TUTORIAL_FRAME) {
+      const text = readFileSync(join(webSrc, file), 'utf8')
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+      expect(code, `${file} reads a task declaration`).not.toMatch(/declaration/)
+      expect(code, `${file} reads a family`).not.toMatch(/family/)
+    }
+  })
+
+  it('names no kind of puzzle either, so dispatch stays data', () => {
+    for (const file of TUTORIAL_FRAME) {
+      const text = readFileSync(join(webSrc, file), 'utf8')
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+      expect(code).not.toContain(LADDER_TUTORIAL_KIND)
+    }
+  })
+
+  it('covers the bodies this build ships, the way it covers a family’s drawing', () => {
+    // A family's drawings live under `components/architecture/` and are scanned like every
+    // other screen; a family's *tutorial* body is under the one exemption in this file, so
+    // the exemption has to be seen to be narrow. Every registered body is a scanned screen,
+    // and what it is allowed to name is the one family it teaches — never a second task's.
+    const scanned = screenSources().map((file) => relative(webSrc, file).split(sep).join('/'))
+    const bodies = readdirSync(join(webSrc, 'components/tutorial'))
+      .filter((name) => /\.tsx$/.test(name) && !name.includes('.test.'))
+      .map((name) => `components/tutorial/${name}`)
+
+    expect(Object.keys(TUTORIAL_BODIES).length).toBeGreaterThan(0)
+    expect(bodies.length).toBeGreaterThan(TUTORIAL_FRAME.length)
+    for (const file of bodies) expect(scanned).toContain(file)
+
+    const offences: string[] = []
+    for (const file of bodies.filter((name) => !TUTORIAL_FRAME.includes(name))) {
+      const text = readFileSync(join(webSrc, file), 'utf8')
+      // A body may name the family it teaches, so the apple task's ids are not the check
+      // here — a task the screens have never seen is, and so is every category and action
+      // word, because those are declared data on any task.
+      for (const id of idLeaks(text, LADDER_FAMILY_IDS)) offences.push(`${file} names "${id}"`)
+      for (const word of labelLeaks(text, LADDER_FAMILY_WORDS)) {
+        offences.push(`${file} contains "${word}"`)
+      }
+    }
+
+    expect(offences).toEqual([])
+  })
+
+  it('is matched by the engine side, which names no family either', () => {
+    // The gate and the registry are under the same rule: the workshop asks them whether a
+    // family may be fielded, and an answer that came from a hardcoded id would be an
+    // answer no second family could ever get.
+    const engineFiles: string[] = []
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name)
+        if (statSync(path).isDirectory()) walk(path)
+        else if (/\.ts$/.test(name)) engineFiles.push(path)
+      }
+    }
+    for (const dir of ['src/tutorials', 'src/progression', 'src/labour']) {
+      walk(join(repoRoot, dir))
+    }
+
+    const offences: string[] = []
+    for (const file of engineFiles) {
+      const text = readFileSync(file, 'utf8')
+      for (const id of idLeaks(text, [...DECLARED_FAMILY_IDS, ...LADDER_FAMILY_IDS])) {
+        offences.push(`${relative(repoRoot, file)} names "${id}"`)
+      }
+    }
+
+    expect(offences).toEqual([])
   })
 })

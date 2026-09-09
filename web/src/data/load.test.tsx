@@ -14,6 +14,7 @@ const DECLARATION_URL = SHIPPED_TASKS[0] ?? ''
 const APPLE = readSource('declarations/apple-harvest.json') as Record<string, unknown>
 const MANIFEST = readSource('pools/apple-harvest/manifest.json')
 const INDEX = readSource('artifacts/apple-harvest/predictions/index.json') as Record<string, unknown>
+const FAMILY = String(INDEX.familyId)
 const COVERED = Object.keys(INDEX.configurations as Record<string, unknown>)
 const FIRST = COVERED[0] ?? ''
 const PREDICTIONS = readSource(`artifacts/apple-harvest/predictions/${FIRST}.json`)
@@ -102,7 +103,7 @@ describe('loading a task', () => {
 
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
-    expect(loaded.value.index.coverage).toEqual(COVERED)
+    expect(loaded.value.families[FAMILY]?.coverage).toEqual(COVERED)
     expect(Object.keys(loaded.value.truth)).toHaveLength(1200)
     expect(loaded.value.imageIds.training).toHaveLength(200)
     // Coverage and provenance arrive; a configuration's 1200 distributions do not.
@@ -180,12 +181,14 @@ describe('loading one configuration', () => {
   it('fetches the file the index names and reads it against the pool', async () => {
     const task = await loadedTask()
 
-    const entry = await loadConfiguration(task, FIRST)
+    const entry = await loadConfiguration(task, FAMILY, FIRST)
 
     expect(entry.ok).toBe(true)
     if (!entry.ok) return
-    expect(entry.value.history).toHaveLength(task.index.configurations[FIRST]?.epochs ?? 0)
-    expect(Object.keys(entry.value.predictions.pool)).toHaveLength(1000)
+    expect(entry.value.history).toHaveLength(
+      task.families[FAMILY]?.index?.configurations[FIRST]?.epochs ?? 0,
+    )
+    expect(entry.value.imageIdsIn('pool')).toHaveLength(1000)
   })
 
   it('refuses an uncovered configuration as untrained, before fetching anything', async () => {
@@ -196,7 +199,7 @@ describe('loading one configuration', () => {
       return Promise.resolve({ ok: false, status: 404 } as Response)
     })
 
-    const entry = await loadConfiguration(task, 'blocks4-channels32-regularization3-dropout0.5')
+    const entry = await loadConfiguration(task, FAMILY, 'blocks4-channels32-regularization3-dropout0.5')
 
     expect(entry.ok).toBe(false)
     if (entry.ok) return

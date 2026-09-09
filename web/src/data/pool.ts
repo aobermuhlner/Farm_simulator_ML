@@ -157,6 +157,12 @@ export interface CropView {
   /** How many pieces the year's crop holds, whether or not anyone reaches them. */
   readonly size: number
   readonly unsorted: number
+  /** How many pieces of each declared category this year drew. */
+  readonly composition: Readonly<Record<CategoryId, number>>
+  /** True when some picture stands for more than one piece of the year's crop. */
+  readonly recurred: boolean
+  /** How many distinct pictures the pool holds, per declared category. */
+  readonly held: Readonly<Record<CategoryId, number>>
   readonly presented: readonly CropImageView[]
   /**
    * What each presented image really is, for scoring the sort once it is over.
@@ -180,7 +186,7 @@ export function cropView(
   seed: number,
   atlases: string,
 ): Loaded<CropView> {
-  const draw = drawCrop(declaration, farm, pool, seed)
+  const draw = drawCrop(declaration, farm, { imageIds: pool.order.pool, truth: pool.truth }, seed)
   if (!draw.ok) return { ok: false, issues: draw.issues }
 
   const presented: CropImageView[] = []
@@ -218,7 +224,15 @@ export function cropView(
 
   return {
     ok: true,
-    value: { size: draw.crop.size, unsorted: draw.crop.unsorted, presented, truth },
+    value: {
+      size: draw.crop.size,
+      unsorted: draw.crop.unsorted,
+      composition: draw.crop.composition,
+      recurred: draw.crop.recurred,
+      held: draw.crop.held,
+      presented,
+      truth,
+    },
   }
 }
 

@@ -40,21 +40,31 @@ stage of it SHALL be reachable without a task's crop having been brought in.
 
 No stage of the workshop SHALL credit or debit the balance, append a record for a year, or
 advance the year. Entering it, browsing what a task declares, making a model any number of
-times, and putting a model to work SHALL all leave the balance and the year exactly as they
-were.
+times, sitting a tutorial any number of times, and putting a model to work SHALL all leave
+the balance and the year exactly as they were.
 
 Hypotheses have to be cheap or they will not be formed. A workshop that charged for a
-model would teach a student to guess once rather than to look.
+model would teach a student to guess once rather than to look, and a tutorial that charged
+for an attempt would teach them to guess at the puzzle rather than read it.
 
 #### Scenario: Making a model costs nothing
+
 - **WHEN** a student makes a model in the workshop any number of times
 - **THEN** the balance is unchanged
 - **AND** the year is unchanged and no record is appended
 
 #### Scenario: Putting a model to work costs nothing
+
 - **WHEN** a student puts a model to work and hands the job back again
 - **THEN** the balance is unchanged
 - **AND** the year is unchanged and no record is appended
+
+#### Scenario: Sitting a tutorial costs nothing
+
+- **WHEN** a student opens a tutorial and attempts it any number of times, passing or failing
+- **THEN** the balance is unchanged
+- **AND** the year is unchanged and no record is appended
+
 
 ### Requirement: Every playable task carries a labour slot
 
@@ -111,31 +121,61 @@ completed, so that a configuration cannot be put to work without its training ha
 presented. Putting a model to work SHALL fill that task's labour slot and SHALL be
 reflected on the overview.
 
+WHEN the selected family declares a tutorial that has not been completed, that control
+SHALL NOT be offered however complete the model's making is, and what withholds it SHALL be
+stated as that tutorial to sit. That statement SHALL name the tutorial and SHALL offer the
+way to it, and SHALL NOT be presented as an error, as a thing to buy, or as a configuration
+that cannot be run. Completing the tutorial SHALL make the control available without the
+model having to be made again.
+
 A task whose slot holds a model SHALL be able to have the job handed back to the farm's
 manual labour. Putting a model to work and handing the job back SHALL both be reversible
 and SHALL take effect from the next crop brought in, never retroactively over a year
-already closed.
+already closed. Handing a job back SHALL never be withheld by a tutorial, so that a
+tutorial can never leave a task stuck with a model on it.
 
 What a student is working on in the workshop SHALL NOT change what is at work. Changing
-knob values, browsing declared data, or making a different model SHALL leave the labour
-slot as it was until the student puts something to work.
+knob values, browsing declared data, sitting a tutorial, or making a different model SHALL
+leave the labour slot as it was until the student puts something to work.
 
 #### Scenario: A model cannot be put to work before it is made
+
 - **WHEN** a student is in the workshop with no model made for the current knob values
 - **THEN** no control puts a model to work
 
 #### Scenario: Putting a model to work fills the slot
+
 - **WHEN** a student puts a made model to work and returns to the overview
 - **THEN** that task's slot states that model
 
 #### Scenario: The job can be handed back
+
 - **WHEN** a student hands a task's job back from a model at work
 - **THEN** that task's slot states the farm's manual labour again
 
 #### Scenario: Tinkering does not change what is at work
+
 - **WHEN** a student changes knob values and makes a different model without putting it to work
 - **THEN** the task's labour slot states what it stated before
 - **AND** the overview shows no change to what is at work
+
+#### Scenario: An unfinished tutorial withholds the control and says so
+
+- **WHEN** a model is made for a family whose declared tutorial is incomplete
+- **THEN** no control puts it to work
+- **AND** the tutorial to sit is named and the way to it is offered
+
+#### Scenario: Completing the tutorial offers the control without remaking the model
+
+- **WHEN** the tutorial is completed with a model already made
+- **THEN** the control that puts that model to work is offered
+- **AND** the model does not have to be made again
+
+#### Scenario: A tutorial never traps a model on a task
+
+- **WHEN** a task worked by a model has that family's tutorial made incomplete
+- **THEN** handing the job back to the farm's manual labour is still offered
+
 
 ### Requirement: Running the year is one act, reached from the overview
 
@@ -292,31 +332,35 @@ instead.
 
 ### Requirement: A report identifies the configuration that produced it
 
-Every report of a task brought in by a model SHALL name the configuration identifier it
-was produced from, and every report SHALL name the year it belongs to. A report of a task
-brought in by the farm's manual labour SHALL identify that labour rather than naming a
-configuration.
+Every report of a task brought in by a model SHALL name the model family and the
+configuration identifier it was produced from, and every report SHALL name the year it
+belongs to. A report of a task brought in by the farm's manual labour SHALL identify that
+labour rather than naming a family or a configuration.
+
+The family is named because an identifier alone no longer identifies a model: two families
+of one task can compose the same identifier string. A report naming an identifier without
+its family would describe a crop the student cannot trace back to what brought it in.
 
 A report SHALL describe the year it belongs to and SHALL NOT be presented as describing
-the current state of the workshop. WHEN knob values change, or a different model is put to
-work, a report already shown SHALL continue to describe the year and the configuration it
-was produced from, and SHALL NOT be re-presented as the result of the current knob values.
+the current state of the workshop. WHEN knob values change, a different family is selected,
+or a different model is put to work, a report already shown SHALL continue to describe the
+year, the family and the configuration it was produced from, and SHALL NOT be re-presented
+as the result of the current knob values.
 
 #### Scenario: Report names its configuration
 - **WHEN** a report of a task brought in by a model is shown
-- **THEN** it displays the configuration identifier that crop was brought in by
+- **THEN** it displays the model family and the configuration identifier that crop was brought in by
 - **AND** it displays the year it belongs to
 
 #### Scenario: A stale report is not passed off as current
-- **WHEN** a knob value is changed, or a different model is put to work, after a report has been shown
-- **THEN** that report still names the configuration and the year it was produced from
+- **WHEN** a knob value is changed, a different family is selected, or a different model is put to work, after a report has been shown
+- **THEN** that report still names the family, the configuration and the year it was produced from
 - **AND** it is not presented as the result of the current knob values
 
 #### Scenario: A hand-brought crop's report identifies the labour
 - **WHEN** a report of a task brought in by the farm's manual labour is shown
 - **THEN** it identifies that labour
-- **AND** it names no configuration identifier
-
+- **AND** it names no family and no configuration identifier
 ### Requirement: Engine refusals are shown with the cause the engine named
 
 WHEN the engine refuses — an unresolvable configuration, a schema version mismatch, a
@@ -391,6 +435,36 @@ combined figure over the identified cells. Identifying which cell was right tell
 where to look; a single figure summing those cells would let them stop looking, which is
 the one thing this report exists to prevent.
 
+The report SHALL additionally carry money and the year's own circumstances:
+
+- **What each row earned.** Every category's row SHALL state what that category's apples
+  came to, so the money is attached to the categories it came from rather than only to the
+  run. No figure SHALL combine only the identified cells' money, for the same reason no
+  count may.
+- **The arithmetic of what was paid.** WHEN the task declares a delivery term, the report
+  SHALL show the gross, what the downgrade took off it, and what the harvest paid, as three
+  figures whose arithmetic a reader can follow. WHEN it declares none, the total earnings
+  stand alone.
+- **The delivery line.** WHEN the task declares a delivery term, the report SHALL state the
+  measured share, the count and the categories it was measured over, the tolerance it was
+  measured against, and whether the delivery was accepted or downgraded. WHEN nothing was
+  delivered, it SHALL say so rather than showing a share.
+- **The warning.** WHEN the harvest recorded a warning, the report SHALL say how close the
+  measured share came to the tolerance, in the same place the downgrade would be reported,
+  so the sentence a student reads before a bad year is in the place they will read it again
+  during one.
+- **The year's crop.** The report SHALL state the size of the crop and the share of it each
+  declared category held that year, in that task's declared category labels. This is what
+  lets a leaner year be attributed to the year. It SHALL NOT be labelled as noise, variance
+  or error.
+- **Recurring photographs.** WHEN photographs recurred in the crop, the report SHALL state
+  that they did and how many the pool holds.
+
+None of these SHALL be expressed in vocabulary belonging to any particular task. The
+categories a delivery term measures, the actions that count as delivering, and the labels
+of both are read from the declaration, so a task measuring something other than worms
+reports through the same screen.
+
 #### Scenario: Every combination is present in the report
 - **WHEN** a report is shown for a task with three categories and three actions
 - **THEN** all nine category-and-action counts are displayed, including combinations with a count of zero
@@ -438,6 +512,49 @@ the one thing this report exists to prevent.
 - **THEN** no count or proportion of correctly treated images is presented
 - **AND** no figure combining the identified cells is presented
 
+#### Scenario: The money is attached to the categories it came from
+- **WHEN** a report is shown
+- **THEN** each category's row states what that category's apples earned
+- **AND** no figure combines the money of the identified cells alone
+
+#### Scenario: A downgraded delivery shows its arithmetic
+- **WHEN** a harvest whose delivery was downgraded is reported
+- **THEN** the gross, the amount the downgrade took off, and what the harvest paid are all shown
+- **AND** the gross less the downgrade equals what it paid
+
+#### Scenario: An accepted delivery still shows the line
+- **WHEN** a harvest whose measured share stayed below the tolerance is reported
+- **THEN** the measured share and the tolerance are shown, and the delivery is stated as accepted
+
+#### Scenario: The warning is where the downgrade would be
+- **WHEN** a harvest that recorded a warning is reported
+- **THEN** how close the measured share came to the tolerance is stated
+- **AND** it appears in the same place a downgrade is reported
+
+#### Scenario: The breakdown contradicts the headline
+- **WHEN** a delivery is downgraded by the apples of one rare category
+- **THEN** the total paid is shown alongside the count of those apples and what the downgrade cost
+- **AND** the cost of that category's cells is legible against the size of the crop
+
+#### Scenario: The year is stated so a lean year can be attributed
+- **WHEN** two closed years' reports for one unchanged configuration are read
+- **THEN** each states its crop's size and the share each category held
+- **AND** neither presents the difference between them as noise, variance or error
+
+#### Scenario: Recurring photographs are disclosed on the report
+- **WHEN** a harvest whose crop repeated photographs is reported
+- **THEN** the report states that photographs recur and how many the pool holds
+
+#### Scenario: A task with no delivery term reports no delivery line
+- **WHEN** a harvest for a task declaring no delivery term is reported
+- **THEN** no share, tolerance, downgrade or warning appears
+- **AND** the total earnings are shown as one figure
+
+#### Scenario: The delivery line names nothing task-specific in the shell
+- **WHEN** a task whose delivery term measures a category unrelated to apples is reported on
+- **THEN** the measured categories and delivering actions are named from that task's declaration
+- **AND** no screen code is added or changed for it
+
 ### Requirement: Declared teaching copy is reachable from the screens
 
 A task's declared task-level copy SHALL be reachable from its configuration screen, and
@@ -457,6 +574,13 @@ declaration alone. This SHALL hold for every stage the shell presents, including
 belong to the farm rather than to a task run and that render a task's images, labels or
 actions.
 
+The same rule SHALL hold over what a model family declares: no family id, family label,
+shipped form, slot icon, slot label or history axis label SHALL appear in screen code, and
+no screen SHALL branch on one. The workshop, the family picker, the labour slot and the
+report SHALL be produced from the declared families and the facts they are supplied. A
+family's own drawing and a family's own tutorial body MAY each name that family and SHALL
+name no other; every other screen, the tutorial frame included, SHALL name none.
+
 The same rule SHALL hold over what the farm declares: no farm name, no currency label and
 no summary fact's label SHALL appear in screen code, and no screen SHALL branch on one.
 The persistent bar SHALL be produced from the farm declaration and the facts it is
@@ -469,17 +593,38 @@ the catalog, never written into a screen, so that a market for an entirely diffe
 renders through the same screens.
 
 #### Scenario: An unrelated task renders without screen changes
+
 - **WHEN** a second task declaring unrelated categories and actions is added as a declaration
-- **THEN** it renders its overview entry, configuration screen and report through the same screens
+- **THEN** it renders its overview entry, workshop and report through the same screens
 - **AND** every farm stage that presents its images or actions renders them from its declaration through the same screens
 - **AND** no screen code is added or changed for it
 
+#### Scenario: An unrelated family renders without screen changes
+
+- **WHEN** a task is declared with a model family whose id, label, knobs and shipped form the shell has never presented
+- **THEN** it is offered in the picker, configured in the workshop, shown in the labour slot and named in the report through the same screens
+- **AND** no screen code is added or changed for it
+
+#### Scenario: No screen branches on what a family ships
+
+- **WHEN** screen code is inspected
+- **THEN** nothing branches on whether a family ships its model or its predictions
+- **AND** nothing names a family outside that family's own drawing and that family's own tutorial body
+
+#### Scenario: The tutorial frame names no family
+
+- **WHEN** the code that opens, presents, judges and records a tutorial is inspected
+- **THEN** no family id and no family label appears in it
+- **AND** nothing branches on which family is being taught
+
 #### Scenario: A farm declaring a different currency renders without screen changes
+
 - **WHEN** the farm declares a different name and a different currency label
 - **THEN** the bar shows both of them
 - **AND** no screen code is added or changed for it
 
 #### Scenario: An unrelated catalog renders without screen changes
+
 - **WHEN** a catalog declaring different groups, items and prices is loaded
 - **THEN** the market renders it, and locked things name the items that open them
 - **AND** no screen code is added or changed for it
@@ -525,3 +670,73 @@ them, and carries the persistent bar as every other stage does.
 #### Scenario: The task stages are untouched
 - **WHEN** a task is selected from an overview that also offers a farm stage
 - **THEN** configuration, run and report proceed as they did before
+
+### Requirement: The workshop offers the task's families, and choosing one is not committing it
+
+WHEN a task declares more than one model family, the workshop SHALL present the families it
+declares and SHALL let the student select among the ones that are available to them. The
+selected family SHALL decide which knobs and which drawing the workshop presents.
+
+Selecting a family SHALL NOT put it to work, SHALL NOT take the model already at work off
+the task, and SHALL move no money. Putting a model to work SHALL remain the separate,
+deliberate act `farm-labour` specifies, so that opening the picker to look at a family the
+student is considering never changes who brings the crop in.
+
+A family the student does not yet have available SHALL be shown with what opens it rather
+than hidden, exactly as a locked knob value is, and SHALL NOT be selectable. A task
+declaring one family SHALL NOT be made to look like a choice.
+
+#### Scenario: The picker renders the declared families
+- **WHEN** a task declaring several families is opened in the workshop
+- **THEN** each declared family is presented with its declared label
+- **AND** the selected family's knobs and drawing are the ones shown
+
+#### Scenario: Looking at a family does not field it
+- **WHEN** a family is selected while a model of another family is at work
+- **THEN** the task's labour is still that model
+- **AND** no money moves and the year is unchanged
+
+#### Scenario: An unavailable family is shown with what opens it
+- **WHEN** a task declares a family the student does not have available
+- **THEN** it is shown together with what opens it
+- **AND** it cannot be selected
+
+#### Scenario: A single family is not presented as a choice
+- **WHEN** a task declaring exactly one family is opened in the workshop
+- **THEN** its knobs are presented directly
+- **AND** no family choice is offered
+
+### Requirement: The tutorial is reached from the workshop, never sprung in the market
+
+WHEN the selected family declares a tutorial, the workshop SHALL offer it beside that
+family's knobs, whether or not it has been completed, so that its theory copy stays
+reachable after it is passed. Nothing SHALL open it unbidden while a student is tuning
+knobs or making a model.
+
+The market SHALL NOT present a tutorial, SHALL NOT open one on a purchase, and SHALL NOT
+condition a purchase on one. Buying a family and being ambushed by a puzzle is the market
+telling a student that money was not the key, which is a thing the market has already
+promised it will never say.
+
+#### Scenario: The workshop offers the selected family's tutorial
+
+- **WHEN** a family declaring a tutorial is selected in the workshop
+- **THEN** that tutorial is offered beside its knobs
+
+#### Scenario: A completed tutorial is still offered
+
+- **WHEN** the selected family's tutorial has been completed
+- **THEN** it is still offered from the workshop
+- **AND** opening it presents its puzzle and its theory copy
+
+#### Scenario: Buying a family opens no puzzle
+
+- **WHEN** an item that opens a family declaring a tutorial is bought
+- **THEN** the market shows the purchase and nothing else
+- **AND** no tutorial is presented until the student reaches the workshop
+
+#### Scenario: A family declaring no tutorial offers none
+
+- **WHEN** a family declaring no tutorial is selected in the workshop
+- **THEN** no tutorial is offered
+- **AND** the workshop is as it was before tutorials existed

@@ -19,7 +19,8 @@ import type { Availability, TaskAvailability } from '../progression/availability
 import { taskAvailability } from '../progression/availability.js'
 import { declaredValues } from '../progression/knobValues.js'
 import { ID_SEPARATOR } from '../task/configId.js'
-import type { TaskDeclaration } from '../task/types.js'
+import type { ModelFamilyDeclaration } from '../task/types.js'
+import type { TaskDeclaration, TutorialDeclaration, TutorialId } from '../task/types.js'
 
 /**
  * One model put to work: the configuration it was trained as, and the family that
@@ -37,8 +38,15 @@ import type { TaskDeclaration } from '../task/types.js'
  */
 export interface FieldedModel {
   readonly configurationId: string
-  /** The family the configuration belongs to, once there is more than one. */
-  readonly family?: string
+  /**
+   * The family the configuration was made in.
+   *
+   * Required, because an identifier alone no longer names one model: two families of one
+   * task can compose the same string, and each resolves only against its own family. A
+   * slot that records an identifier and no family is not guessed at — `src/save/` treats
+   * it as a slot this build cannot make.
+   */
+  readonly family: string
 }
 
 /** Task id to the model at work for it. A task with no entry is worked by hand. */
@@ -63,16 +71,59 @@ export function isAtWork(slots: LabourSlots | undefined, taskId: string): boolea
   return labourFor(slots, taskId).kind === 'model'
 }
 
-/** The slots with one task's job given to a model. Free and reversible; moves no money. */
+/**
+ * What a caller has to show before a model may fill a slot.
+ *
+ * Required rather than optional, deliberately. An optional gate is a gate with a way
+ * around it, and the one thing this refusal has to guarantee is that an untutored family
+ * cannot reach a labour slot by any route — not from a screen that forgot, and not from a
+ * restored save.
+ */
+export interface FieldingGate {
+  /** The tutorial the model's family declares, where it declares one. */
+  readonly tutorial?: TutorialDeclaration
+  /** The tutorial ids this farm has passed. */
+  readonly completed: readonly TutorialId[]
+}
+
+/**
+ * The outcome of trying to fill a slot: the new slots, or the tutorial standing in the way.
+ *
+ * A union rather than a thrown error, because this is not a fault. The student owns the
+ * family and made the model; what is missing is a lesson they can go and sit, and the
+ * shell has to be able to say so in those words.
+ */
+export type Fielding =
+  | { readonly ok: true; readonly slots: LabourSlots }
+  | { readonly ok: false; readonly withheldBy: TutorialId }
+
+/**
+ * The slots with one task's job given to a model. Free and reversible; moves no money.
+ *
+ * Refused while the family's declared tutorial is outstanding. The refusal changes
+ * nothing: the slots handed in are the slots that stand, so a caller that ignores the
+ * answer still leaves the farm as it was rather than fielding by accident.
+ */
 export function putToWork(
   slots: LabourSlots,
   taskId: string,
   model: FieldedModel,
-): LabourSlots {
-  return { ...slots, [taskId]: model }
+  gate: FieldingGate,
+): Fielding {
+  const { tutorial } = gate
+  if (tutorial !== undefined && !gate.completed.includes(tutorial.id)) {
+    return { ok: false, withheldBy: tutorial.id }
+  }
+  return { ok: true, slots: { ...slots, [taskId]: model } }
 }
 
-/** The slots with one task's job handed back to the farm's hands. */
+/**
+ * The slots with one task's job handed back to the farm's hands.
+ *
+ * Unconditional, and it must stay so. A tutorial that could withhold this as well as
+ * `putToWork` could strand a model on a task — a family declared a tutorial after the
+ * model was fielded, and now the student can neither keep it nor take it off.
+ */
 export function handBack(slots: LabourSlots, taskId: string): LabourSlots {
   const { [taskId]: _removed, ...rest } = slots
   return rest
@@ -130,8 +181,8 @@ export function playableTasks(
  * brought in, with a cause the engine names at harvest time, and not the same thing at
  * all — see design.md decision 5.
  */
-export function configurationResolves(declaration: TaskDeclaration, id: string): boolean {
-  const knobs = declaration.knobs
+export function configurationResolves(family: ModelFamilyDeclaration, id: string): boolean {
+  const knobs = family.knobs
   if (knobs.length === 0) return id.length === 0
 
   const segments = id.split(ID_SEPARATOR)

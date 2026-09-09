@@ -37,6 +37,7 @@ import type {
   CropBroughtIn,
   Farm,
   FarmDeclaration,
+  HarvestFigures,
   Movement,
   YearInProgress,
   YearRecord,
@@ -45,10 +46,17 @@ import type { FieldedModel, LabourSlots } from '../labour/index.js'
 import { configurationResolves } from '../labour/index.js'
 import { openFarm, toAmount, toUnits } from '../economy/index.js'
 import type { Catalog } from '../progression/catalog.js'
-import { itemById } from '../progression/catalog.js'
+import { itemById, repeatLimit } from '../progression/catalog.js'
 import { declaredValues } from '../progression/knobValues.js'
 import { valueKey } from '../progression/knobValues.js'
-import type { TaskDeclaration } from '../task/types.js'
+import { familyById, selectedFamily } from '../task/families.js'
+import { isTutorialComplete } from '../tutorials/index.js'
+import type {
+  FamilyId,
+  ModelFamilyDeclaration,
+  TaskDeclaration,
+  TutorialId,
+} from '../task/types.js'
 import type { ValidationIssue } from '../task/validate.js'
 import { knobPermits } from '../task/validate.js'
 
@@ -56,15 +64,36 @@ import { knobPermits } from '../task/validate.js'
  * The schema this build reads. Bumped deliberately and never silently: every bump resets
  * every student's farm, which is the cost of never migrating one wrongly.
  */
-export const SAVE_SCHEMA_VERSION = '2.0.0'
+export const SAVE_SCHEMA_VERSION = '4.0.0'
 
 /** A save discarded whole, with the cause the student is told. */
 export const SAVE_RESET = 'save-reset'
 /** A reference the declarations no longer carry, dropped from an otherwise kept save. */
 export const SAVE_REFERENCE_DROPPED = 'save-reference-dropped'
+/**
+ * A slot dropped because its family's tutorial is outstanding.
+ *
+ * Its own code rather than `SAVE_REFERENCE_DROPPED`, because it is a different kind of
+ * news. The dropped references say this build cannot make what was recorded; this one says
+ * there is a lesson to go and sit, and a student who is told the two in the same words
+ * learns that the game broke rather than that they have something to do.
+ */
+export const SAVE_TUTORIAL_OUTSTANDING = 'save-tutorial-outstanding'
 
-/** Knob id to the value last chosen for it, per task. */
-export type SavedKnobs = Readonly<Record<string, Readonly<Record<string, string | number>>>>
+/** One family's knob values: knob id to the value last chosen for it. */
+export type SavedFamilyKnobs = Readonly<Record<string, string | number>>
+
+/**
+ * Knob values per family per task.
+ *
+ * Two levels rather than one, because a knob id is unique only within a family and a
+ * student tuning the network must not lose the tree's budget. Task id, then family id,
+ * then knob id.
+ */
+export type SavedKnobs = Readonly<Record<string, Readonly<Record<string, SavedFamilyKnobs>>>>
+
+/** Which family each task has selected. A task with no entry opens at its first. */
+export type SelectedFamilies = Readonly<Record<string, FamilyId>>
 
 /** Everything play has changed, and nothing a declaration states. */
 export interface GameState {
@@ -79,6 +108,27 @@ export interface GameState {
   readonly seed: number
   readonly owned: readonly string[]
   readonly knobs: SavedKnobs
+  /**
+   * Which model family each task has selected, for every task where one was chosen.
+   *
+   * Progress rather than a declaration: selecting a family is something play changed. A
+   * task with no entry opens at its first declared family, which is why nothing writes
+   * one at farm creation.
+   */
+  readonly families: SelectedFamilies
+  /**
+   * The tutorials this farm has passed, by the id each declares.
+   *
+   * A set of ids and nothing more: no score, no attempt count, no timing. A puzzle that
+   * recorded how well it was solved would be a puzzle a student optimises instead of
+   * reads, and the only way to keep that promise is to have nowhere to put the number.
+   *
+   * By the tutorial's own id rather than by family or by task, because a family id is
+   * unique only within its task and completion is recorded once globally. Two families
+   * declaring the same tutorial share this entry, which is what stops a student being
+   * asked to sit one lesson twice.
+   */
+  readonly tutorials: readonly TutorialId[]
   /**
    * Who brings each task's crop in, for every task a model has been put to work for.
    *
@@ -119,19 +169,50 @@ export interface SavedYear {
   readonly closingBalance: number
 }
 
-/** One model at work, as the save writes it. */
+/**
+ * One model at work, as the save writes it.
+ *
+ * The family is written because an identifier alone no longer names one model. A save
+ * written without one is read back as a slot this build cannot make, rather than being
+ * guessed at against the task's families.
+ */
 export interface SavedSlot {
   readonly configuration: string
   readonly family?: string
+}
+
+/**
+ * What a harvest recorded about itself, as the save writes it.
+ *
+ * Amounts are decimal here as everywhere in a save; the shares are shares and cross
+ * nothing. Optional throughout, because a year written before harvests explained
+ * themselves is still a year, and dropping it would cost a schema bump — which resets
+ * every student's farm over a figure the report can simply not show.
+ */
+export interface SavedHarvest {
+  readonly cropSize: number
+  readonly composition: Readonly<Record<string, number>>
+  readonly gross: number
+  readonly downgrade: number
+  readonly downgraded: boolean
+  readonly warned: boolean
+  readonly delivered?: number
+  readonly measured?: number
+  readonly share?: number
+  readonly tolerance?: number
+  readonly recurred: boolean
+  readonly heldPictures?: number
 }
 
 /** What one card brought in, as the save writes it. Amounts are decimal, not whole units. */
 export interface SavedCrop {
   readonly task: string
   readonly configuration?: string
+  readonly family?: string
   readonly paid: number
   readonly evaluated: number
   readonly counts: Readonly<Record<string, Readonly<Record<string, number>>>>
+  readonly harvest?: SavedHarvest
 }
 
 /** A year, in progress or closed, as the save writes it. */
@@ -145,18 +226,29 @@ export interface SavedFarm {
   readonly seed: number
   readonly year: number
   /**
-   * How many pieces this year's crop holds.
+   * How many units of land the farm holds.
    *
-   * Progress rather than a declaration: it opens at the declared figure and grows with
-   * the land. A save written before the crop was state carries none, and reads back at
-   * the declared opening — the value such a farm was playing at anyway.
+   * Progress rather than a declaration: it opens at the declared opening and grows with
+   * what is bought. The size of the crop that land bears is *not* recorded — it is the
+   * product of this figure and a declared one, and recording it too would let a restored
+   * farm carry a crop size its own land and yield contradict.
+   *
+   * A save written before land could be bought carries none, and reads back at the
+   * declared opening — which is the land such a farm was playing on anyway.
    */
-  readonly cropSize: number
+  readonly land: number
   readonly balance: number
   readonly movements: readonly SavedMovement[]
   readonly ledger: readonly SavedYear[]
   readonly owned: readonly string[]
   readonly knobs: SavedKnobs
+  /** Task id to the family selected for it. A task with no entry opens at its first. */
+  readonly families: SelectedFamilies
+  /**
+   * The tutorials passed, by id. Absent on a save written before tutorials existed, which
+   * had passed none — so absence reads as none rather than refusing.
+   */
+  readonly tutorials?: readonly TutorialId[]
   /** Task id to the model at work for it. A task with no entry is worked by hand. */
   readonly slots: Readonly<Record<string, SavedSlot>>
   /** The year run and not yet closed, where there is one. */
@@ -223,6 +315,8 @@ export function newGame(
     seed: draw(),
     owned: [...catalog.ownedAtStart],
     knobs: {},
+    families: {},
+    tutorials: [],
     slots: {},
   }
 }
@@ -234,7 +328,7 @@ export function encodeSave(state: GameState): SavedFarm {
     schemaVersion: SAVE_SCHEMA_VERSION,
     seed: state.seed,
     year: state.farm.year,
-    cropSize: state.farm.cropSize,
+    land: state.farm.land,
     balance: toAmount(state.farm.balance, precision),
     movements: state.farm.movements.map((movement) => ({
       amount: toAmount(movement.units, precision),
@@ -248,12 +342,12 @@ export function encodeSave(state: GameState): SavedFarm {
     })),
     owned: [...state.owned],
     knobs: state.knobs,
+    families: state.families,
+    tutorials: [...state.tutorials],
     slots: Object.fromEntries(
       Object.entries(state.slots).map(([taskId, model]) => [
         taskId,
-        model.family === undefined
-          ? { configuration: model.configurationId }
-          : { configuration: model.configurationId, family: model.family },
+        { configuration: model.configurationId, family: model.family },
       ]),
     ),
     ...(state.pending === undefined ? {} : { pending: encodeCrops(state.pending, precision) }),
@@ -271,10 +365,30 @@ function encodeCrops(
     brought: year.brought.map((crop) => ({
       task: crop.taskId,
       ...(crop.configurationId === undefined ? {} : { configuration: crop.configurationId }),
+      ...(crop.family === undefined ? {} : { family: crop.family }),
       paid: toAmount(crop.paidUnits, precision),
       evaluated: crop.evaluated,
       counts: crop.counts,
+      ...(crop.harvest === undefined ? {} : { harvest: encodeHarvest(crop.harvest, precision) }),
     })),
+  }
+}
+
+/** What a harvest recorded, with its two amounts written the way a save writes money. */
+function encodeHarvest(harvest: HarvestFigures, precision: number): SavedHarvest {
+  return {
+    cropSize: harvest.cropSize,
+    composition: harvest.composition,
+    gross: toAmount(harvest.grossUnits, precision),
+    downgrade: toAmount(harvest.downgradeUnits, precision),
+    downgraded: harvest.downgraded,
+    warned: harvest.warned,
+    ...(harvest.delivered === undefined ? {} : { delivered: harvest.delivered }),
+    ...(harvest.measured === undefined ? {} : { measured: harvest.measured }),
+    ...(harvest.share === undefined ? {} : { share: harvest.share }),
+    ...(harvest.tolerance === undefined ? {} : { tolerance: harvest.tolerance }),
+    recurred: harvest.recurred,
+    ...(harvest.heldPictures === undefined ? {} : { heldPictures: harvest.heldPictures }),
   }
 }
 
@@ -324,9 +438,13 @@ function readLedger(raw: unknown, precision: number): YearRecord[] | undefined {
 /**
  * Reads the saved knob values, dropping every reference the declarations no longer carry.
  *
- * A task that is gone drops whole; a knob that is gone drops; a value the knob no longer
- * permits falls back to that knob's declared default, so the knob opens somewhere it is
- * allowed to be rather than somewhere it is not.
+ * A task that is gone drops whole; a family that is gone drops whole; a knob that is gone
+ * drops; a value the knob no longer permits falls back to that knob's declared default,
+ * so the knob opens somewhere it is allowed to be rather than somewhere it is not.
+ *
+ * Read per family, because that is how it is written: a knob id belongs to a family, and
+ * looking one up across the task would let a withdrawn family's value settle onto a
+ * surviving family's knob of the same name.
  */
 function readKnobs(
   raw: unknown,
@@ -335,9 +453,9 @@ function readKnobs(
 ): SavedKnobs | undefined {
   if (!isRecord(raw)) return undefined
 
-  const knobs: Record<string, Record<string, string | number>> = {}
-  for (const [taskId, values] of Object.entries(raw)) {
-    if (!isRecord(values)) return undefined
+  const knobs: Record<string, Record<string, Record<string, string | number>>> = {}
+  for (const [taskId, byFamily] of Object.entries(raw)) {
+    if (!isRecord(byFamily)) return undefined
 
     const task = tasks.find((candidate) => candidate.id === taskId)
     if (task === undefined) {
@@ -347,35 +465,96 @@ function readKnobs(
       continue
     }
 
-    const kept: Record<string, string | number> = {}
-    for (const [knobId, value] of Object.entries(values)) {
-      if (typeof value !== 'string' && typeof value !== 'number') return undefined
+    const perFamily: Record<string, Record<string, string | number>> = {}
+    for (const [familyId, values] of Object.entries(byFamily)) {
+      if (!isRecord(values)) return undefined
 
-      const knob = task.knobs.find((candidate) => candidate.id === knobId)
-      if (knob === undefined) {
+      const family = familyById(task, familyId)
+      if (family === undefined) {
         issues.push(
           dropped(
-            `The save holds a setting for "${knobId}", which task "${taskId}" no longer declares.`,
-            knobId,
+            `The save holds settings for family "${familyId}" of task "${taskId}", which this build does not declare.`,
+            familyId,
           ),
         )
         continue
       }
-      if (!knobPermits(knob, value)) {
-        issues.push(
-          dropped(
-            `The save holds ${JSON.stringify(value)} for "${knobId}", which it no longer permits; it opens at its default of ${JSON.stringify(knob.default)}.`,
-            knobId,
-          ),
-        )
-        kept[knobId] = knob.default
-        continue
+
+      const kept: Record<string, string | number> = {}
+      for (const [knobId, value] of Object.entries(values)) {
+        if (typeof value !== 'string' && typeof value !== 'number') return undefined
+
+        const knob = family.knobs.find((candidate) => candidate.id === knobId)
+        if (knob === undefined) {
+          issues.push(
+            dropped(
+              `The save holds a setting for "${knobId}", which family "${familyId}" of task "${taskId}" no longer declares.`,
+              knobId,
+            ),
+          )
+          continue
+        }
+        if (!knobPermits(knob, value)) {
+          issues.push(
+            dropped(
+              `The save holds ${JSON.stringify(value)} for "${knobId}", which it no longer permits; it opens at its default of ${JSON.stringify(knob.default)}.`,
+              knobId,
+            ),
+          )
+          kept[knobId] = knob.default
+          continue
+        }
+        kept[knobId] = value
       }
-      kept[knobId] = value
+      perFamily[familyId] = kept
     }
-    knobs[taskId] = kept
+    knobs[taskId] = perFamily
   }
   return knobs
+}
+
+/**
+ * Reads which family each task had selected, dropping a selection that no longer exists.
+ *
+ * A dropped selection is not a refusal: the task opens at its first declared family, the
+ * same as a save that never recorded one. Selecting is free and reversible, so the worst
+ * a withdrawn selection costs is a workshop that opens on a different rung — quite unlike
+ * a labour slot, which is a commitment and is dropped loudly.
+ */
+function readSelectedFamilies(
+  raw: unknown,
+  tasks: readonly TaskDeclaration[],
+  issues: ValidationIssue[],
+): SelectedFamilies | undefined {
+  if (raw === undefined) return {}
+  if (!isRecord(raw)) return undefined
+
+  const selected: Record<string, string> = {}
+  for (const [taskId, familyId] of Object.entries(raw)) {
+    if (typeof familyId !== 'string') return undefined
+
+    const task = tasks.find((candidate) => candidate.id === taskId)
+    if (task === undefined) {
+      issues.push(
+        dropped(
+          `The save has family "${familyId}" selected for task "${taskId}", which this build does not declare.`,
+          taskId,
+        ),
+      )
+      continue
+    }
+    if (familyById(task, familyId) === undefined) {
+      issues.push(
+        dropped(
+          `The save has family "${familyId}" selected for "${taskId}", which that task no longer declares; it opens at the first family it does.`,
+          taskId,
+        ),
+      )
+      continue
+    }
+    selected[taskId] = familyId
+  }
+  return selected
 }
 
 /**
@@ -402,6 +581,48 @@ function readCounts(
   return counts
 }
 
+/**
+ * Reads what a harvest recorded, or undefined when it recorded nothing readable.
+ *
+ * A harvest whose figures do not read is dropped rather than refusing the year around it.
+ * What the card paid is not in here — it is in `paid`, which the year is settled from —
+ * so the worst a dropped record costs is a report that shows less than it could.
+ */
+function readHarvest(raw: unknown, precision: number): HarvestFigures | undefined {
+  if (!isRecord(raw)) return undefined
+  if (!Number.isInteger(raw.cropSize) || (raw.cropSize as number) < 0) return undefined
+  if (!isFiniteNumber(raw.gross) || !isFiniteNumber(raw.downgrade)) return undefined
+  if (typeof raw.downgraded !== 'boolean' || typeof raw.warned !== 'boolean') return undefined
+  if (typeof raw.recurred !== 'boolean') return undefined
+  if (!isRecord(raw.composition)) return undefined
+
+  const composition: Record<string, number> = {}
+  for (const [category, count] of Object.entries(raw.composition)) {
+    if (!Number.isInteger(count) || (count as number) < 0) return undefined
+    composition[category] = count as number
+  }
+
+  const whole = (value: unknown): number | undefined =>
+    Number.isInteger(value) && (value as number) >= 0 ? (value as number) : undefined
+  const share = (value: unknown): number | undefined =>
+    isFiniteNumber(value) && (value as number) >= 0 ? (value as number) : undefined
+
+  return {
+    cropSize: raw.cropSize as number,
+    composition,
+    grossUnits: toUnits(raw.gross as number, precision),
+    downgradeUnits: toUnits(raw.downgrade as number, precision),
+    downgraded: raw.downgraded,
+    warned: raw.warned,
+    ...(raw.delivered === undefined ? {} : { delivered: whole(raw.delivered) }),
+    ...(raw.measured === undefined ? {} : { measured: whole(raw.measured) }),
+    ...(raw.share === undefined ? {} : { share: share(raw.share) }),
+    ...(raw.tolerance === undefined ? {} : { tolerance: share(raw.tolerance) }),
+    recurred: raw.recurred,
+    ...(raw.heldPictures === undefined ? {} : { heldPictures: whole(raw.heldPictures) }),
+  }
+}
+
 /** Reads a year of crops — in progress or closed — or undefined when the shape is wrong. */
 function readCrops(raw: unknown, precision: number): YearInProgress | undefined {
   if (!isRecord(raw) || !Number.isInteger(raw.year)) return undefined
@@ -412,6 +633,7 @@ function readCrops(raw: unknown, precision: number): YearInProgress | undefined 
     if (!isRecord(entry) || typeof entry.task !== 'string' || entry.task.length === 0) {
       return undefined
     }
+    if (entry.family !== undefined && typeof entry.family !== 'string') return undefined
     if (entry.configuration !== undefined && typeof entry.configuration !== 'string') {
       return undefined
     }
@@ -421,12 +643,16 @@ function readCrops(raw: unknown, precision: number): YearInProgress | undefined 
     const counts = readCounts(entry.counts)
     if (counts === undefined) return undefined
 
+    const harvest = entry.harvest === undefined ? undefined : readHarvest(entry.harvest, precision)
+
     brought.push({
       taskId: entry.task,
       ...(entry.configuration === undefined ? {} : { configurationId: entry.configuration }),
+      ...(entry.family === undefined ? {} : { family: entry.family }),
       paidUnits: toUnits(entry.paid, precision),
       evaluated: entry.evaluated as number,
       counts,
+      ...(harvest === undefined ? {} : { harvest }),
     })
   }
   return { year: raw.year as number, brought }
@@ -440,9 +666,30 @@ function readCrops(raw: unknown, precision: number): YearInProgress | undefined 
  * the student is told, rather than the whole farm being refused over a model they can
  * simply train again. `Game_design.md` §4.4 rule 3 — never hard-fail.
  */
+/**
+ * The tutorials this save says were passed.
+ *
+ * Absent reads as none rather than refusing: a save written before tutorials existed had
+ * passed none, which is exactly what an empty set says.
+ *
+ * An id no declaration now carries is **kept**, alone among the references this module
+ * handles. Every other stale reference could open something the declarations no longer
+ * describe; an unknown completion gates nothing at all while nothing declares it. So
+ * dropping it buys nothing and costs the student a lesson they already sat — and a
+ * declaration that names that id again finds it already satisfied.
+ */
+function readTutorials(raw: unknown): readonly TutorialId[] | undefined {
+  if (raw === undefined) return []
+  if (!Array.isArray(raw) || raw.some((id) => typeof id !== 'string' || id === '')) {
+    return undefined
+  }
+  return [...new Set(raw as readonly string[])]
+}
+
 function readSlots(
   raw: unknown,
   tasks: readonly TaskDeclaration[],
+  tutorials: readonly TutorialId[],
   issues: ValidationIssue[],
 ): LabourSlots | undefined {
   if (raw === undefined) return {}
@@ -463,7 +710,32 @@ function readSlots(
       )
       continue
     }
-    if (!configurationResolves(task, slot.configuration)) {
+
+    // No family recorded is not a family to guess at. An identifier alone names one model
+    // per family, so adopting the task's first family here would put a model to work that
+    // nobody chose — and it would answer with a real, plausible distribution.
+    if (slot.family === undefined) {
+      issues.push(
+        dropped(
+          `The save has configuration "${slot.configuration}" at work for "${taskId}" without saying which model family made it, so this build cannot make that model; that job goes back to hand work until you put another model to it.`,
+          taskId,
+        ),
+      )
+      continue
+    }
+
+    const family = familyById(task, slot.family)
+    if (family === undefined) {
+      issues.push(
+        dropped(
+          `The save has a model of family "${slot.family}" at work for "${taskId}", which this build no longer declares; that job goes back to hand work until you put another model to it.`,
+          taskId,
+        ),
+      )
+      continue
+    }
+
+    if (!configurationResolves(family, slot.configuration)) {
       issues.push(
         dropped(
           `The save has configuration "${slot.configuration}" at work for "${taskId}", which this build can no longer make; that job goes back to hand work until you put another model to it.`,
@@ -473,10 +745,19 @@ function readSlots(
       continue
     }
 
-    slots[taskId] = {
-      configurationId: slot.configuration,
-      ...(slot.family === undefined ? {} : { family: slot.family }),
+    // Its own cause, and its own words. The three refusals above say this build cannot
+    // make what was recorded; this one says there is a lesson waiting, which is something
+    // the student can go and do rather than something that went wrong.
+    if (!isTutorialComplete(family.tutorial, tutorials)) {
+      issues.push({
+        code: SAVE_TUTORIAL_OUTSTANDING,
+        field: taskId,
+        message: `The model at work for "${taskId}" is one you have not finished the tutorial for yet, so that job has gone back to hand work. Finish it in the workshop and you can put the model back on.`,
+      })
+      continue
     }
+
+    slots[taskId] = { configurationId: slot.configuration, family: slot.family }
   }
   return slots
 }
@@ -500,8 +781,8 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
 
   if (!isFiniteNumber(raw.seed)) return reset('it records no usable farm seed.')
   if (!Number.isInteger(raw.year)) return reset('it records no usable year.')
-  if (raw.cropSize !== undefined && (!Number.isInteger(raw.cropSize) || (raw.cropSize as number) < 1)) {
-    return reset('it records no usable crop size.')
+  if (raw.land !== undefined && (!Number.isInteger(raw.land) || (raw.land as number) < 1)) {
+    return reset('it records no usable amount of land.')
   }
   if (!isFiniteNumber(raw.balance) || raw.balance < 0) return reset('it records no usable balance.')
 
@@ -519,7 +800,17 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
   const knobs = readKnobs(raw.knobs, context.tasks, issues)
   if (knobs === undefined) return reset('its record of the knob values is not of the shape a save has.')
 
-  const slots = readSlots(raw.slots, context.tasks, issues)
+  const families = readSelectedFamilies(raw.families, context.tasks, issues)
+  if (families === undefined) {
+    return reset('its record of the selected model families is not of the shape a save has.')
+  }
+
+  const tutorials = readTutorials(raw.tutorials)
+  if (tutorials === undefined) {
+    return reset('its record of the tutorials passed is not of the shape a save has.')
+  }
+
+  const slots = readSlots(raw.slots, context.tasks, tutorials, issues)
   if (slots === undefined) return reset('its record of what is at work is not of the shape a save has.')
 
   let pending: YearInProgress | undefined
@@ -551,15 +842,40 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
     lastYear = read
   }
 
+  // A count rather than a membership test: `owned` is a multiset, and an item the
+  // catalog permits to be bought five times is recorded five times. A count the catalog
+  // no longer permits is trimmed the way a dropped reference is — reported, never fatal.
+  //
+  // Trimming does not take back what those purchases gave. Land is recorded as land, not
+  // as a tally of purchases, so a farm whose record is trimmed keeps the land it saved
+  // and is refunded nothing. That is the promise "there is no way to sell, refund or
+  // return a bought item" already makes, kept across a redeclaration.
   const owned: string[] = []
+  const counts = new Map<string, number>()
   for (const id of raw.owned as readonly string[]) {
-    if (itemById(context.catalog, id) === undefined) {
+    const item = itemById(context.catalog, id)
+    if (item === undefined) {
       issues.push(
         dropped(`The save owns "${id}", which the catalog no longer declares; it opens nothing.`, id),
       )
       continue
     }
-    if (!owned.includes(id)) owned.push(id)
+    const limit = repeatLimit(item)
+    const held = counts.get(id) ?? 0
+    if (held >= limit) {
+      if (held === limit) {
+        issues.push(
+          dropped(
+            `The save owns "${id}" more times than the catalog now permits; it has been trimmed to ${limit}. Nothing those purchases gave has been taken back.`,
+            id,
+          ),
+        )
+      }
+      counts.set(id, held + 1)
+      continue
+    }
+    counts.set(id, held + 1)
+    owned.push(id)
   }
 
   return {
@@ -569,13 +885,15 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
         declaration: context.declaration,
         balance: toUnits(raw.balance, precision),
         year: raw.year as number,
-        cropSize: (raw.cropSize as number | undefined) ?? context.declaration.openingCrop,
+        land: (raw.land as number | undefined) ?? context.declaration.orchard.opening,
         movements,
         ledger,
       },
       seed: raw.seed,
       owned,
       knobs,
+      families,
+      tutorials,
       slots,
       ...(pending === undefined ? {} : { pending }),
       ...(lastYear === undefined ? {} : { lastYear }),
@@ -601,18 +919,21 @@ export function parseSave(text: string, context: SaveContext): SaveRestore {
 }
 
 /**
- * The knob values one task opens at: what the save kept, over the declared defaults.
+ * The knob values one family of one task opens at: what the save kept, over the defaults.
  *
  * Exported so the shell has one place to ask, rather than spreading the fallback across
- * every screen that needs a starting value.
+ * every screen that needs a starting value. A family the save records nothing for opens
+ * at its declared defaults with nothing reported missing — never having tuned a family is
+ * not a defect in the save.
  */
 export function knobValuesFor(
   state: GameState,
   task: TaskDeclaration,
+  family: ModelFamilyDeclaration,
 ): Readonly<Record<string, string | number>> {
-  const saved = state.knobs[task.id] ?? {}
+  const saved = state.knobs[task.id]?.[family.id] ?? {}
   return Object.fromEntries(
-    task.knobs.map((knob) => {
+    family.knobs.map((knob) => {
       const value = saved[knob.id]
       const permitted =
         value !== undefined &&
@@ -620,4 +941,17 @@ export function knobValuesFor(
       return [knob.id, permitted ? (value as string | number) : knob.default]
     }),
   )
+}
+
+/**
+ * The family one task opens at: the one progress recorded, or the first declared.
+ *
+ * The single place the silence rule is applied to a save, so that a task whose selection
+ * was dropped and a task that never had one open the same way.
+ */
+export function selectedFamilyFor(
+  state: GameState,
+  task: TaskDeclaration,
+): ModelFamilyDeclaration {
+  return selectedFamily(task, state.families[task.id])
 }

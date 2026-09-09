@@ -16,7 +16,7 @@
 
 import type { ResolvedConfiguration } from '../task/configuration.js'
 import { resolveConfiguration } from '../task/configuration.js'
-import type { TaskDeclaration } from '../task/types.js'
+import type { ModelFamilyDeclaration, TaskDeclaration } from '../task/types.js'
 import type { ValidationIssue } from '../task/validate.js'
 import type { TaskAvailability } from './availability.js'
 import { lockedValue } from './availability.js'
@@ -63,10 +63,11 @@ export type SelectableConfiguration =
  */
 export function resolveSelectable(
   declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
   requested: Readonly<Record<string, unknown>>,
   availability: TaskAvailability | undefined,
 ): SelectableConfiguration {
-  const resolved = resolveConfiguration(declaration, requested)
+  const resolved = resolveConfiguration(declaration, family, requested)
   if (!resolved.ok) return { ok: false, issues: resolved.issues }
 
   const locked = lockedIssues(resolved.configuration, availability)

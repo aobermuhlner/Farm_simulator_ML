@@ -158,6 +158,19 @@ describe('a colour the check cannot see cannot be introduced', () => {
     ).toEqual([])
   })
 
+  it('covers the leaf-labelling puzzle, whose colours are all tokens', () => {
+    // The puzzle is the one screen where choosing between two categories *is* the
+    // interaction, so it is the one most tempting to colour. Every rule it adds draws with
+    // a palette token; the distinction it carries is the declared label beside each
+    // picture, which `components/tutorial/LeafLabelling.test.tsx` asserts is there.
+    const rules = [...CSS.matchAll(/\.(leaf|tray|tutorial)[a-z-]*\s*(\[[^\]]*\])?[^{]*\{([^}]*)\}/g)]
+
+    expect(rules.length).toBeGreaterThan(5)
+    for (const rule of rules) {
+      expect([...(rule[3] ?? '').matchAll(/#[0-9a-fA-F]{3,8}/g)].map((hit) => hit[0])).toEqual([])
+    }
+  })
+
   it('names the offending literal when one is introduced', () => {
     // The failure has to say where the colour was found, so the fix is "move it into the
     // palette" rather than "something is wrong with the stylesheet".

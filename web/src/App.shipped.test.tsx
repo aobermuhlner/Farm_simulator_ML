@@ -143,14 +143,41 @@ describe('a student who has bought nothing', () => {
     }
   })
 
-  it('sees a market with nothing in it for sale, and nothing pretending otherwise', async () => {
+  it('sees a market selling the orchard and nothing else, each other row saying why', async () => {
     renderApp()
     await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
 
-    expect(screen.queryByRole('button', { name: /^Buy / })).toBeNull()
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(3)
+    // The orchard is the one thing a broke farmer can spend on: the robot, the datasets
+    // and the model families are all still unpriced, and each says so in its own words.
+    expect(screen.getAllByRole('button', { name: /^Buy / })).toHaveLength(1)
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(4)
     for (const testId of ['state-deeper-stacks', 'state-stronger-regularization', 'state-dropout-layers']) {
       expect(screen.getByTestId(testId).textContent).toContain('trained')
     }
+  })
+
+  it('shows how much of the orchard has been bought and how much the catalog permits', async () => {
+    renderApp()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    expect(screen.getByTestId('tally-orchard-expansion').textContent).toBe(
+      '0 of 5 bought, 5 to go',
+    )
+  })
+
+  it('buys the orchard with the money the farm opens with, and grows it', async () => {
+    renderApp()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    const bar = screen.getByRole('region', { name: 'Farm status' })
+    expect(bar.textContent).toContain('100 / 600 trees')
+
+    await userEvent.click(screen.getByRole('button', { name: /^Buy / }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
+
+    expect(bar.textContent).toContain('200 / 600 trees')
+    expect(screen.getByTestId('tally-orchard-expansion').textContent).toBe(
+      '1 of 5 bought, 4 to go',
+    )
   })
 })

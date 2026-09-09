@@ -42,7 +42,7 @@ export const DUPLICATE_RANK_TOLERANCE = 0.999
 export const CONTAMINATION_TOLERANCE = 0.15
 
 /**
- * How much better a feature may separate the harvest than the fitted images.
+ * How much better a feature may separate the evaluation split than the fitted images.
  *
  * Fitted against the measured pool, and the number is the measurement rather than a
  * round figure chosen first: see `test/features-pool.test.ts`, which asserts that no
@@ -309,11 +309,17 @@ export function separation(
   return best
 }
 
-/** One feature's separation on the images a student can browse and on the harvest. */
+/**
+ * One feature's separation on the images a student can browse and on the evaluation split.
+ *
+ * The evaluation split as a whole, not a year's crop. A crop is drawn under a composition
+ * that varies by year, and a guard about the authored gap between what a student fits on
+ * and what they are scored over must not move with one year's weather.
+ */
 export interface SeparationPair {
   readonly feature: FeatureId
   readonly fitted: number
-  readonly harvest: number
+  readonly evaluation: number
 }
 
 /** Both separations, per declared feature. */
@@ -324,19 +330,23 @@ export function separations(
   return declaration.features.map((feature) => ({
     feature: feature.id,
     fitted: separation(declaration, pool, pool.roles.fitted, feature.id),
-    harvest: separation(declaration, pool, pool.order.pool, feature.id),
+    evaluation: separation(declaration, pool, pool.order.pool, feature.id),
   }))
 }
 
 /**
- * Refuses a feature that separates categories better on the harvest than on the images a
- * student can look at.
+ * Refuses a feature that separates categories better on the evaluation split than on the
+ * images a student can look at.
  *
- * This is the trap the requirement exists to prevent, and it is not symmetric. A feature
- * may be weak everywhere, or weak on the harvest and strong on the fitted images — that
- * is overfitting, and it is the lesson. The other way round punishes a student for
- * reasoning correctly: they inspect their own 200 photos, conclude the feature is
- * useless, discard it, and lose the one feature that would have worked.
+ * One direction only, and which one is the whole content of the requirement. Forbidden is
+ * *evaluation above fitted*: a feature that looks like noise on the 200 photos a student
+ * can browse and turns out to separate the evaluation split cleanly punishes them for
+ * reasoning correctly — they inspect their own data, conclude the feature is useless,
+ * discard it, and lose the one feature that would have worked.
+ *
+ * The other direction is permitted, and deliberately: a feature strong on the fitted images
+ * and weak on the evaluation split is overfitting, which is the lesson the whole pool is
+ * built around. A feature weak on both is merely a weak feature. Neither is refused here.
  */
 export function checkNoInversion(
   declaration: TaskDeclaration,
@@ -345,11 +355,11 @@ export function checkNoInversion(
 ): readonly ValidationIssue[] {
   const issues: ValidationIssue[] = []
   for (const pair of separations(declaration, pool)) {
-    if (pair.harvest - pair.fitted > tolerance) {
+    if (pair.evaluation - pair.fitted > tolerance) {
       issues.push(
         issue(
           'separation-inverted',
-          `Feature "${pair.feature}" separates categories better on the harvest (${pair.harvest.toFixed(3)}) than on the fitted images (${pair.fitted.toFixed(3)}), by more than the ${tolerance} tolerance.`,
+          `Feature "${pair.feature}" separates categories better on the evaluation split (${pair.evaluation.toFixed(3)}) than on the fitted images (${pair.fitted.toFixed(3)}), by more than the ${tolerance} tolerance.`,
           `features.${pair.feature}`,
         ),
       )

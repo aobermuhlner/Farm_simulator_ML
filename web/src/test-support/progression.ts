@@ -53,6 +53,38 @@ export function emptyCatalog(): Catalog {
 }
 
 /**
+ * A catalog holding one row the market permits to be bought more than once.
+ *
+ * Its own catalog rather than a row added to `shopCatalog`, so the four-state fixture
+ * keeps saying exactly what it says: one repeatable row is a different question from
+ * four rows reading differently from one another.
+ */
+export function repeatShopCatalog(
+  owned: readonly string[] = [],
+  farm: FarmDeclaration = farmDeclaration(),
+): Catalog {
+  return soundCatalog(
+    {
+      schemaVersion: '1.0.0',
+      groups: [{ id: 'planting', label: 'Planting' }],
+      ownedAtStart: owned,
+      items: [
+        {
+          id: 'another-row',
+          group: 'planting',
+          label: 'Another row',
+          copy: 'One more row along the fence, and the next one after that.',
+          price: 10,
+          repeat: 5,
+          opens: [{ kind: 'farm-land', units: 20 }],
+        },
+      ],
+    },
+    farm,
+  )
+}
+
+/**
  * A catalog whose rows cover all four states a market row can be in.
  *
  * Its ids, labels and groups share nothing with the shipped catalog, which is what makes

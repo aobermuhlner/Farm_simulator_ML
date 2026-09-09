@@ -14,7 +14,7 @@
 
 import type { ResolvedConfiguration } from './configuration.js'
 import { configurationId } from './configId.js'
-import type { TaskDeclaration } from './types.js'
+import type { ModelFamilyDeclaration, TaskDeclaration } from './types.js'
 import type { ValidationIssue } from './validate.js'
 import { checkArtifactVersion } from './version.js'
 
@@ -46,6 +46,16 @@ export interface ConfigurationEntry {
 export interface PredictionArtifact {
   readonly schemaVersion: string
   readonly taskId: string
+  /**
+   * The model family these predictions were made by.
+   *
+   * Recorded rather than assumed, and the refusal on a mismatch is what makes
+   * family-scoped configuration identity safe: two families of one task may compose
+   * identical identifier strings from different knobs, so an artifact that recorded only
+   * its task could be resolved against the wrong family and would answer — with a real,
+   * plausible distribution — rather than refuse.
+   */
+  readonly familyId: string
   /** Category order the probability vectors are indexed by. */
   readonly categories: readonly string[]
   readonly configurations: Readonly<Record<string, ConfigurationEntry>>
@@ -61,13 +71,14 @@ export type ArtifactLookup =
 
 /**
  * Resolves a configuration against an artifact: refuses on a schema version
- * mismatch, on a task id mismatch, on a category order the task does not
- * declare, and on a configuration the artifact has no entry for. On success the
+ * mismatch, on a task id mismatch, on a family mismatch, on a category order the task
+ * does not declare, and on a configuration the artifact has no entry for. On success the
  * predictions and the training history returned both come from one entry, so
  * they cannot refer to different configurations.
  */
 export function lookupConfiguration(
   declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
   configuration: ResolvedConfiguration,
   artifact: PredictionArtifact,
 ): ArtifactLookup {
@@ -81,6 +92,21 @@ export function lookupConfiguration(
       code: 'artifact-task-mismatch',
       field: 'taskId',
       message: `Artifact belongs to task "${artifact.taskId}", not "${declaration.id}".`,
+    })
+  }
+
+  if (artifact.familyId === undefined) {
+    issues.push({
+      code: 'artifact-family-missing',
+      field: 'familyId',
+      message:
+        'The artifact records no model family, so nothing can say which family its configuration identifiers belong to.',
+    })
+  } else if (artifact.familyId !== family.id) {
+    issues.push({
+      code: 'artifact-family-mismatch',
+      field: 'familyId',
+      message: `Artifact belongs to family "${artifact.familyId}", not "${family.id}".`,
     })
   }
 

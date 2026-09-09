@@ -14,7 +14,7 @@ import type { SortOutcome } from '../../../src/sorting/index.js'
 import { measureSort } from '../../../src/sorting/index.js'
 import { formatUnits, toUnits } from '../../../src/economy/index.js'
 import { appleDeclaration } from '../test-support/declarations.js'
-import { farmDeclaration } from '../test-support/farm.js'
+import { farmBearing, farmDeclaration } from '../test-support/farm.js'
 import { appleCrop, farmSorting, loadsCrop, refusesCrop } from '../test-support/pool.js'
 import { ACTION_KEYS, describeSeconds, HandSort } from './HandSort.js'
 import type { CropView } from '../data/pool.js'
@@ -295,8 +295,13 @@ describe('the summary breaks the crop down and states its arithmetic', () => {
   })
 
   it('says nothing about a remainder when the crop was sorted entire', () => {
-    renderSort(crop, { outcome })
-    expect(outcome.unsorted).toBe(0)
+    // A crop one person can get through, which the shipped orchard is far past: the
+    // remainder line is about the crop being larger than a pair of hands, so a crop that
+    // is not needs its own farm to say so.
+    const small = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    const whole = sortedWith(small, (category) => REQUIRED[category] as string)
+    renderSort(small, { outcome: whole })
+    expect(whole.unsorted).toBe(0)
     expect(document.querySelector('[data-unsorted]')).toBeNull()
   })
 
@@ -393,7 +398,10 @@ describe('a sort that runs to the end', () => {
     expect(settled[0]?.decided).toBe(crop.presented.length)
     expect(settled[0]?.correct).toBe(crop.presented.length)
     expect(settled[0]?.throughput.seconds).toBeGreaterThan(0)
-  })
+    // Sixty simulated clicks through the real screen, which outruns the default five
+    // seconds whenever the suite is busy. The screen is not slow; the test is doing sixty
+    // of everything, because that is what one person is presented with.
+  }, 60_000)
 
   it('opens no decision at all for a year already brought in', async () => {
     const crop = appleCrop()
@@ -405,5 +413,102 @@ describe('a sort that runs to the end', () => {
 
     await userEvent.keyboard(ACTION_KEYS[0] as string)
     expect(settled).toHaveLength(0)
+  })
+})
+
+describe('the summary states what the buyer measured', () => {
+  const term = declaration.delivery
+  if (term === undefined) throw new Error('the shipped task must declare a delivery term')
+
+  /**
+   * A crop of the wettest year the shipped range allows, so the limit is reachable.
+   *
+   * The range is dropped and the share pinned at its upper bound rather than left to a
+   * draw: a screen test about what the summary says must not depend on which year came up.
+   */
+  function wettest(cropSize = declaration.handSorting.perHarvest): CropView {
+    // Built from a farm declared to bear exactly this crop, not from the shipped one:
+    // the size is the land times the yield now, so pinning the composition on the
+    // shipped orchard would hand the draw sixty pieces per requested one.
+    const wet = { ...farmBearing(cropSize, farm), cropComposition: { red: 0.51, green: 0.35, wormy: 0.14 } }
+    delete (wet as { yearVariation?: unknown }).yearVariation
+    return appleCrop({ ...farmSorting(cropSize), declaration: wet }, 4242)
+  }
+
+  it('states the measured share and the limit it was measured against', () => {
+    const crop = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    const careless = sortedWith(crop, () => term.delivering[0] as string)
+    renderSort(crop, { outcome: careless })
+
+    const line = document.querySelector('[data-delivery]') as HTMLElement
+    expect(line).not.toBeNull()
+    expect(line.querySelector('[data-share]')?.textContent).toContain('%')
+    expect(line.querySelector('[data-tolerance]')?.textContent).toBe(
+      `${Math.round(term.tolerance * 1000) / 10}%`,
+    )
+    expect(line.querySelector('[data-delivered]')?.textContent).toBe(String(careless.decided))
+    // Named from the declaration, so a lesson measuring something else says so here.
+    for (const category of term.measures) {
+      const label = declaration.categories.find((entry) => entry.id === category)?.label
+      expect(line.textContent).toContain(label)
+    }
+  })
+
+  it('shows the deduction as its own figure when the delivery was downgraded', () => {
+    const crop = wettest()
+    const careless = sortedWith(crop, () => term.delivering[0] as string)
+    renderSort(crop, { outcome: careless })
+
+    expect(careless.delivery.downgraded).toBe(true)
+    expect(document.querySelector('[data-downgraded]')).not.toBeNull()
+    expect(document.querySelector('[data-gross]')?.textContent).toBe(
+      formatAmount(careless.delivery.gross),
+    )
+    expect(document.querySelector('[data-downgrade]')?.textContent).toBe(
+      formatAmount(careless.delivery.downgrade),
+    )
+    expect(document.querySelector('[data-wage]')?.textContent).toBe(formatAmount(careless.wage))
+  })
+
+  it('says the delivery was accepted when the share stayed under the limit', () => {
+    const crop = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    const careful = sortedWith(crop, (category) => REQUIRED[category] as string)
+    renderSort(crop, { outcome: careful })
+
+    expect(careful.delivery.downgraded).toBe(false)
+    expect(document.querySelector('[data-accepted]')).not.toBeNull()
+    expect(document.querySelector('[data-downgraded]')).toBeNull()
+    expect(document.querySelector('[data-wage]')?.textContent).toBe(
+      formatAmount(careful.delivery.gross),
+    )
+  })
+
+  it('says nothing was measured when nothing went to the buyer', () => {
+    const crop = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    const outside = actions.find((action) => !term.delivering.includes(action.id))
+    if (outside === undefined) throw new Error('the term must leave an action outside it')
+    const kept = sortedWith(crop, () => outside.id)
+    renderSort(crop, { outcome: kept })
+
+    const line = document.querySelector('[data-delivery]') as HTMLElement
+    expect(line.querySelector('[data-share]')).toBeNull()
+    expect(line.textContent).toMatch(/nothing/i)
+  })
+
+  it('leaves the unsorted line and the throughput figures exactly as they were', () => {
+    const crop = wettest(400)
+    const careless = sortedWith(crop, () => term.delivering[0] as string)
+    renderSort(crop, { outcome: careless })
+
+    expect(careless.delivery.downgraded).toBe(true)
+    expect(document.querySelector('[data-unsorted]')?.getAttribute('data-unsorted')).toBe(
+      String(400 - declaration.handSorting.perHarvest),
+    )
+    expect(document.querySelector('[data-elapsed]')?.textContent).toBe(
+      describeSeconds(careless.throughput.seconds),
+    )
+    expect(document.querySelector('[data-projection]')?.textContent).toBe(
+      describeSeconds(careless.throughput.wholeCropSeconds),
+    )
   })
 })

@@ -14,6 +14,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { CnnDiagram, FeedforwardDiagram, TaskDeclaration } from '../../../src/task/types.js'
+import { firstFamily } from '../../../src/task/families.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
 import {
   appleArtifact,
@@ -31,19 +32,20 @@ import { ConfigureTask } from './ConfigureTask.js'
 afterEach(cleanup)
 
 const apple = appleDeclaration()
+const appleFamily = firstFamily(apple)
 
 const DIAGRAM: CnnDiagram = (() => {
-  if (apple.diagram?.kind !== 'cnn') {
+  if (appleFamily.diagram?.kind !== 'cnn') {
     throw new Error('the apple task should declare a convolutional diagram')
   }
-  return apple.diagram
+  return appleFamily.diagram
 })()
 
 function render_(declaration: TaskDeclaration) {
   return render(
     <ConfigureTask
       declaration={declaration}
-      loadEntry={entryLoader(appleArtifact())}
+      loadEntry={entryLoader(declaration, appleArtifact())}
       replayMs={0}
       onBack={() => {}}
     />,
@@ -55,7 +57,7 @@ function renderOther(declaration: TaskDeclaration) {
   return render(
     <ConfigureTask
       declaration={declaration}
-      loadEntry={entryLoader(unrelatedArtifact())}
+      loadEntry={entryLoader(declaration, unrelatedArtifact())}
       replayMs={0}
       onBack={() => {}}
       onPutToWork={() => {}}
@@ -65,7 +67,7 @@ function renderOther(declaration: TaskDeclaration) {
 
 /** The declared label of a knob the diagram names. */
 function labelOf(knobId: string): string {
-  const label = apple.knobs.find((knob) => knob.id === knobId)?.label
+  const label = appleFamily.knobs.find((knob) => knob.id === knobId)?.label
   if (label === undefined) throw new Error(`no label for ${knobId}`)
   return label
 }
@@ -109,7 +111,7 @@ async function choose(label: string, value: string | number): Promise<void> {
 
 /** Every value a choice knob of the apple task permits. */
 function valuesOf(knobId: string): readonly (string | number)[] {
-  const knob = apple.knobs.find((candidate) => candidate.id === knobId)
+  const knob = appleFamily.knobs.find((candidate) => candidate.id === knobId)
   if (knob?.kind !== 'choice') throw new Error(`${knobId} is expected to be a choice`)
   return knob.values
 }
@@ -119,7 +121,7 @@ describe('the diagram beside the settings', () => {
     const { container } = render_(apple)
 
     expect(drawing()).toBeDefined()
-    for (const knob of apple.knobs) {
+    for (const knob of appleFamily.knobs) {
       expect(screen.getByLabelText(knob.label), `no control for ${knob.id}`).toBeDefined()
     }
     expect(blockVolumes(container).length).toBeGreaterThan(0)
@@ -205,12 +207,12 @@ describe('the drawing follows the knobs', () => {
 describe('a task that declares no diagram', () => {
   it('is shown none, and is otherwise the same screen', () => {
     const other = unrelatedDeclaration()
-    expect(other.diagram).toBeUndefined()
+    expect(firstFamily(other).diagram).toBeUndefined()
 
     renderOther(other)
 
     expect(screen.queryByRole('img')).toBeNull()
-    for (const knob of other.knobs) {
+    for (const knob of firstFamily(other).knobs) {
       expect(screen.getByLabelText(knob.label)).toBeDefined()
     }
     expect(screen.getByRole('heading', { name: other.title })).toBeDefined()
@@ -239,11 +241,16 @@ describe('a configuration that does not resolve', () => {
   function impossible(): TaskDeclaration {
     const declaration = {
       ...apple,
-      knobs: apple.knobs.map((knob) =>
-        knob.id === DIAGRAM.blocksKnob && knob.kind === 'choice'
-          ? { ...knob, default: 5 }
-          : knob,
-      ),
+      families: [
+        {
+          ...appleFamily,
+          knobs: appleFamily.knobs.map((knob) =>
+            knob.id === DIAGRAM.blocksKnob && knob.kind === 'choice'
+              ? { ...knob, default: 5 }
+              : knob,
+          ),
+        },
+      ],
     } as TaskDeclaration
     expect(validateDeclaration(declaration).ok).toBe(false)
     return declaration
@@ -262,10 +269,11 @@ describe('a configuration that does not resolve', () => {
 describe('a fully-connected task on the same screen', () => {
   /** The feedforward diagram of the drawn test task. */
   function diagramOf(declaration: TaskDeclaration): FeedforwardDiagram {
-    if (declaration.diagram?.kind !== 'feedforward') {
+    const diagram = firstFamily(declaration).diagram
+    if (diagram?.kind !== 'feedforward') {
       throw new Error('the drawn test task should declare a feedforward diagram')
     }
-    return declaration.diagram
+    return diagram
   }
 
   it('draws from its own declaration, with no screen code of its own', () => {
@@ -291,8 +299,8 @@ describe('a fully-connected task on the same screen', () => {
   it('follows its own knobs, including a width knob taking strings', async () => {
     const other = diagrammedDeclaration()
     const diagram = diagramOf(other)
-    const breadth = other.knobs.find((knob) => knob.id === diagram.unitsKnob)
-    const stack = other.knobs.find((knob) => knob.id === diagram.layersKnob)
+    const breadth = firstFamily(other).knobs.find((knob) => knob.id === diagram.unitsKnob)
+    const stack = firstFamily(other).knobs.find((knob) => knob.id === diagram.layersKnob)
     if (breadth?.kind !== 'choice' || stack?.kind !== 'choice') {
       throw new Error('both knobs are expected to be choices')
     }
@@ -315,9 +323,9 @@ describe('a fully-connected task on the same screen', () => {
 describe('a second convolutional task on the same screen', () => {
   it('draws its own resolution, stages and categories', async () => {
     const other = convolutionalDeclaration()
-    if (other.diagram?.kind !== 'cnn') throw new Error('expected a convolutional test task')
-    const diagram = other.diagram
-    const stages = other.knobs.find((knob) => knob.id === diagram.blocksKnob)
+    const diagram = firstFamily(other).diagram
+    if (diagram?.kind !== 'cnn') throw new Error('expected a convolutional test task')
+    const stages = firstFamily(other).knobs.find((knob) => knob.id === diagram.blocksKnob)
     if (stages?.kind !== 'choice') throw new Error('its depth knob should be a choice')
 
     const { container } = renderOther(other)

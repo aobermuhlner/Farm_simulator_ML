@@ -13,18 +13,24 @@
  */
 
 import { useState } from 'react'
-import type { ConfigurationEntry } from '../../../src/task/artifact.js'
+import type { FamilyEntry } from '../../../src/families/index.js'
 import type { TaskAvailability } from '../../../src/progression/index.js'
 import { knobAvailability } from '../../../src/progression/index.js'
 import { resolveArchitecture } from '../../../src/task/diagram.js'
-import type { TaskDeclaration } from '../../../src/task/types.js'
+import { selectedFamily } from '../../../src/task/families.js'
+import type { TaskDeclaration, TutorialId } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
+import type { TutorialKinds } from '../../../src/tutorials/index.js'
+import { isTutorialComplete } from '../../../src/tutorials/index.js'
 import type { Loaded } from '../data/load.js'
 import type { TrainingSplitView } from '../data/pool.js'
+import { FamilyPicker } from '../components/FamilyPicker.js'
 import { HelpDisclosure } from '../components/HelpDisclosure.js'
 import { Issues } from '../components/Issues.js'
 import { KnobControl } from '../components/KnobControl.js'
 import { ArchitectureDiagram } from '../components/architecture/ArchitectureDiagram.js'
+import { Tutorial } from '../components/tutorial/Tutorial.js'
+import type { TutorialBodies } from '../components/tutorial/TutorialBody.js'
 import { defaultKnobValues, identifyConfiguration, type KnobValues } from '../model/run.js'
 import { TrainingBrowser } from './TrainingBrowser.js'
 import { TrainingRun } from './TrainingRun.js'
@@ -32,13 +38,13 @@ import { TrainingRun } from './TrainingRun.js'
 export interface ConfigureTaskProps {
   readonly declaration: TaskDeclaration
   /**
-   * Fetches one configuration's predictions and history.
+   * Fetches one configuration of one family.
    *
-   * A function rather than loaded data: the artifact ships one file per configuration,
-   * so opening a task transfers coverage and provenance, and running one transfers that
-   * configuration alone.
+   * A function rather than loaded data: a family ships one file per configuration, so
+   * opening a task transfers coverage and provenance, and running one transfers that
+   * configuration alone — and nothing belonging to the task's other families.
    */
-  readonly loadEntry: (configurationId: string) => Promise<Loaded<ConfigurationEntry>>
+  readonly loadEntry: (familyId: string, configurationId: string) => Promise<Loaded<FamilyEntry>>
   readonly onBack: () => void
   /**
    * Fetches this task's training split, when the task ships one to browse.
@@ -46,6 +52,11 @@ export interface ConfigureTaskProps {
    * Given here rather than opened as a stage of its own: leaving the browser has to
    * leave the knob values selected, and they live in this screen's state. A sibling
    * stage would unmount it — `design.md`.
+   *
+   * Forwarded to a mounted tutorial as well, for a puzzle that is about particular
+   * pictures of that split. The same loader rather than a second one: nothing about the
+   * pool should be fetched twice, and what crosses this boundary has already had the
+   * generation attributes and the measured values dropped from it.
    */
   readonly loadSplit?: () => Promise<Loaded<TrainingSplitView>>
   /**
@@ -63,10 +74,24 @@ export interface ConfigureTaskProps {
   readonly availability?: TaskAvailability
   /** Presents a price in the farm's declared currency, for a locked value that has one. */
   readonly formatPrice?: (units: number) => string
-  /** The knob values to open at — what the student last left, where a save kept them. */
-  readonly initialValues?: KnobValues
+  /**
+   * Which family to open at — what progress recorded, where it recorded one.
+   *
+   * Undefined opens at the task's first declared family, which is the specified rule for
+   * progress that says nothing.
+   */
+  readonly initialFamily?: string
+  /** Reports a family being selected, so the shell can keep it between visits. */
+  readonly onFamilyChange?: (familyId: string) => void
+  /**
+   * The knob values to open each family at — what the student last left, per family.
+   *
+   * Per family because tuning one family must not lose another's: a family this records
+   * nothing for opens at its declared defaults.
+   */
+  readonly initialValues?: (familyId: string) => KnobValues | undefined
   /** Reports every change, so the shell can keep them between visits. */
-  readonly onValuesChange?: (values: KnobValues) => void
+  readonly onValuesChange?: (familyId: string, values: KnobValues) => void
   /**
    * The configuration already at work for this task, where one is.
    *
@@ -75,11 +100,25 @@ export interface ConfigureTaskProps {
    * reads. Tinkering with one must not silently change the other — `design.md`,
    * decision 2.
    */
-  readonly atWork?: string
+  readonly atWork?: { readonly family: string; readonly configurationId: string }
   /** Puts the model just made to work for this task. Offered only once it is made. */
-  readonly onPutToWork?: (configurationId: string) => void
+  readonly onPutToWork?: (familyId: string, configurationId: string) => void
   /** Hands this task's job back to the farm's manual labour. */
   readonly onHandBack?: () => void
+  /**
+   * Which of this task's tutorials this farm has passed, by tutorial id.
+   *
+   * Passed in rather than worked out here, for the same reason availability is: whether a
+   * family may be fielded is `src/progression/`'s answer, and a screen that decided for
+   * itself could offer a control the labour resolver would then refuse.
+   */
+  readonly completedTutorials?: readonly TutorialId[]
+  /** Reports a tutorial passed, so the shell can keep it between visits. */
+  readonly onTutorialComplete?: (tutorialId: TutorialId) => void
+  /** Injected by tests, which judge a fixture puzzle no shipped build carries. */
+  readonly tutorialKinds?: TutorialKinds
+  /** Injected by tests, which mount a fixture body no shipped build carries. */
+  readonly tutorialBodies?: TutorialBodies
 }
 
 /**
@@ -96,8 +135,9 @@ type Stage =
   /** The replay is playing, or has played, for this configuration's fetched entry. */
   | {
       readonly kind: 'training' | 'trained'
+      readonly familyId: string
       readonly configurationId: string
-      readonly entry: ConfigurationEntry
+      readonly entry: FamilyEntry
     }
 
 export function ConfigureTask({
@@ -108,32 +148,48 @@ export function ConfigureTask({
   replayMs,
   availability,
   formatPrice,
+  initialFamily,
+  onFamilyChange,
   initialValues,
   onValuesChange,
   atWork,
   onPutToWork,
   onHandBack,
+  completedTutorials = [],
+  onTutorialComplete,
+  tutorialKinds,
+  tutorialBodies,
 }: ConfigureTaskProps) {
+  const [familyId, setFamilyId] = useState<string>(
+    () => selectedFamily(declaration, initialFamily).id,
+  )
+  const family = selectedFamily(declaration, familyId)
   const [values, setValues] = useState<KnobValues>(
-    () => initialValues ?? defaultKnobValues(declaration),
+    () => initialValues?.(family.id) ?? defaultKnobValues(declaration, family),
   )
   const [refusal, setRefusal] = useState<readonly ValidationIssue[] | undefined>(undefined)
   const [browsing, setBrowsing] = useState(false)
   const [stage, setStage] = useState<Stage>({ kind: 'untrained' })
+  const [sitting, setSitting] = useState(false)
 
-  const identified = identifyConfiguration(declaration, values, availability)
+  // The one question the gate turns on. A family declaring no tutorial is fielded the
+  // moment it is owned, which is what every family did before tutorials existed.
+  const tutorial = family.tutorial
+  const tutorialDone = isTutorialComplete(tutorial, completedTutorials)
+
+  const identified = identifyConfiguration(declaration, family, values, availability)
   const currentId = identified.ok ? identified.id : undefined
   // Derived, not stored: the drawing is a function of the values already held above, so
-  // there is no second copy of the configuration to keep in step. Undefined for a task
+  // there is no second copy of the configuration to keep in step. Undefined for a family
   // declaring no diagram, and beside a configuration the engine will not resolve.
-  const architecture = resolveArchitecture(declaration, values)
+  const architecture = resolveArchitecture(declaration, family, values)
 
   function setKnob(id: string, value: string | number): void {
     const next = { ...values, [id]: value }
     setValues(next)
     // Reported from the handler rather than from inside the updater: a state updater must
     // stay a pure function of what it is given, and React may call one twice.
-    onValuesChange?.(next)
+    onValuesChange?.(family.id, next)
     // Clearing the refusal, so a stale explanation never sits under new knob values.
     setRefusal(undefined)
     // A trained model belongs to its configuration even more strictly than a report
@@ -142,8 +198,28 @@ export function ConfigureTask({
     setStage({ kind: 'untrained' })
   }
 
+  /**
+   * Shows a different family: its own knobs, at its own remembered values.
+   *
+   * Free, and it commits nothing. No money moves, no ledger record is written, the year
+   * stands where it stood, and whatever is at work stays at work — looking at a family is
+   * not putting it to work. What it does clear is the replay, which belonged to the
+   * family that was showing.
+   */
+  function selectFamily(next: string): void {
+    if (next === familyId) return
+    const chosen = selectedFamily(declaration, next)
+    setFamilyId(chosen.id)
+    setValues(initialValues?.(chosen.id) ?? defaultKnobValues(declaration, chosen))
+    onFamilyChange?.(chosen.id)
+    setRefusal(undefined)
+    setStage({ kind: 'untrained' })
+    // The puzzle showing belonged to the family that was showing.
+    setSitting(false)
+  }
+
   async function train(): Promise<void> {
-    const identified = identifyConfiguration(declaration, values, availability)
+    const identified = identifyConfiguration(declaration, family, values, availability)
     if (!identified.ok) {
       // Not repeated as a second refusal: the settings block below already carries these
       // issues for as long as the values that caused them are the ones in the knobs.
@@ -155,7 +231,7 @@ export function ConfigureTask({
     setStage({ kind: 'fetching' })
     // Fetched per run rather than held: a student who never chooses a configuration
     // never transfers it, and one they return to is served from the browser's cache.
-    const loaded = await loadEntry(identified.id)
+    const loaded = await loadEntry(family.id, identified.id)
     if (!loaded.ok) {
       setRefusal(loaded.issues)
       setStage({ kind: 'untrained' })
@@ -163,7 +239,31 @@ export function ConfigureTask({
     }
 
     setRefusal(undefined)
-    setStage({ kind: 'training', configurationId: identified.id, entry: loaded.value })
+    setStage({
+      kind: 'training',
+      familyId: family.id,
+      configurationId: identified.id,
+      entry: loaded.value,
+    })
+  }
+
+  // Mounted the way the browser is, and for the same reason: leaving the puzzle has to
+  // leave the knob values, the replay and the family selection exactly as they were.
+  if (sitting && tutorial !== undefined) {
+    return (
+      <section aria-labelledby="task-heading">
+        <h1 id="task-heading">{declaration.title}</h1>
+        <Tutorial
+          tutorial={tutorial}
+          loadSplit={loadSplit}
+          complete={tutorialDone}
+          onComplete={() => onTutorialComplete?.(tutorial.id)}
+          onClose={() => setSitting(false)}
+          kinds={tutorialKinds}
+          bodies={tutorialBodies}
+        />
+      </section>
+    )
   }
 
   // This screen stays mounted while the browser is open, so the knob values, the run
@@ -192,6 +292,33 @@ export function ConfigureTask({
         {declaration.teaching.theory}
       </HelpDisclosure>
 
+      <FamilyPicker
+        families={declaration.families}
+        selected={family.id}
+        onSelect={selectFamily}
+        availability={availability?.families}
+        formatPrice={formatPrice}
+      />
+
+      <p className="family-summary">{family.teaching.summary}</p>
+      <HelpDisclosure label={`How does ${family.label} work?`}>
+        {family.teaching.theory}
+      </HelpDisclosure>
+
+      {/*
+        Offered whether or not it has been passed, so its theory copy stays reachable
+        afterwards, and offered here rather than sprung on a purchase — the market has
+        already promised that money is the only key to what it sells.
+      */}
+      {tutorial === undefined ? null : (
+        <p className="tutorial-offer">
+          <button type="button" onClick={() => setSitting(true)}>
+            {tutorial.title}
+          </button>
+          {tutorialDone ? <span> — finished</span> : null}
+        </p>
+      )}
+
       {loadSplit === undefined ? null : (
         <p>
           <button type="button" onClick={() => setBrowsing(true)}>
@@ -209,7 +336,7 @@ export function ConfigureTask({
         <div className="configure-columns">
           <fieldset>
             <legend>Settings</legend>
-            {declaration.knobs.map((knob) => (
+            {family.knobs.map((knob) => (
               <KnobControl
                 key={knob.id}
                 knob={knob}
@@ -253,8 +380,9 @@ export function ConfigureTask({
 
       {stage.kind === 'training' || stage.kind === 'trained' ? (
         <TrainingRun
-          key={stage.configurationId}
-          history={stage.entry.history}
+          key={`${stage.familyId}-${stage.configurationId}`}
+          history={stage.entry.history ?? []}
+          axis={family.history?.axis}
           configurationId={stage.configurationId}
           durationMs={replayMs}
           onFinished={() =>
@@ -265,13 +393,13 @@ export function ConfigureTask({
         />
       ) : null}
 
-      {stage.kind === 'trained' && onPutToWork !== undefined ? (
+      {stage.kind === 'trained' && onPutToWork !== undefined && tutorialDone ? (
         <p>
           <button
             type="button"
             onClick={() => {
               if (stage.kind !== 'trained') return
-              onPutToWork(stage.configurationId)
+              onPutToWork(stage.familyId, stage.configurationId)
             }}
           >
             Put this model to work
@@ -279,10 +407,27 @@ export function ConfigureTask({
         </p>
       ) : null}
 
+      {/*
+        Something to go and do, not a fault. The student owns this family and has made the
+        model; what is missing is a lesson, so this names it, offers the way to it, and
+        says nothing about buying anything or about a configuration that will not run.
+      */}
+      {stage.kind === 'trained' && onPutToWork !== undefined && tutorial !== undefined && !tutorialDone ? (
+        <p className="tutorial-withheld">
+          <span>
+            Before this one goes out to the orchard, finish {tutorial.title}.
+          </span>
+          <button type="button" onClick={() => setSitting(true)}>
+            {tutorial.title}
+          </button>
+        </p>
+      ) : null}
+
       {atWork === undefined ? null : (
         <p className="at-work">
           <span>
-            Configuration <code data-testid="at-work">{atWork}</code> is at work here.
+            {selectedFamily(declaration, atWork.family).label}, configuration{' '}
+            <code data-testid="at-work">{atWork.configurationId}</code>, is at work here.
           </span>
           {onHandBack === undefined ? null : (
             <button type="button" onClick={onHandBack}>

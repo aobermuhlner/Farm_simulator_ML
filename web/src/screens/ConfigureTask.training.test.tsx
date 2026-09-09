@@ -17,6 +17,7 @@ import {
   entryLoader,
 } from '../test-support/declarations.js'
 import { appleTrainingSplit } from '../test-support/pool.js'
+import { firstFamily } from '../../../src/task/families.js'
 import { ConfigureTask } from './ConfigureTask.js'
 
 afterEach(cleanup)
@@ -29,7 +30,7 @@ function renderApple(load: () => Promise<Loaded<TrainingSplitView>> = () =>
   return render(
     <ConfigureTask
       declaration={apple}
-      loadEntry={entryLoader(appleArtifact())}
+      loadEntry={entryLoader(apple, appleArtifact())}
       loadSplit={load}
       replayMs={0}
       onBack={() => {}}
@@ -70,7 +71,7 @@ describe('reaching the training data', () => {
     await leaveBrowser()
 
     expect(screen.getByRole('button', { name: 'Train model' })).toBeDefined()
-    for (const knob of apple.knobs) {
+    for (const knob of firstFamily(apple).knobs) {
       expect(screen.getByLabelText(knob.label), `no control for ${knob.id}`).toBeDefined()
     }
   })
@@ -79,7 +80,7 @@ describe('reaching the training data', () => {
     render(
       <ConfigureTask
         declaration={apple}
-        loadEntry={entryLoader(appleArtifact())}
+        loadEntry={entryLoader(apple, appleArtifact())}
         replayMs={0}
         onBack={() => {}}
       />,

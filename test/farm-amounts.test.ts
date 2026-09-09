@@ -15,7 +15,7 @@ const cents: FarmDeclaration = {
   precision: 2,
   openingBalance: 0,
   openingYear: 1,
-  openingCrop: 10,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 10, piecesPerUnit: 1 },
   cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 
@@ -26,7 +26,7 @@ const coins: FarmDeclaration = {
   precision: 0,
   openingBalance: 0,
   openingYear: 1,
-  openingCrop: 10,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 10, piecesPerUnit: 1 },
   cropComposition: { sound: 0.75, spoiled: 0.25 },
 }
 

@@ -11,14 +11,20 @@
  * apart, which would report a rate no hand could reach; two and a half seconds an image
  * is a plausible one, and the arithmetic on screen is the app's own either way.
  *
- * What the harvests come to, at the shipped 55/35/10 crop and payoff table:
+ * What the harvests come to, at the shipped payoff table and the mix the farm's first
+ * year draws:
  *
  * | Crop | Presented | Sorted faultlessly | Left unsorted | At 2.5 s an image |
  * | ---: | --------: | -----------------: | ------------: | ----------------: |
- * |   10 |        10 |          CHF  3.00 |             0 |    25 s, whole crop 25 s |
+ * |   10 |        10 |          CHF  2.80 |             0 |    25 s, whole crop 25 s |
  * |   40 |        40 |          CHF 11.60 |             0 |  1.7 min, whole crop 1.7 min |
  * |  400 |        60 |          CHF 17.40 |           340 |  2.5 min, whole crop 16.7 min |
  * | 4000 |        60 |          CHF 17.40 |          3940 |  2.5 min, whole crop 2.8 h |
+ *
+ * The money figures are derived from the crop the shell actually drew rather than typed
+ * out, because the year's mix is drawn within a declared range and a retuned range would
+ * otherwise mean sweeping this file again. The table above is what they currently come to;
+ * the assertions are what they must agree with.
  *
  * The wage stops rising at a crop of 60 — the declared limit — and every piece grown past
  * it is time on the projection and nothing in the pocket. That is the plateau, and it is
@@ -30,7 +36,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatUnits, toUnits } from '../../src/economy/index.js'
 import { App } from './App.js'
-import { farmDeclaration, loadsFarm } from './test-support/farm.js'
+import { farmBearing, farmDeclaration, loadsFarm } from './test-support/farm.js'
 import { appleCrop, appleManifest, appleTask, farmSorting, loadEntryFor } from './test-support/pool.js'
 import { emptyCatalog, loadsCatalog, memoryStorage, savesTo } from './test-support/progression.js'
 
@@ -61,6 +67,22 @@ function money(amount: number): string {
   return formatUnits(toUnits(amount, shipped.precision), shipped)
 }
 
+/**
+ * What a faultless sort of the pieces on screen comes to, from the declaration.
+ *
+ * Derived rather than written down: what one person is presented with is the year's mix
+ * over the declared limit, and the year's mix is drawn from a declared range. A figure
+ * typed out here would be a second statement of the same thing, able to disagree.
+ */
+function faultlessWage(crop: { presented: readonly { imageId: string }[]; truth: Readonly<Record<string, string>> }): string {
+  const total = crop.presented.reduce((sum, piece) => {
+    const category = crop.truth[piece.imageId] as string
+    const action = declaration.categoryActions[category] as string
+    return sum + (declaration.payoffs[category]?.[action] as number)
+  }, 0)
+  return money(total)
+}
+
 /** What the screen says, for a figure it marks with `attribute`. */
 function figure(attribute: string): string {
   return document.querySelector(`[${attribute}]`)?.textContent ?? ''
@@ -75,6 +97,7 @@ async function harvest(
   task = appleTask(),
 ): Promise<{
   readonly presented: number
+  readonly faultlessly: string
   readonly wage: string
   readonly faultless: string
   readonly elapsed: string
@@ -95,7 +118,7 @@ async function harvest(
     <App
       load={() => Promise.resolve({ ok: true as const, value: [task] })}
       loadEntry={loadEntryFor}
-      loadFarm={loadsFarm({ ...shipped, openingCrop: cropSize })}
+      loadFarm={loadsFarm(farmBearing(cropSize, shipped))}
       loadShop={loadsCatalog(emptyCatalog())}
       drawSeed={() => SEED}
       now={() => clock}
@@ -126,6 +149,8 @@ async function harvest(
 
   return {
     presented: crop.presented.length,
+    /** What a faultless sort of exactly these pieces is worth, from the declaration. */
+    faultlessly: faultlessWage(crop),
     wage: figure('data-wage'),
     faultless: figure('data-faultless'),
     elapsed: figure('data-elapsed'),
@@ -152,8 +177,9 @@ describe('the first harvests, as the app plays them', () => {
     const played = await harvest(10)
 
     expect(played.presented).toBe(10)
-    expect(played.wage).toBe(money(3))
-    expect(played.faultless).toBe(money(3))
+    expect(played.wage).toBe(played.faultlessly)
+    expect(played.faultless).toBe(played.faultlessly)
+    expect(played.wage).toBe(money(2.8))
     expect(played.elapsed).toBe('25 s')
     expect(played.rate).toBe('24')
     expect(played.projection).toBe('25 s')
@@ -164,6 +190,7 @@ describe('the first harvests, as the app plays them', () => {
     const played = await harvest(40)
 
     expect(played.presented).toBe(40)
+    expect(played.wage).toBe(played.faultlessly)
     expect(played.wage).toBe(money(11.6))
     expect(played.elapsed).toBe('1.7 min')
     expect(played.projection).toBe('1.7 min')

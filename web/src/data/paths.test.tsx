@@ -26,7 +26,11 @@ describe('task data is served as assets, not bundled', () => {
       expect(paths, `no mount serves the data ${declaration.id} names`).toBeDefined()
       if (paths === undefined) continue
 
-      for (const served of [paths.declaration, paths.pool.manifest, paths.predictions]) {
+      for (const served of [
+        paths.declaration,
+        paths.pool.manifest,
+        ...Object.values(paths.families),
+      ]) {
         const source = sourcePathFor(served)
         expect(source, `no mount serves ${served}`).toBeDefined()
         expect(existsSync(join(repoRoot, source ?? '')), `${source} is missing`).toBe(true)
@@ -40,7 +44,11 @@ describe('task data is served as assets, not bundled', () => {
     const paths = taskDataPaths(url, declaration)
 
     expect(paths?.pool.manifest).toBe(`${dataUrlFor(declaration.pool)}/manifest.json`)
-    expect(paths?.predictions).toBe(`${dataUrlFor(declaration.predictions)}/index.json`)
+    for (const family of declaration.families) {
+      expect(paths?.families[family.id]).toBe(
+        `${dataUrlFor(family.predictions ?? family.models ?? '')}/index.json`,
+      )
+    }
   })
 
   it('browses and scores one pool, because there is only one to name', () => {
@@ -58,7 +66,10 @@ describe('task data is served as assets, not bundled', () => {
   })
 
   it('refuses a declaration naming data this build serves from nowhere', () => {
-    const declaration = { pool: 'elsewhere/pool', predictions: 'elsewhere/predictions' }
+    const declaration = {
+      pool: 'elsewhere/pool',
+      families: [{ id: 'somewhere', predictions: 'elsewhere/predictions' }],
+    }
     expect(taskDataPaths('data/declarations/x.json', declaration)).toBeUndefined()
   })
 

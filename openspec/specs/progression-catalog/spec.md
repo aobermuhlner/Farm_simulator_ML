@@ -39,14 +39,20 @@ with the field named, and the farm SHALL NOT open.
 
 ### Requirement: The catalog is checked against what it claims to open
 
-Everything an item opens SHALL name something that exists: a declared task, a knob that
-task declares, and — where values are named — values that knob permits. An item SHALL
-open at least one thing, so that nothing is sold that does nothing.
+
+Everything an item opens SHALL name something that exists. Where it opens values of a
+knob, it SHALL name a declared task, a knob that task declares, and values that knob
+permits. Where it opens growth of the farm, it SHALL name a whole amount of land of one or
+more — a purchase that grows the farm by nothing is a purchase that does nothing, which is
+the same defect as an item that opens nothing. An item SHALL open at least one thing, so
+that nothing is sold that does nothing.
 
 No item SHALL open a knob's declared default value: the default is the configuration
 every student opens at, and a locked default would leave a task with no configuration to
-run. No two items SHALL open the same thing, so that what opens a locked thing is always
-exactly one item and can always be named.
+run. No two items SHALL open the same knob value, so that what opens a locked thing is
+always exactly one item and can always be named. Growth is not subject to that rule,
+because growth accumulates rather than unlocking: two items that each grow the farm open
+two different things, and a student who buys both gets both.
 
 A kind of thing to open that the build does not recognise SHALL be refused naming that
 kind, rather than ignored — an unlock that silently opens nothing is indistinguishable
@@ -78,6 +84,16 @@ open.
 #### Scenario: An item that opens nothing is refused
 - **WHEN** an item declares nothing that owning it opens
 - **THEN** the catalog is refused naming that item
+
+#### Scenario: Growth of no land is refused
+- **WHEN** an item declares that it grows the farm by zero, a fraction, or no amount at all
+- **THEN** the refusal names the item and that field
+- **AND** the farm does not open
+
+#### Scenario: Two items may both grow the farm
+- **WHEN** two items each declare that they grow the farm
+- **THEN** the catalog is accepted
+- **AND** a farm that buys both holds the land both gave
 
 ### Requirement: Nothing for sale opens a configuration no model was trained for
 
@@ -115,33 +131,76 @@ item SHALL open what that item declares and nothing further.
 Nothing SHALL become available through the year reached, the balance held, a task having
 been played, or any other state of the farm.
 
+Putting a model family to work SHALL be the one exception, and it SHALL gain exactly one
+further input: whether that family's declared tutorial has been completed. A family whose
+tutorial is incomplete SHALL still be selectable, configurable and buildable — the
+exception reaches only the act of putting it to work, and reaches nothing else the catalog
+governs. No further input SHALL be added to it: not the year, not the balance, not whether
+a task has been played, and not any other state of the farm.
+
+Whether a tutorial has been completed SHALL have no bearing on what may be bought. *Money
+is the only key to a purchase* is untouched by this exception: the market SHALL never bar a
+purchase on a tutorial, and SHALL never state that anything but money would obtain an item.
+
 #### Scenario: What the catalog does not mention is open
+
 - **WHEN** a knob value is named by no item
 - **THEN** it is selectable from the first year, whatever is owned
 
 #### Scenario: What the catalog mentions is locked until it is bought
+
 - **WHEN** a knob value is opened by an item the farm does not own
 - **THEN** it is not selectable
 - **AND** buying that item makes it selectable
 
 #### Scenario: Money and time open nothing on their own
+
 - **WHEN** a farm reaches a later year with a large balance and has bought nothing
 - **THEN** exactly the same things are available as on the first day
 
 #### Scenario: An item opens what it declares and no more
+
 - **WHEN** an item that opens one knob's values is bought
 - **THEN** those values become selectable
 - **AND** no value of any other knob changes state
 
+#### Scenario: An untutored family is selectable but not fieldable
+
+- **WHEN** a family whose tutorial is incomplete is owned
+- **THEN** it is selectable in the workshop and its knobs are usable
+- **AND** it cannot be put to work
+
+#### Scenario: A completed tutorial opens fielding and nothing else
+
+- **WHEN** a family's tutorial is completed
+- **THEN** that family can be put to work
+- **AND** no knob value and no catalog item changes state
+
+#### Scenario: A tutorial bars no purchase
+
+- **WHEN** the market is shown to a farm that has completed no tutorial
+- **THEN** every item the balance covers offers to be bought
+- **AND** nothing states that completing a tutorial would obtain an item
+
+
 ### Requirement: Money is the only key to a purchase
 
-An item SHALL be purchasable whenever the farm's balance covers its price, and SHALL NOT
-be gated on owning any other item. An item the balance does not cover SHALL be presented
-as not yet affordable — never as barred, and never as requiring anything but money.
+
+An item SHALL be purchasable whenever the farm's balance covers its price and it has not
+already been bought as many times as the catalog permits it to be, and SHALL NOT be gated
+on owning any other item. An item the balance does not cover SHALL be presented as not yet
+affordable — never as barred, and never as requiring anything but money.
+
+An item the catalog permits to be bought more than once SHALL be presented with how many
+times it has been bought and how many the catalog still permits, so that a student can see
+what is left to earn towards rather than discovering the limit by reaching it. An item
+bought as many times as the catalog permits SHALL be shown with what it gave and SHALL
+offer no further purchase; it SHALL NOT be presented as unaffordable, since no amount of
+money would obtain another.
 
 An item declared without a price SHALL be presented as not for sale, together with the
 declared reason it cannot be bought yet, and SHALL NOT be presented as though money alone
-would obtain it. No screen SHALL invent a reason of its own for either state.
+would obtain it. No screen SHALL invent a reason of its own for any of these states.
 
 #### Scenario: An affordable item can be bought
 - **WHEN** the balance covers an item's price
@@ -161,16 +220,37 @@ would obtain it. No screen SHALL invent a reason of its own for either state.
 - **THEN** it is shown with the declared reason it cannot yet be bought
 - **AND** it offers no purchase
 
+#### Scenario: A repeatable item shows how much of it is left
+- **WHEN** an item the catalog permits to be bought five times has been bought twice
+- **THEN** it is shown with those two and the three the catalog still permits
+- **AND** it offers to be bought while the balance covers its price
+
+#### Scenario: An item bought to its limit offers nothing further
+- **WHEN** an item has been bought as many times as the catalog permits
+- **THEN** it is shown with what it gave
+- **AND** it offers no purchase
+- **AND** it is not reported as unaffordable
+
 ### Requirement: A purchase moves money once and cannot be undone
+
 
 Buying SHALL be confirmed before any money moves, with the item and its price named, and
 abandoning the confirmation SHALL leave the balance and what is owned untouched. On
 confirmation the price SHALL be debited exactly once, with the item as the reason recorded
 for the movement, and the item SHALL become owned.
 
-Buying an item already owned SHALL be refused and SHALL move no money. A purchase the
-balance cannot cover SHALL be refused with the shortfall named, leaving the balance and
-what is owned untouched. There SHALL be no way to sell, refund or return a bought item.
+An item MAY declare how many times it can be bought. An item declaring no such limit SHALL
+be buyable once, and buying it again SHALL be refused and SHALL move no money. An item
+declaring a limit SHALL be buyable up to that many times, each purchase debiting the price
+once and recording its own movement, and a purchase beyond the limit SHALL be refused with
+the limit named and SHALL move no money. A declared limit that is not a whole number of one
+or more SHALL be refused with the item and the field named, and the farm SHALL NOT open.
+
+What each purchase opens SHALL be given each time it is bought, so an item that grows the
+farm by a given amount of land grows it by that amount on every purchase. A purchase the
+balance cannot cover SHALL be refused with the shortfall named, leaving the balance and what
+is owned untouched. There SHALL be no way to sell, refund or return a bought item, however
+many times it was bought.
 
 #### Scenario: A confirmed purchase debits once and says what for
 - **WHEN** a purchase of a priced item is confirmed
@@ -182,9 +262,25 @@ what is owned untouched. There SHALL be no way to sell, refund or return a bough
 - **THEN** the balance is unchanged and the item is not owned
 
 #### Scenario: Buying what is already owned is refused
-- **WHEN** an owned item is bought again
+- **WHEN** an owned item declaring no repeat limit is bought again
 - **THEN** the attempt is refused
 - **AND** no movement is recorded
+
+#### Scenario: A repeatable item is bought again
+- **WHEN** an item the catalog permits to be bought five times is bought a second time
+- **THEN** the balance falls by exactly its price again
+- **AND** a second debit carrying that item as its reason is recorded
+- **AND** what it opens has been given twice
+
+#### Scenario: A purchase past the declared limit is refused
+- **WHEN** an item is bought once more than the catalog permits
+- **THEN** the refusal names the limit
+- **AND** no movement is recorded and nothing further is given
+
+#### Scenario: A limit that is not a whole count is refused
+- **WHEN** an item declares a repeat limit of zero, a fraction or a negative number
+- **THEN** the refusal names the item and that field
+- **AND** the farm does not open
 
 #### Scenario: A purchase beyond the balance is refused with the shortfall
 - **WHEN** an item priced above the balance is confirmed

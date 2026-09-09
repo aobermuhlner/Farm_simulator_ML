@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runHarvest } from '../../../src/scoring/index.js'
+import { earningsByCategory, runHarvest } from '../../../src/scoring/index.js'
 import type { RunOutcome } from '../../../src/scoring/index.js'
+import type { HarvestFigures } from '../../../src/economy/index.js'
 import type { TaskDeclaration } from '../../../src/task/types.js'
 import { validateDeclaration } from '../../../src/task/validate.js'
 import {
@@ -13,6 +14,7 @@ import {
   sharedActionDeclaration,
   unrelatedDeclaration,
 } from '../test-support/declarations.js'
+import { firstFamily } from '../../../src/task/families.js'
 import { Report } from './Report.js'
 
 afterEach(cleanup)
@@ -27,7 +29,14 @@ function outcomeFor(
   id: string
   outcome: RunOutcome
 } {
-  const result = runHarvest(declaration, knobs, appleArtifact(), 'pool', appleTruth())
+  const result = runHarvest(
+    declaration,
+    firstFamily(declaration),
+    knobs,
+    appleArtifact(),
+    'pool',
+    appleTruth(),
+  )
   if (!result.ok) {
     throw new Error(`expected ${JSON.stringify(knobs)} to run: ${result.issues[0]?.message}`)
   }
@@ -45,7 +54,11 @@ const YEAR = 12
 
 function renderReport(
   knobs: Record<string, string | number>,
-  overrides: Partial<{ declaration: TaskDeclaration }> = {},
+  overrides: Partial<{
+    declaration: TaskDeclaration
+    money: { gross: string; downgrade: string }
+    harvest: HarvestFigures
+  }> = {},
 ) {
   const declaration = overrides.declaration ?? apple
   const { id, outcome } = outcomeFor(knobs, declaration)
@@ -57,9 +70,37 @@ function renderReport(
       evaluated={outcome.evaluated}
       earnings={outcome.earnings.toFixed(2)}
       counts={outcome.counts}
+      rowEarnings={rowsOf(declaration, outcome)}
+      {...(overrides.money === undefined ? {} : { money: overrides.money })}
+      {...(overrides.harvest === undefined ? {} : { harvest: overrides.harvest })}
     />,
   )
   return outcome
+}
+
+/** What each category's pieces came to, from the engine rather than typed out. */
+function rowsOf(
+  declaration: TaskDeclaration,
+  outcome: RunOutcome,
+): Readonly<Record<string, string>> {
+  return Object.fromEntries(
+    Object.entries(earningsByCategory(declaration, outcome.counts)).map(([category, amount]) => [
+      category,
+      amount.toFixed(2),
+    ]),
+  )
+}
+
+/**
+ * The column headers standing for declared actions, in the order they are drawn.
+ *
+ * The first column names the true category and the last states what that category's
+ * pieces earned; neither is an action, and neither is the task's to name. Everything
+ * between them is one declared action each, which is the claim these tests are about.
+ */
+function actionHeaders(): (string | null)[] {
+  const headers = [...document.querySelectorAll('thead th[scope="col"]')]
+  return headers.slice(1, headers.length - 1).map((header) => header.textContent)
 }
 
 /** The count in one category-and-action cell. */
@@ -91,6 +132,7 @@ function renderEmpty(declaration: TaskDeclaration) {
       evaluated={0}
       earnings="0.00"
       counts={{}}
+      rowEarnings={{}}
     />,
   )
 }
@@ -164,11 +206,9 @@ describe('the report is the payoff table filled with counts', () => {
   it('gives every declared action a column of its own, in declared order', () => {
     renderReport(BALANCED)
 
-    const columns = [...document.querySelectorAll('thead th[scope="col"]')].map(
-      (header) => header.textContent,
-    )
-    // The first column heads the true-category rows; the rest are the actions, one each.
-    expect(columns.slice(1)).toEqual(apple.actions.map((action) => action.label))
+    // The first column heads the true-category rows and the last states what that row
+    // earned; between them is one column per declared action, one each.
+    expect(actionHeaders()).toEqual(apple.actions.map((action) => action.label))
   })
 
   it('includes combinations that happened zero times', () => {
@@ -217,7 +257,7 @@ describe('the report is the payoff table filled with counts', () => {
     expect(narrower.actions.length).toBe(apple.actions.length - 1)
 
     renderReport(BALANCED)
-    const wide = document.querySelectorAll('thead th[scope="col"]').length
+    const wide = actionHeaders().length
     cleanup()
 
     render(
@@ -228,14 +268,13 @@ describe('the report is the payoff table filled with counts', () => {
         evaluated={0}
         earnings="0.00"
         counts={{}}
+        rowEarnings={{}}
       />,
     )
-    const narrow = [...document.querySelectorAll('thead th[scope="col"]')].map(
-      (header) => header.textContent,
-    )
+    const narrow = actionHeaders()
 
     expect(narrow.length).toBe(wide - 1)
-    expect(narrow.slice(1)).toEqual(narrower.actions.map((action) => action.label))
+    expect(narrow).toEqual(narrower.actions.map((action) => action.label))
   })
 })
 
@@ -328,6 +367,7 @@ describe('every row identifies the cell its category calls for', () => {
         evaluated={contradictory.evaluated}
         earnings={contradictory.earnings.toFixed(2)}
         counts={contradictory.counts}
+        rowEarnings={{}}
       />,
     )
 
@@ -440,14 +480,11 @@ describe('the declared order survives the marking', () => {
     const shared = sharedActionDeclaration()
     renderEmpty(shared)
 
-    const columns = [...document.querySelectorAll('thead th[scope="col"]')].map(
-      (header) => header.textContent,
-    )
     const rows = [...document.querySelectorAll('tbody th[scope="row"]')].map(
       (header) => header.textContent,
     )
 
-    expect(columns.slice(1)).toEqual(shared.actions.map((action) => action.label))
+    expect(actionHeaders()).toEqual(shared.actions.map((action) => action.label))
     expect(rows).toEqual(shared.categories.map((category) => category.label))
   })
 })
@@ -557,6 +594,7 @@ describe('a report is the record of a year, not a readout of the knobs', () => {
         evaluated={10}
         earnings="12.50"
         counts={{}}
+        rowEarnings={{}}
       />,
     )
 
@@ -565,6 +603,36 @@ describe('a report is the record of a year, not a readout of the knobs', () => {
     expect(configuration.textContent).toContain(`Year ${String(YEAR)}`)
     expect(configuration.querySelector('code')).toBeNull()
     expect(configuration.textContent).not.toMatch(/blocks\d/)
+    // No family either: there is none to name, and inventing one would put a model's
+    // name on a student's own work.
+    for (const family of apple.families) {
+      expect(configuration.textContent).not.toContain(family.label)
+    }
+  })
+
+  it('names the family alongside the configuration for a crop a model brought in', () => {
+    const family = firstFamily(apple)
+    render(
+      <Report
+        declaration={apple}
+        year={YEAR}
+        configurationId="blocks2-channels16-regularization1-dropout0"
+        family={family.label}
+        evaluated={10}
+        earnings="12.50"
+        counts={{}}
+        rowEarnings={{}}
+      />,
+    )
+
+    // An identifier alone no longer names one model: two families of a task can compose
+    // the same string, so a report carrying one without the other names nothing traceable.
+    const configuration = document.querySelector('.configuration') as HTMLElement
+    expect(configuration.textContent).toContain(family.label)
+    expect(configuration.querySelector('code')?.textContent).toBe(
+      'blocks2-channels16-regularization1-dropout0',
+    )
+    expect(configuration.textContent).toContain(`Year ${String(YEAR)}`)
   })
 
   it('presents the earnings it is handed rather than formatting a figure of its own', () => {
@@ -576,9 +644,275 @@ describe('a report is the record of a year, not a readout of the knobs', () => {
         evaluated={3}
         earnings="coins 40"
         counts={{}}
+        rowEarnings={{}}
       />,
     )
 
     expect(screen.getByText(/Total earnings/).textContent).toContain('coins 40')
+  })
+})
+
+/**
+ * A harvest record, with whatever the caller wants to say about the year.
+ *
+ * Every figure is the caller's: the screen states what it is handed, and a screen test
+ * that had to run a whole year to get a warning on screen would be testing the year.
+ */
+function harvestOf(over: Partial<HarvestFigures> = {}): HarvestFigures {
+  return {
+    cropSize: 6000,
+    composition: { red: 3300, green: 2100, wormy: 600 },
+    grossUnits: 138_000,
+    downgradeUnits: 0,
+    downgraded: false,
+    warned: false,
+    delivered: 5000,
+    measured: 300,
+    share: 0.06,
+    tolerance: 0.12,
+    recurred: true,
+    heldPictures: 1000,
+    ...over,
+  }
+}
+
+/** The declaration with a delivery term, so the arithmetic and the line are reachable. */
+function withDelivery(): TaskDeclaration {
+  const raw = JSON.parse(
+    readFileSync(join(process.cwd(), 'declarations/apple-harvest.json'), 'utf8'),
+  ) as Record<string, unknown>
+  const result = validateDeclaration({
+    ...raw,
+    delivery: {
+      measures: ['wormy'],
+      delivering: ['crate-red', 'crate-green'],
+      tolerance: 0.12,
+      warnAbove: 0.09,
+      downgradedValue: 0.05,
+    },
+  })
+  if (!result.ok) throw new Error(`the patched declaration must validate: ${result.issues[0]?.message}`)
+  return result.declaration
+}
+
+const delivering = withDelivery()
+
+describe('the money is attached to the categories it came from', () => {
+  it('states what each category’s pieces earned, in its own row', () => {
+    const outcome = renderReport(OVER_REGULARIZED)
+    const rows = earningsByCategory(apple, outcome.counts)
+
+    for (const category of apple.categories) {
+      const cell = document.querySelector(`[data-row-earnings="${category.id}"]`)
+      expect(cell, `no earnings for "${category.id}"`).not.toBeNull()
+      expect(cell?.textContent).toBe((rows[category.id] ?? 0).toFixed(2))
+    }
+  })
+
+  it('has rows that come to the run’s own total rather than to something else', () => {
+    const outcome = renderReport(BALANCED)
+    const rows = earningsByCategory(apple, outcome.counts)
+    const summed = Object.values(rows).reduce((total, amount) => total + amount, 0)
+    expect(summed).toBeCloseTo(outcome.earnings, 8)
+  })
+
+  it('combines the money of no set of cells, the identified ones least of all', () => {
+    // The same guard the count has: a figure summing what went right is the one number a
+    // student could stop looking at, and money makes it more tempting rather than less.
+    const outcome = renderReport(OVER_REGULARIZED, { harvest: harvestOf() })
+    const right = apple.categories.reduce((sum, category) => {
+      const action = apple.categoryActions[category.id] as string
+      const count = outcome.counts[category.id]?.[action] ?? 0
+      return sum + count * (apple.payoffs[category.id]?.[action] ?? 0)
+    }, 0)
+
+    const section = document.querySelector('.report') as HTMLElement
+    expect(right).not.toBeCloseTo(outcome.earnings, 6)
+    expect(section.textContent ?? '').not.toContain(right.toFixed(2))
+    expect(section.textContent ?? '').not.toMatch(/accurac/i)
+  })
+})
+
+describe('the arithmetic of what was paid', () => {
+  it('shows the gross, the deduction and the paid figure when a term is declared', () => {
+    const outcome = renderReport(BALANCED, {
+      declaration: delivering,
+      money: { gross: '1 380.00', downgrade: '1 130.00' },
+      harvest: harvestOf({ downgraded: true, share: 0.2 }),
+    })
+
+    // Three figures whose arithmetic a reader can follow, each presented as handed over.
+    expect(document.querySelector('[data-gross]')?.textContent).toBe('1 380.00')
+    expect(document.querySelector('[data-downgrade]')?.textContent).toBe('1 130.00')
+    expect(document.querySelector('[data-paid]')?.textContent).toContain(
+      outcome.earnings.toFixed(2),
+    )
+  })
+
+  it('shows the total alone when the task declares no term', () => {
+    renderReport(BALANCED)
+    expect(document.querySelector('[data-gross]')).toBeNull()
+    expect(document.querySelector('[data-downgrade]')).toBeNull()
+    expect(document.querySelector('[data-paid]')).not.toBeNull()
+    expect(document.querySelector('[data-delivery]')).toBeNull()
+  })
+})
+
+describe('the delivery line', () => {
+  it('states the share, the count, the categories and the limit, from the declaration', () => {
+    renderReport(BALANCED, { declaration: delivering, harvest: harvestOf() })
+    const line = document.querySelector('[data-delivery]') as HTMLElement
+
+    expect(line.querySelector('[data-delivered]')?.textContent).toBe('5000')
+    expect(line.querySelector('[data-measured]')?.textContent).toBe('300')
+    expect(line.querySelector('[data-share]')?.textContent).toBe('6%')
+    expect(line.querySelector('[data-tolerance]')?.textContent).toBe('12%')
+    expect(line.querySelector('[data-accepted]')).not.toBeNull()
+    expect(line.querySelector('[data-downgraded]')).toBeNull()
+
+    // The measured categories are named by their declared labels, read from the term.
+    for (const category of delivering.delivery?.measures ?? []) {
+      const label = delivering.categories.find((entry) => entry.id === category)?.label
+      expect(line.textContent).toContain(label)
+    }
+  })
+
+  it('says the delivery was downgraded when it was', () => {
+    renderReport(BALANCED, {
+      declaration: delivering,
+      harvest: harvestOf({ downgraded: true, share: 0.2, downgradeUnits: 113_000 }),
+    })
+    const line = document.querySelector('[data-delivery]') as HTMLElement
+    expect(line.querySelector('[data-downgraded]')).not.toBeNull()
+    expect(line.querySelector('[data-accepted]')).toBeNull()
+  })
+
+  it('says so rather than showing a share when nothing was delivered', () => {
+    renderReport(BALANCED, {
+      declaration: delivering,
+      harvest: harvestOf({ delivered: 0, measured: 0, share: undefined }),
+    })
+    const line = document.querySelector('[data-delivery]') as HTMLElement
+    expect(line.querySelector('[data-share]')).toBeNull()
+    expect(line.textContent).toMatch(/nothing/i)
+  })
+
+  it('names nothing belonging to any one task in the screen’s own words', () => {
+    // A term measuring a category of another lesson entirely, rendered by the same screen.
+    const other = validateDeclaration({
+      ...JSON.parse(
+        JSON.stringify(unrelatedDeclaration()),
+      ) as Record<string, unknown>,
+      delivery: {
+        measures: ['diseased'],
+        delivering: ['pass'],
+        tolerance: 0.05,
+        warnAbove: 0.02,
+        downgradedValue: 0,
+      },
+    })
+    if (!other.ok) throw new Error('the unrelated term must validate')
+
+    render(
+      <Report
+        declaration={other.declaration}
+        year={YEAR}
+        configurationId="sensitivitylow"
+        evaluated={0}
+        earnings="0.00"
+        counts={{}}
+        rowEarnings={{}}
+        money={{ gross: '0.00', downgrade: '0.00' }}
+        harvest={{
+          cropSize: 40,
+          composition: { healthy: 30, diseased: 10 },
+          grossUnits: 0,
+          downgradeUnits: 0,
+          downgraded: false,
+          warned: false,
+          delivered: 20,
+          measured: 3,
+          share: 0.15,
+          tolerance: 0.05,
+          recurred: false,
+        }}
+      />,
+    )
+
+    const line = document.querySelector('[data-delivery]') as HTMLElement
+    expect(line.textContent).toContain('Diseased patch')
+    for (const category of apple.categories) {
+      expect(line.textContent).not.toContain(category.label)
+    }
+  })
+})
+
+describe('the warning is where the downgrade would be', () => {
+  it('appears when the harvest recorded one, beside the delivery line', () => {
+    renderReport(BALANCED, {
+      declaration: delivering,
+      harvest: harvestOf({ warned: true, share: 0.1 }),
+    })
+    const line = document.querySelector('[data-delivery]') as HTMLElement
+    expect(line.querySelector('[data-warned]')).not.toBeNull()
+    // Same place a downgrade would be reported, which is what makes it read again later.
+    expect(line.querySelector('[data-share]')).not.toBeNull()
+  })
+
+  it('is absent when the harvest recorded none', () => {
+    renderReport(BALANCED, { declaration: delivering, harvest: harvestOf() })
+    expect(document.querySelector('[data-warned]')).toBeNull()
+  })
+})
+
+describe('the year is stated so a lean year can be attributed', () => {
+  it('states the crop’s size and each category’s share, in declared labels', () => {
+    renderReport(BALANCED, { declaration: delivering, harvest: harvestOf() })
+    const stated = document.querySelector('[data-crop-size]') as HTMLElement
+
+    expect(stated.getAttribute('data-crop-size')).toBe('6000')
+    expect(stated.textContent).toContain('6000')
+    for (const category of apple.categories) {
+      expect(stated.textContent, `"${category.id}" is not stated`).toContain(category.label)
+    }
+    expect(stated.textContent).toContain('55%')
+    expect(stated.textContent).toContain('35%')
+    expect(stated.textContent).toContain('10%')
+  })
+
+  it('presents the difference between two years as neither noise, variance nor error', () => {
+    for (const share of [0.07, 0.14]) {
+      renderReport(BALANCED, {
+        declaration: delivering,
+        harvest: harvestOf({
+          composition: { red: 3300, green: 2100, wormy: Math.round(6000 * share) },
+        }),
+      })
+      const section = document.querySelector('.report') as HTMLElement
+      for (const word of [/\bnoise\b/i, /\bvariance\b/i, /\berror\b/i, /\brandom\b/i, /\bsampling\b/i]) {
+        expect(section.textContent ?? '', `the report calls the year ${String(word)}`).not.toMatch(
+          word,
+        )
+      }
+      cleanup()
+    }
+  })
+})
+
+describe('recurring photographs are disclosed', () => {
+  it('states that they recur and how many the pool holds', () => {
+    renderReport(BALANCED, { declaration: delivering, harvest: harvestOf() })
+    const stated = document.querySelector('[data-recurrence]') as HTMLElement
+    expect(stated.getAttribute('data-recurrence')).toBe('1000')
+    expect(stated.textContent).toContain('1000')
+    expect(stated.textContent).toContain('6000')
+  })
+
+  it('states nothing for a crop that repeated nothing', () => {
+    renderReport(BALANCED, {
+      declaration: delivering,
+      harvest: harvestOf({ cropSize: 300, composition: { red: 165, green: 105, wormy: 30 }, recurred: false, heldPictures: undefined }),
+    })
+    expect(document.querySelector('[data-recurrence]')).toBeNull()
   })
 })

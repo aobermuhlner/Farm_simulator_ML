@@ -7,12 +7,21 @@
  * therefore cannot reach a run.
  */
 
-import type { KnobDeclaration, TaskDeclaration } from './types.js'
+import type { FamilyId, KnobDeclaration, ModelFamilyDeclaration, TaskDeclaration } from './types.js'
 import { knobPermits, type ValidationIssue } from './validate.js'
 
 export interface ResolvedConfiguration {
   readonly taskId: string
-  /** Knob id and value pairs, in the task's declared knob order. */
+  /**
+   * The family whose knobs these values belong to.
+   *
+   * Carried because configuration identity is family-scoped: the identifier composed
+   * below says nothing about which family composed it, and two families of one task may
+   * compose the same string from different knobs. Everything that resolves an identifier
+   * resolves it against this family and never against the task at large.
+   */
+  readonly familyId: FamilyId
+  /** Knob id and value pairs, in the family's declared knob order. */
   readonly values: readonly (readonly [string, string | number])[]
 }
 
@@ -26,38 +35,47 @@ function describeAllowed(knob: KnobDeclaration): string {
     : `allowed range is ${knob.min} to ${knob.max} in steps of ${knob.step}`
 }
 
-/** The configuration a student starts from: every knob at its declared default. */
-export function defaultConfiguration(declaration: TaskDeclaration): ResolvedConfiguration {
+/** The configuration a student starts from: every knob of one family at its default. */
+export function defaultConfiguration(
+  declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
+): ResolvedConfiguration {
   return {
     taskId: declaration.id,
-    values: declaration.knobs.map((knob) => [knob.id, knob.default] as const),
+    familyId: family.id,
+    values: family.knobs.map((knob) => [knob.id, knob.default] as const),
   }
 }
 
 /**
- * Resolves requested knob values against a task's knob declarations. Knobs the
+ * Resolves requested knob values against one family's knob declarations. Knobs the
  * request omits fall back to their declared default; unknown knob ids and
  * values the declaration does not permit are refused, each naming the knob.
+ *
+ * Against the family rather than the task, because a knob id is unique only within a
+ * family: resolving `depth` against the task would pick whichever family declared it
+ * first and quietly build a configuration of the wrong model.
  */
 export function resolveConfiguration(
   declaration: TaskDeclaration,
+  family: ModelFamilyDeclaration,
   requested: Readonly<Record<string, unknown>>,
 ): ConfigurationValidation {
   const issues: ValidationIssue[] = []
   const values: (readonly [string, string | number])[] = []
-  const knownIds = declaration.knobs.map((knob) => knob.id)
+  const knownIds = family.knobs.map((knob) => knob.id)
 
   for (const key of Object.keys(requested)) {
     if (!knownIds.includes(key)) {
       issues.push({
         code: 'unknown-knob',
         field: key,
-        message: `Task "${declaration.id}" declares no knob "${key}".`,
+        message: `Family "${family.id}" of task "${declaration.id}" declares no knob "${key}".`,
       })
     }
   }
 
-  for (const knob of declaration.knobs) {
+  for (const knob of family.knobs) {
     const requestedValue = Object.prototype.hasOwnProperty.call(requested, knob.id)
       ? requested[knob.id]
       : knob.default
@@ -74,5 +92,5 @@ export function resolveConfiguration(
   }
 
   if (issues.length > 0) return { ok: false, issues }
-  return { ok: true, configuration: { taskId: declaration.id, values } }
+  return { ok: true, configuration: { taskId: declaration.id, familyId: family.id, values } }
 }

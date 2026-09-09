@@ -29,7 +29,7 @@ const farmDeclaration: FarmDeclaration = {
   precision: 2,
   openingBalance: 0,
   openingYear: 1,
-  openingCrop: 10,
+  orchard: { label: 'Orchard', unit: 'trees', opening: 10, piecesPerUnit: 1 },
   cropComposition: { red: 0.55, green: 0.35, wormy: 0.1 },
 }
 
@@ -45,12 +45,17 @@ function pool(): LoadedPool {
 const committed = pool()
 const truth = committed.truth
 
-function farm(cropSize: number): Farm {
-  return { ...openFarm(farmDeclaration), cropSize }
+/** The evaluation split, in the shape the crop draw asks for. */
+function splitOf(loaded: LoadedPool) {
+  return { imageIds: loaded.order.pool, truth: loaded.truth }
 }
 
-function cropOf(cropSize: number, seed = 4242): Crop {
-  const draw = drawCrop(declaration, farm(cropSize), committed, seed)
+function farm(land: number): Farm {
+  return { ...openFarm(farmDeclaration), land }
+}
+
+function cropOf(land: number, seed = 4242): Crop {
+  const draw = drawCrop(declaration, farm(land), splitOf(committed), seed)
   if (!draw.ok) throw new Error(`the crop was meant to draw: ${draw.issues[0]?.message}`)
   return draw.crop
 }
@@ -287,7 +292,12 @@ describe('the shipped table pays for judgement rather than for one key', () => {
       ).toBeLessThan(careful.wage)
       // Not merely less: a table where the lazy sort came close would make the lesson
       // optional. If this fails the table is what to change, not this screen.
-      expect(blank.wage).toBeLessThan(careful.wage * 0.25)
+      //
+      // Half rather than a quarter, because the per-apple fine is now the milder half of
+      // the lesson. In a year wormier than the declared limit the same blanket sort has
+      // its whole delivery repriced and pays a fraction of this — which is the punishing
+      // branch, and `delivery-guards.test.ts` is where it is held against real years.
+      expect(blank.wage).toBeLessThan(careful.wage * 0.5)
     }
   })
 
@@ -307,5 +317,111 @@ describe('the shipped table pays for judgement rather than for one key', () => {
   it('is the shipped table that says so, not a table this suite made up', () => {
     expect(declaration.payoffs).toStrictEqual(appleDeclaration().payoffs)
     expect(careful.wage).toBeGreaterThan(0)
+  })
+})
+
+/** A crop of a farm whose year is as wormy as the shipped range allows. */
+function wettestCrop(land: number, seed = 4242): Crop {
+  const wet: FarmDeclaration = {
+    ...farmDeclaration,
+    cropComposition: { red: 0.51, green: 0.35, wormy: 0.14 },
+  }
+  const draw = drawCrop(
+    declaration,
+    { ...openFarm(wet), land },
+    splitOf(committed),
+    seed,
+  )
+  if (!draw.ok) throw new Error(`the crop was meant to draw: ${draw.issues[0]?.message}`)
+  return draw.crop
+}
+
+describe('a person’s crates face the same buyer a robot’s do', () => {
+  const term = declaration.delivery
+  if (term === undefined) throw new Error('the shipped task must declare a delivery term')
+
+  /** Which of the declared actions count as sending a piece to the buyer. */
+  const delivering = term.delivering
+
+  it('is the shipped term, applied by the same function the automated harvest goes through', () => {
+    const crop = cropOf(limit)
+    const outcome = measureSort(declaration, crop, truth, faultlessly(crop))
+    expect(outcome.delivery.tolerance).toBe(term.tolerance)
+    expect(outcome.delivery.gross).toBeCloseTo(outcome.faultless, 10)
+  })
+
+  it('pays a careful sort the plain payoff sum, with nothing taken off', () => {
+    const crop = cropOf(limit)
+    const outcome = measureSort(declaration, crop, truth, faultlessly(crop))
+
+    // Faultless means every measured piece was kept out of the crates, so the share is
+    // nothing at all and the buyer has no complaint to make.
+    expect(outcome.delivery.share).toBe(0)
+    expect(outcome.delivery.downgraded).toBe(false)
+    expect(outcome.delivery.downgrade).toBe(0)
+    expect(outcome.wage).toBeCloseTo(outcome.delivery.gross, 10)
+  })
+
+  it('downgrades a careless sort that reaches the limit, on the buyer’s own terms', () => {
+    // A wet year and a student who crates everything: the share is the year's own worm
+    // share, which the wettest declared year puts over the limit.
+    const crop = wettestCrop(limit)
+    const crated = delivering[0] as ActionId
+    const outcome = measureSort(declaration, crop, truth, blanket(crop, crated))
+
+    expect(outcome.delivery.share ?? 0).toBeGreaterThanOrEqual(term.tolerance)
+    expect(outcome.delivery.downgraded).toBe(true)
+
+    // Every piece sent to the buyer pays the declared reduced value, and nothing else was
+    // sent — which is what "the whole delivery" means.
+    expect(outcome.wage).toBeCloseTo(outcome.decided * term.downgradedValue, 10)
+    expect(outcome.delivery.gross - outcome.delivery.downgrade).toBeCloseTo(outcome.wage, 10)
+  })
+
+  it('leaves a careful sort of the same wet year ahead of the careless one', () => {
+    const crop = wettestCrop(limit)
+    const careless = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
+    const careful = measureSort(declaration, crop, truth, faultlessly(crop))
+
+    expect(careful.delivery.downgraded).toBe(false)
+    expect(careful.wage).toBeGreaterThan(careless.wage)
+  })
+
+  it('values perfect play the same way, so the two figures on screen are comparable', () => {
+    // The comparison figure is what these same pieces would have paid sorted faultlessly,
+    // and it goes through the term rather than round it. A faultless sort delivers no
+    // measured piece, so it is never downgraded — which is the point being made.
+    const crop = wettestCrop(limit)
+    const careless = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
+    const perfect = measureSort(declaration, crop, truth, faultlessly(crop))
+
+    expect(careless.faultless).toBeCloseTo(perfect.wage, 10)
+    expect(careless.faultless).toBeGreaterThan(careless.wage)
+  })
+
+  it('leaves the unsorted count and the throughput arithmetic exactly as they were', () => {
+    // The term prices what was delivered. It says nothing about how many pieces nobody
+    // reached, or how fast the ones that were reached went.
+    const crop = wettestCrop(400)
+    const careless = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
+
+    expect(careless.delivery.downgraded).toBe(true)
+    expect(careless.decided).toBe(limit)
+    expect(careless.unsorted).toBe(400 - limit)
+    expect(careless.throughput.perMinute).toBeCloseTo((careless.decided * 60) / careless.throughput.seconds, 10)
+    expect(careless.throughput.wholeCropSeconds).toBeCloseTo(
+      (careless.throughput.seconds * 400) / careless.decided,
+      10,
+    )
+  })
+
+  it('measures the share over the pieces the student decided, not over the crop', () => {
+    // Four hundred pieces, sixty decided: the denominator is what went to the buyer out of
+    // those sixty. Nothing was delivered from the part nobody reached, because nothing was
+    // decided about it.
+    const crop = wettestCrop(400)
+    const outcome = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
+    expect(outcome.delivery.delivered).toBe(limit)
+    expect(outcome.delivery.delivered).toBeLessThan(crop.size)
   })
 })

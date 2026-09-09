@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { FarmBar } from './components/FarmBar.js'
 import { Issues } from './components/Issues.js'
-import type { ConfigurationEntry } from '../../src/task/artifact.js'
+import type { FamilyEntry } from '../../src/families/index.js'
 import type { Farm, FarmDeclaration, YearInProgress } from '../../src/economy/index.js'
 import {
   bringIn,
@@ -40,17 +40,30 @@ import {
   computeAvailability,
   itemById,
   marketView,
+  maxLand,
   taskAvailability,
 } from '../../src/progression/index.js'
 import { handBack, labourFor, playableTasks, putToWork } from '../../src/labour/index.js'
+import { earningsByCategory, recordHarvestFigures, valueDelivery } from '../../src/scoring/index.js'
 import type { SortOutcome } from '../../src/sorting/index.js'
+import { drawCrop } from '../../src/sorting/index.js'
 import type { GameState } from '../../src/save/index.js'
-import { knobValuesFor, newGame, parseSave, serializeSave } from '../../src/save/index.js'
+import {
+  knobValuesFor,
+  newGame,
+  parseSave,
+  selectedFamilyFor,
+  serializeSave,
+} from '../../src/save/index.js'
 import type { LoadedTask } from './data/load.js'
+import type { CropView } from './data/pool.js'
 import { loadCatalog, loadConfiguration, loadFarmDeclaration, loadShippedTasks } from './data/load.js'
 import { loadCrop, loadTrainingSplit } from './data/pool.js'
 import { clearStoredSave, readStoredSave, writeStoredSave } from './data/save.js'
 import type { ValidationIssue } from '../../src/task/validate.js'
+import { familyById, selectedFamily } from '../../src/task/families.js'
+import type { TutorialKinds } from '../../src/tutorials/index.js'
+import type { TutorialBodies } from './components/tutorial/TutorialBody.js'
 import type { TaskDeclaration } from '../../src/task/types.js'
 import type { KnobValues } from './model/run.js'
 import { runFielded } from './model/run.js'
@@ -74,7 +87,11 @@ export interface AppProps {
    * Injected by tests for the same reason `load` is: the shell's job is to route a
    * refusal to the screen, and that is worth testing without a server in the way.
    */
-  readonly loadEntry?: (task: LoadedTask, configurationId: string) => Promise<Loaded<ConfigurationEntry>>
+  readonly loadEntry?: (
+    task: LoadedTask,
+    familyId: string,
+    configurationId: string,
+  ) => Promise<Loaded<FamilyEntry>>
   /**
    * Fetches the farm declaration — the currency, the name and the state play opens at.
    *
@@ -104,6 +121,16 @@ export interface AppProps {
    * one of the figures the numbers pass is set against.
    */
   readonly now?: () => number
+  /**
+   * The tutorial kinds this build recognises, and the bodies that pose them.
+   *
+   * Injected for the same reason the loaders are: the shipped registries are empty until
+   * a body change fills them, so the only way to exercise the gate end to end is to be
+   * handed a kind. Passing them separately keeps a test-only puzzle out of the build a
+   * student loads.
+   */
+  readonly tutorialKinds?: TutorialKinds
+  readonly tutorialBodies?: TutorialBodies
 }
 
 /** Everything the farm needs before it can be played, loaded and checked against itself. */
@@ -129,6 +156,8 @@ export function App({
   clearSave = clearStoredSave,
   drawSeed,
   now,
+  tutorialKinds,
+  tutorialBodies,
 }: AppProps) {
   const [opening, setOpening] = useState<Opening>({ state: 'loading' })
   const [game, setGame] = useState<GameState | undefined>(undefined)
@@ -244,6 +273,28 @@ export function App({
     )
   }, [opened, game])
 
+  /**
+   * The orchard, as the persistent bar's first supplied summary fact.
+   *
+   * Every word of it is declared — the orchard's own name and the name of a unit of its
+   * land — so a farm measured in hectares of vines renders through this unchanged and
+   * the screen names no unit of its own.
+   *
+   * The maximum comes from the catalog rather than the farm, because the largest orchard
+   * reachable is whatever is still for sale towards it. A catalog that sells no land
+   * gives no maximum, and the land held is then shown alone rather than against a limit
+   * invented for it — "100 / 100 trees" would state a ceiling nothing declared.
+   */
+  const orchardFact = useMemo(() => {
+    if (opened === undefined || game === undefined) return undefined
+    const { label, unit, opening } = opened.declaration.orchard
+    const reach = maxLand(opened.catalog, opened.declaration)
+    return {
+      label,
+      value: reach > opening ? `${game.farm.land} / ${reach} ${unit}` : `${game.farm.land} ${unit}`,
+    }
+  }, [opened, game])
+
   // Memoised per open task because the browser fetches when this identity changes; a
   // fresh closure on every render would refetch the manifest on every keystroke.
   const loadSplit = useMemo(() => {
@@ -321,7 +372,7 @@ export function App({
    * the year in progress, and the outcome is kept so re-entering shows it rather than
    * drawing a fresh crop to be paid for a second time.
    */
-  function settle(outcome: SortOutcome): void {
+  function settle(outcome: SortOutcome, crop: CropView): void {
     if (game === undefined || sorting === undefined) return
     const closing = game.farm.year
     const precision = game.farm.declaration.precision
@@ -334,6 +385,9 @@ export function App({
           paidUnits: toUnits(outcome.wage, precision),
           evaluated: outcome.decided,
           counts: outcome.counts,
+          // The same record the automated path writes, from the same function: the report
+          // of a closed year must not be able to tell which labour brought the crop in.
+          harvest: recordHarvestFigures(crop, outcome.delivery, precision),
         }),
       ),
     )
@@ -362,9 +416,24 @@ export function App({
       const loaded = opened.tasks.find((task) => task.declaration.id === declaration.id)
       if (loaded === undefined) continue
 
-      const fetched = await loadEntry(loaded, labour.model.configurationId)
+      const fetched = await loadEntry(loaded, labour.model.family, labour.model.configurationId)
       if (!fetched.ok) {
         refused.push({ task: declaration, issues: fetched.issues })
+        continue
+      }
+
+      // The farm's crop for this year, drawn from what the task already holds: the pool
+      // manifest was read when the task loaded, and drawing needs its image ids and their
+      // true categories and nothing else. Same draw, same seed and same year as the one a
+      // pair of hands would be given, so the two labours bring in the same apples.
+      const crop = drawCrop(
+        declaration,
+        game.farm,
+        { imageIds: loaded.imageIds.pool ?? [], truth: loaded.truth },
+        game.seed,
+      )
+      if (!crop.ok) {
+        refused.push({ task: declaration, issues: crop.issues })
         continue
       }
 
@@ -372,19 +441,23 @@ export function App({
         declaration,
         labour.model.configurationId,
         fetched.value,
-        loaded.truth,
+        crop.crop.pieces,
       )
       if (!scored.ok) {
         refused.push({ task: declaration, issues: scored.issues })
         continue
       }
 
+      const value = valueDelivery(declaration, scored.outcome)
+
       year = bringIn(year, {
         taskId: declaration.id,
         configurationId: labour.model.configurationId,
-        paidUnits: toUnits(scored.outcome.earnings, precision),
+        family: labour.model.family,
+        paidUnits: toUnits(value.paid, precision),
         evaluated: scored.outcome.evaluated,
         counts: scored.outcome.counts,
+        harvest: recordHarvestFigures(crop.crop, value, precision),
       })
     }
 
@@ -433,7 +506,34 @@ export function App({
     const loaded = opened.tasks.find((task) => task.declaration.id === reporting)
     const crop = broughtIn(closed, reporting)
     if (loaded === undefined || crop === undefined) return undefined
-    return { declaration: loaded.declaration, year: closed.year, crop }
+
+    // Every figure below is the engine's: the rows come from the payoff table over the
+    // counts the year recorded, and the two amounts either side of the deduction come off
+    // the harvest record rather than being recomputed from a farm that has since moved on.
+    const declaration = loaded.declaration
+    const precision = opened.declaration.precision
+    const rows = earningsByCategory(declaration, crop.counts)
+    const rowEarnings = Object.fromEntries(
+      Object.entries(rows).map(([category, amount]) => [
+        category,
+        formatUnits(toUnits(amount, precision), opened.declaration),
+      ]),
+    )
+    const harvest = crop.harvest
+    const money =
+      declaration.delivery === undefined || harvest === undefined
+        ? undefined
+        : {
+            gross: formatUnits(harvest.grossUnits, opened.declaration),
+            downgrade: formatUnits(harvest.downgradeUnits, opened.declaration),
+          }
+
+    // The family the crop was brought in by, as that family's declaration labels it —
+    // the year's own record, not what the workshop happens to have selected now.
+    const family =
+      crop.family === undefined ? undefined : selectedFamily(declaration, crop.family).label
+
+    return { declaration, year: closed.year, crop, rowEarnings, money, family }
   }, [opened, game?.lastYear, reporting])
 
   /**
@@ -450,19 +550,22 @@ export function App({
     if (!playable.some((candidate) => candidate.id === task.id)) return undefined
 
     const labour = labourFor(game.slots, task.id)
-    // A model's icon and label come from what declares it, which nothing does yet; until
-    // then the configuration it was trained as is what there is to state, and that is
-    // declared data rather than a word this file made up.
-    if (labour.kind === 'model') return { label: labour.model.configurationId }
+    // A model's icon and short label are the family's own declaration, so a farm working
+    // an orchard by tree and a screen by network reads at a glance without this file
+    // learning either word.
+    if (labour.kind === 'model') {
+      const { slot } = selectedFamily(task, labour.model.family)
+      return { icon: slot.icon, label: slot.label }
+    }
     const icon = opened?.declaration.manualLabour?.icon
     return icon === undefined ? { label: manualLabel } : { icon, label: manualLabel }
   }
 
-  /** The configuration at work for one task, or undefined when its hands are. */
-  function atWorkFor(taskId: string): string | undefined {
+  /** The model at work for one task, or undefined when its hands are. */
+  function atWorkFor(taskId: string): { family: string; configurationId: string } | undefined {
     if (game === undefined) return undefined
     const labour = labourFor(game.slots, taskId)
-    return labour.kind === 'model' ? labour.model.configurationId : undefined
+    return labour.kind === 'model' ? { ...labour.model } : undefined
   }
 
   function startNewFarm(): void {
@@ -487,11 +590,38 @@ export function App({
    * so neither can touch the balance, the ledger or the year. That is the workshop's
    * guarantee, made structural rather than remembered.
    */
-  function setAtWork(taskId: string, configurationId: string): void {
+  function setAtWork(taskId: string, family: string, configurationId: string): void {
+    setGame((current) => {
+      if (current === undefined) return current
+      const declared = open?.declaration.id === taskId ? open.declaration : undefined
+      const fielded = putToWork(
+        current.slots,
+        taskId,
+        { configurationId, family },
+        {
+          tutorial: declared === undefined ? undefined : familyById(declared, family)?.tutorial,
+          completed: current.tutorials,
+        },
+      )
+      // Withheld leaves the farm exactly as it was. The workshop does not offer the
+      // control while a tutorial is outstanding, so reaching here means something went
+      // round it — and the right answer to that is to change nothing.
+      return fielded.ok ? { ...current, slots: fielded.slots } : current
+    })
+  }
+
+  /**
+   * Records a tutorial passed. Free, and it happens at most once.
+   *
+   * Completion and nothing else — no score, no attempt count, no timing. Passing one
+   * already passed writes nothing, which is what keeps "it does not come undone" and
+   * "nothing but completion is recorded" the same sentence.
+   */
+  function completeTutorial(tutorialId: string): void {
     setGame((current) =>
-      current === undefined
+      current === undefined || current.tutorials.includes(tutorialId)
         ? current
-        : { ...current, slots: putToWork(current.slots, taskId, { configurationId }) },
+        : { ...current, tutorials: [...current.tutorials, tutorialId] },
     )
   }
 
@@ -505,9 +635,33 @@ export function App({
     setHarvestRefusals((current) => current.filter((refused) => refused.task.id !== taskId))
   }
 
-  function rememberKnobs(taskId: string, values: KnobValues): void {
+  /**
+   * Keeps one family's knob values, leaving every other family's exactly as they were.
+   *
+   * Nested rather than flat, because tuning the network must not lose the tree's budget —
+   * and because a knob id is unique only within a family, so one map per task would let
+   * two families' values collide under one name.
+   */
+  function rememberKnobs(taskId: string, familyId: string, values: KnobValues): void {
     setGame((current) =>
-      current === undefined ? current : { ...current, knobs: { ...current.knobs, [taskId]: values } },
+      current === undefined
+        ? current
+        : {
+            ...current,
+            knobs: {
+              ...current.knobs,
+              [taskId]: { ...(current.knobs[taskId] ?? {}), [familyId]: values },
+            },
+          },
+    )
+  }
+
+  /** Keeps which family a task is showing. Free, and it puts nothing to work. */
+  function rememberFamily(taskId: string, familyId: string): void {
+    setGame((current) =>
+      current === undefined
+        ? current
+        : { ...current, families: { ...current.families, [taskId]: familyId } },
     )
   }
 
@@ -524,7 +678,9 @@ export function App({
 
       {notices.length === 0 ? null : <Issues title="About your saved progress" issues={notices} />}
 
-      {game === undefined || opened === undefined ? null : <FarmBar farm={game.farm} />}
+      {game === undefined || opened === undefined ? null : (
+        <FarmBar farm={game.farm} facts={orchardFact === undefined ? [] : [orchardFact]} />
+      )}
 
       {opened === undefined ||
       game === undefined ||
@@ -579,10 +735,14 @@ export function App({
             declaration={reported.declaration}
             year={reported.year}
             configurationId={reported.crop.configurationId}
+            family={reported.family}
             labour={manualLabel}
             evaluated={reported.crop.evaluated}
             earnings={formatUnits(reported.crop.paidUnits, opened.declaration)}
             counts={reported.crop.counts}
+            rowEarnings={reported.rowEarnings}
+            money={reported.money}
+            harvest={reported.crop.harvest}
           />
         </section>
       )}
@@ -616,22 +776,34 @@ export function App({
       {open === undefined || game === undefined ? null : (
         <ConfigureTask
           declaration={open.declaration}
-          loadEntry={(configurationId) => loadEntry(open, configurationId)}
+          loadEntry={(familyId, configurationId) => loadEntry(open, familyId, configurationId)}
           loadSplit={loadSplit}
           replayMs={replayMs}
           availability={
             availability === undefined ? undefined : taskAvailability(availability, open.declaration.id)
           }
           formatPrice={formatPrice}
-          initialValues={knobValuesFor(game, open.declaration)}
-          onValuesChange={(values) => rememberKnobs(open.declaration.id, values)}
+          initialFamily={selectedFamilyFor(game, open.declaration).id}
+          onFamilyChange={(familyId) => rememberFamily(open.declaration.id, familyId)}
+          initialValues={(familyId) =>
+            knobValuesFor(game, open.declaration, selectedFamily(open.declaration, familyId))
+          }
+          onValuesChange={(familyId, values) =>
+            rememberKnobs(open.declaration.id, familyId, values)
+          }
           atWork={atWorkFor(open.declaration.id)}
-          onPutToWork={(configurationId) => setAtWork(open.declaration.id, configurationId)}
+          onPutToWork={(familyId, configurationId) =>
+            setAtWork(open.declaration.id, familyId, configurationId)
+          }
           onHandBack={
             atWorkFor(open.declaration.id) === undefined
               ? undefined
               : () => clearAtWork(open.declaration.id)
           }
+          completedTutorials={game.tutorials}
+          onTutorialComplete={completeTutorial}
+          tutorialKinds={tutorialKinds}
+          tutorialBodies={tutorialBodies}
           onBack={() => setSelected(undefined)}
         />
       )}

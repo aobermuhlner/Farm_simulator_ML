@@ -15,7 +15,7 @@ import { formatUnits } from '../../../src/economy/index.js'
 import { marketView } from '../../../src/progression/index.js'
 import { Market } from './Market.js'
 import { farmDeclaration } from '../test-support/farm.js'
-import { shopCatalog } from '../test-support/progression.js'
+import { repeatShopCatalog, shopCatalog } from '../test-support/progression.js'
 
 afterEach(cleanup)
 
@@ -183,5 +183,93 @@ describe('a market for another farm renders through the same screen', () => {
       'Stone shed',
       'Weather station',
     ])
+  })
+})
+
+describe('a row the catalog permits to be bought more than once', () => {
+  function renderRepeat(held: number, balanceUnits = 200000, onBuy = vi.fn()) {
+    const owned = Array.from({ length: held }, () => 'another-row')
+    render(
+      <Market
+        view={marketView(repeatShopCatalog(), owned, balanceUnits)}
+        formatPrice={(units) => formatUnits(units, farm)}
+        onBuy={onBuy}
+        onBack={vi.fn()}
+      />,
+    )
+    return onBuy
+  }
+
+  it('shows how many have been bought and how many the catalog still permits', () => {
+    renderRepeat(2)
+    expect(screen.getByTestId('tally-another-row').textContent).toBe('2 of 5 bought, 3 to go')
+  })
+
+  it('still offers to be bought while the balance covers it', async () => {
+    const onBuy = renderRepeat(2)
+    await userEvent.click(screen.getByRole('button', { name: 'Buy Another row' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    expect(onBuy).toHaveBeenCalledWith('another-row')
+  })
+
+  it('offers no purchase at the limit, and says what it gave rather than saving for it', () => {
+    renderRepeat(5)
+    expect(screen.getByTestId('tally-another-row').textContent).toBe('All 5 bought')
+    expect(stateOf('another-row')).toBe('Owned')
+    expect(screen.queryByRole('button', { name: /^Buy / })).toBeNull()
+  })
+
+  it('is not reported as unaffordable at its limit, however little money is left', () => {
+    // No amount of money would obtain another one, so "not yet affordable" would be a
+    // lie about why the row offers nothing.
+    renderRepeat(5, 0)
+    expect(stateOf('another-row')).toBe('Owned')
+    expect(stateOf('another-row')).not.toMatch(/saving/i)
+  })
+
+  it('reports being saved for while some remain and the balance does not cover it', () => {
+    renderRepeat(2, 0)
+    expect(screen.getByTestId('tally-another-row').textContent).toBe('2 of 5 bought, 3 to go')
+    expect(stateOf('another-row')).toMatch(/saving/i)
+  })
+
+  it('says nothing about a count for a row the catalog permits once', () => {
+    renderMarket()
+    expect(screen.queryByTestId('tally-second-row')).toBeNull()
+    expect(screen.queryByTestId('tally-starter-plot')).toBeNull()
+  })
+
+  it('offers no way to sell, refund or return what it gave', () => {
+    renderRepeat(5)
+    for (const word of [/sell/i, /refund/i, /return/i]) {
+      expect(screen.queryByRole('button', { name: word })).toBeNull()
+    }
+  })
+})
+
+describe('a tutorial is nothing the market knows about', () => {
+  it('bars no purchase, to a farm that has finished nothing', () => {
+    // The market takes no tutorial state at all, which is the structural form of *Money
+    // is the only key to a purchase* surviving `model-tutorials` untouched. Every row the
+    // balance covers still offers to be bought.
+    renderMarket(200000, [])
+
+    for (const row of screen.getAllByTestId(/^state-/)) {
+      expect(row.textContent ?? '').not.toMatch(/tutorial|lesson|finish|learn/i)
+    }
+    expect(screen.getAllByRole('button', { name: /buy/i }).length).toBeGreaterThan(0)
+  })
+
+  it('presents no puzzle and opens none on a purchase', async () => {
+    const onBuy = renderMarket(200000, [])
+
+    const [first] = screen.getAllByRole('button', { name: /buy/i })
+    if (first === undefined) throw new Error('the market offers nothing to buy')
+    await userEvent.click(first)
+
+    // Buying a family and being ambushed by a puzzle would be the market saying money was
+    // not the key after all. What a purchase does here is ask for confirmation.
+    expect(document.body.textContent ?? '').not.toMatch(/tutorial/i)
+    expect(onBuy).not.toHaveBeenCalled()
   })
 })
