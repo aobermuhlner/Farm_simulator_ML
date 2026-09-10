@@ -51,5 +51,5 @@ the code that reads them third, and the artifacts last. Each group leaves the bu
 ## 7. Whole-system checks
 
 - [x] 7.1 Verify a save written before this change reopens with its money and purchases intact and its dataset knob at `starter`, and that a model it had at work is either restored on `starter` or dropped per `game-save` rather than crashing. Cover in `test/save-codec.test.ts` and `web/src/App.save.test.tsx`.
-- [ ] 7.2 Verify the full suite and the workshop end to end: `npm test`, and a manual pass through farm → workshop → training browser → market confirming `bulk` and `checked` appear, are explained, and cannot be bought.
+- [x] 7.2 Verify the full suite and the workshop end to end: `npm test`, and a manual pass through farm → workshop → training browser → market confirming `bulk` and `checked` appear, are explained, and cannot be bought.
 - [x] 7.3 Record in `training/README.md` that the shipped figures are `starter`-tier measurements fitted against `starter`'s labels, so the later tiers have something to be compared against.

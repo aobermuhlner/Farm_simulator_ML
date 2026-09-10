@@ -10,13 +10,36 @@
 
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App.js'
 import { farmDeclaration, loadsFarm } from './test-support/farm.js'
-import { appleTask as committedAppleTask, loadEntryFor } from './test-support/pool.js'
+import {
+  appleManifest,
+  appleTask as committedAppleTask,
+  loadEntryFor,
+} from './test-support/pool.js'
 import { loadsCatalog, memoryStorage, savesTo, shippedCatalog } from './test-support/progression.js'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+/**
+ * Serves the committed pool manifest, for the one walk that opens the training browser.
+ *
+ * The browser fetches it when a student asks for it, which is the whole point of it not
+ * being on the farm's startup path — so a suite that never opens the browser needs no
+ * stub, and this one does.
+ */
+function serveManifest(): void {
+  const manifest = appleManifest()
+  vi.stubGlobal('fetch', (input: string) =>
+    String(input).endsWith('manifest.json')
+      ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(manifest) } as Response)
+      : Promise.resolve({ ok: false, status: 404 } as Response),
+  )
+}
 
 const appleTask = committedAppleTask()
 const shipped = farmDeclaration()
@@ -184,5 +207,87 @@ describe('a student who has bought nothing', () => {
     expect(screen.getByTestId('tally-orchard-expansion').textContent).toBe(
       '1 of 5 bought, 4 to go',
     )
+  })
+})
+
+/**
+ * The walk `dataset-tiers`' last task asks for, scripted rather than done by hand.
+ *
+ * One session through all four screens in the order a student meets them — farm,
+ * workshop, training browser, market — against the shipped declaration, the shipped
+ * catalog, the committed pool and the committed artifacts. What it confirms is what the
+ * task names: that the two larger datasets appear, that they are explained in their own
+ * declared words, and that neither can be bought.
+ *
+ * Written as one test rather than four because the claim is about a student's path. Each
+ * screen already has its own suite; what is not asserted anywhere else is that the tier a
+ * student is fitting on survives the trip between them.
+ */
+describe('farm to workshop to the training data to the market, in one sitting', () => {
+  const family = appleTask.declaration.families[0]
+  const tiers = appleTask.declaration.datasets
+
+  it('shows the set the robot came with, and says why the others cannot be bought', async () => {
+    if (family === undefined) throw new Error('the shipped task must declare a family')
+    const [smallest, ...larger] = tiers
+    if (smallest === undefined) throw new Error('the shipped task must declare a tier')
+    const datasetKnob = family.knobs.find((knob) => knob.id === family.datasetKnob)
+    if (datasetKnob === undefined) throw new Error('the shipped family must declare its knob')
+
+    // ── The farm ────────────────────────────────────────────────────────────────
+    serveManifest()
+    renderApp()
+    expect(await screen.findByRole('heading', { name: 'The farm' })).toBeDefined()
+
+    // ── The workshop ────────────────────────────────────────────────────────────
+    await openTask()
+
+    // Every tier is on screen, so a student can see what there is to earn; only the one
+    // that came with the robot can be selected.
+    expect(optionsOf(datasetKnob.label)).toEqual(
+      tiers.map((tier, index) => ({ text: tier.id, enabled: index === 0 })),
+    )
+    // Its label quality is stated where it is offered, not only where it is browsed.
+    expect(screen.getByText(smallest.disclosure)).toBeDefined()
+    // And the tier is part of what the configuration is.
+    expect(screen.getByTestId('current-configuration').textContent).toContain(
+      `${family.datasetKnob}${smallest.id}`,
+    )
+
+    // ── The training data ───────────────────────────────────────────────────────
+    await userEvent.click(screen.getByRole('button', { name: 'See the training data' }))
+    await screen.findByRole('table')
+
+    expect(screen.getByText(smallest.label, { exact: false })).toBeDefined()
+    expect(screen.getByText(smallest.disclosure)).toBeDefined()
+    expect(screen.queryAllByRole('img')).toHaveLength(smallest.size)
+    // The composition it declares is the composition on screen.
+    const composition = screen.getByRole('table')
+    for (const category of appleTask.declaration.categories) {
+      const row = within(composition).getByRole('row', { name: new RegExp(category.label) })
+      expect(within(row).getByText(String(smallest.composition[category.id]))).toBeDefined()
+    }
+    // Nothing gives away which photographs are filed wrongly, on a tier or otherwise.
+    expect(screen.queryByText(/mislabel/i)).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the settings' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
+
+    // ── The market ──────────────────────────────────────────────────────────────
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    for (const tier of larger) {
+      // Present, and described in the catalog's own declared copy.
+      const row = screen.getByRole('heading', { level: 3, name: tier.label })
+      expect(row).toBeDefined()
+    }
+    // Neither is for sale, and each says why in words a student can act on.
+    for (const testId of ['state-bulk-photos', 'state-checked-photos']) {
+      const state = screen.getByTestId(testId)
+      expect(state.textContent).toContain('fitted')
+      expect(state.textContent).not.toBe('Owned')
+    }
+    // The orchard is the only thing a broke farmer can spend on.
+    expect(screen.getAllByRole('button', { name: /^Buy / })).toHaveLength(1)
   })
 })
