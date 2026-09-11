@@ -19,9 +19,18 @@
  * scored over all of it. That is why photographs recur. A crop of six thousand cannot be
  * drawn from a thousand distinct pictures, so each category's pictures are dealt out in
  * whole passes and the remainder is taken from a shuffle — every picture used before any
- * is used again. `presented` is the separate, smaller question of what one pair of hands
- * is shown, and that stays distinct, because the same picture returning asks a person
- * whether they remember what they answered rather than what the apple is.
+ * is used again. `presented` is the separate question of what one pair of hands is shown,
+ * and that stays distinct, because the same picture returning asks a person whether they
+ * remember what they answered rather than what the apple is.
+ *
+ * Nothing declares how much of the crop a person may be offered. It is the whole of it,
+ * and the one thing that bounds it is how many distinct photographs the split holds: once
+ * a category needs more than there are, the portion shown is cut back to what that
+ * category can supply and every other category is cut by the same fraction, so the part
+ * a person sorts is a smaller crop rather than a different one. That is what makes hand
+ * sorting stop growing with the orchard — a real shortage of pictures rather than a
+ * number — and it is why two crops of different sizes with the same mix, both past the
+ * bound, put the same counts in front of a person and pay the same wage.
  *
  * Every failure refuses and names its cause. There is no partial crop: half a harvest
  * scored as a whole one is exactly the plausible-looking wrong number the refusals in
@@ -128,6 +137,31 @@ export function allocate(total: number, shares: readonly number[]): number[] {
   }
 
   return counts
+}
+
+/**
+ * How much of a crop can be put in front of one person, as a fraction of the whole.
+ *
+ * All of it, unless some category needs more distinct photographs than the split holds of
+ * it. Then it is whichever category runs shortest that sets the fraction — green, against
+ * the shipped pool, because the split over-samples worms on purpose and the orchard is
+ * mostly red — and every category is cut by that same fraction rather than by its own.
+ *
+ * Cutting each category to its own supply instead would hand a hand sorter a crop richer
+ * in whatever the split happened to hold plenty of, and their reason to sort by hand is
+ * to compare what they managed against what their robot manages on the same orchard.
+ *
+ * The fraction falls as the orchard grows and the counts it yields do not, which is why
+ * what one pair of hands can bring in stops rising with the land: `count x portion` is
+ * `share x min(held / share)`, and the crop's size cancels out of it.
+ */
+export function presentablePortion(counts: readonly number[], held: readonly number[]): number {
+  let portion = 1
+  counts.forEach((count, index) => {
+    if (count <= 0) return
+    portion = Math.min(portion, (held[index] ?? 0) / count)
+  })
+  return portion
 }
 
 /**
@@ -273,18 +307,21 @@ export function drawCrop(
   )
   const counts = allocate(size, shares)
 
-  // What one pair of hands reaches, as its own allocation of the same year's shares. It
-  // has to be the year's mix rather than a slice off the front of the crop, because the
-  // wage must not move when the orchard grows past what one person can sort — two crops
-  // of different sizes sorted the same way pay the same, and a sampled mix would not.
-  const perHarvest = Math.min(size, declaration.handSorting.perHarvest)
-  const targets = allocate(perHarvest, shares)
-
   const available = new Map<CategoryId, string[]>()
   for (const category of categories) available.set(category, [])
   for (const imageId of split.imageIds) {
     available.get(split.truth[imageId] ?? '')?.push(imageId)
   }
+
+  // What one pair of hands is offered: the whole crop, cut back only by the photographs
+  // there are. Allocated over the crop's own counts rather than over the year's shares,
+  // so the portion is the crop scaled down and the two roundings cannot disagree about a
+  // piece.
+  const portion = presentablePortion(
+    counts,
+    categories.map((category) => (available.get(category) ?? []).length),
+  )
+  const targets = allocate(Math.floor(size * portion), counts)
 
   const drawn: CropImage[] = []
   const held: Record<CategoryId, number> = {}
@@ -310,10 +347,9 @@ export function drawCrop(
       )
       return
     }
-    // What one person is shown must be distinct pictures, so their share of this category
-    // is bounded by how many the split holds. That bound is far above what one pair of
-    // hands reaches against any real pool; it is here so a small one shortens the sort
-    // rather than refusing the crop a model could have brought in perfectly well.
+    // The portion was cut to fit the shortest category, so this holds already; it is
+    // stated rather than assumed because a picture shown twice is a different question
+    // put to a person, and nothing downstream would notice one.
     targets[index] = Math.min(targets[index] ?? 0, pictures.length)
     if (wanted > pictures.length) recurred = true
     for (const imageId of deal(pictures, wanted, (of) => stream.shuffle(of))) {
@@ -327,9 +363,14 @@ export function drawCrop(
   const pieces = stream.shuffle(drawn)
 
   // The pieces themselves, in the crop's own order, taken until each category's share of
-  // what one person reaches is filled and skipping any picture already put in front of
-  // them. So a person sorts the crop rather than a sample standing in for it, and never
-  // sees one picture twice however often the crop repeats it.
+  // the portion is filled and skipping any picture already put in front of them. So a
+  // person sorts the crop rather than a sample standing in for it, and never sees one
+  // picture twice however often the crop repeats it.
+  //
+  // No category is ever made up from another's pictures when its own run short. A portion
+  // richer in one kind of apple than the crop it stands for would make hand sorting a
+  // different task from the one the robot is doing on the same orchard, rather than a
+  // smaller one, and the comparison between the two is the whole reason to sort by hand.
   const quota = new Map(categories.map((category, index) => [category, targets[index] ?? 0]))
   const reachable = targets.reduce((sum, count) => sum + count, 0)
   const presented: CropImage[] = []
@@ -342,19 +383,6 @@ export function drawCrop(
     quota.set(piece.category, left - 1)
     shown.add(piece.imageId)
     presented.push(piece)
-  }
-  // Whole pieces are allocated twice, over the crop and over what one person reaches, and
-  // the two roundings can leave a category wanting one more piece than the crop drew of
-  // it. The shortfall is made up from the crop in its own order rather than left short:
-  // the count presented is what the task declares, and a crop one piece light would be
-  // paid as a whole one.
-  if (presented.length < reachable) {
-    for (const piece of pieces) {
-      if (presented.length >= reachable) break
-      if (shown.has(piece.imageId)) continue
-      shown.add(piece.imageId)
-      presented.push(piece)
-    }
   }
 
   return {

@@ -16,10 +16,11 @@ export {
   CROP_TOO_SMALL,
   drawCrop,
   drawShares,
+  presentablePortion,
 } from './crop.js'
 
-export type { Decision, Mistake, SortOutcome, Throughput } from './tally.js'
-export { measureSort } from './tally.js'
+export type { Decision, Mistake, SortOutcome, StopChoice, Throughput } from './tally.js'
+export { measureSort, whatStoppingCosts } from './tally.js'
 
 export type { Stream } from './random.js'
 export { createStream, streamFor } from './random.js'

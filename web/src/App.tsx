@@ -39,6 +39,7 @@ import {
   buyItem,
   computeAvailability,
   itemById,
+  benchView,
   marketView,
   maxLand,
   taskAvailability,
@@ -272,6 +273,20 @@ export function App({
       game.owned,
     )
   }, [opened, game])
+
+  /**
+   * Whether one family of one task may be selected, for the screens that open at one.
+   *
+   * The progression module's own answer, threaded in rather than worked out again: a
+   * screen that decided for itself could open a task on a model the farm cannot use.
+   */
+  function familyAvailableFor(taskId: string): ((familyId: string) => boolean) | undefined {
+    if (availability === undefined) return undefined
+    const task = taskAvailability(availability, taskId)
+    if (task === undefined) return undefined
+    return (familyId) =>
+      task.families.find((entry) => entry.familyId === familyId)?.available ?? true
+  }
 
   /**
    * The orchard, as the persistent bar's first supplied summary fact.
@@ -755,6 +770,7 @@ export function App({
           outcome={settled[sorting.farm.year]}
           onSettle={settle}
           formatAmount={formatAmount}
+          cropComposition={sorting.farm.declaration.cropComposition}
           automation={automation}
           onBack={() => setSorting(undefined)}
           now={now}
@@ -763,7 +779,13 @@ export function App({
 
       {opened === undefined || game === undefined || !inMarket || sorting !== undefined ? null : (
         <Market
-          view={marketView(opened.catalog, game.owned, game.farm.balance)}
+          view={marketView(
+            opened.catalog,
+            opened.tasks.map((task) => task.declaration),
+            opened.declaration,
+            game.owned,
+            game.farm.balance,
+          )}
           formatPrice={formatPrice}
           onBuy={buy}
           onBack={() => {
@@ -774,7 +796,7 @@ export function App({
         />
       )}
 
-      {open === undefined || game === undefined ? null : (
+      {open === undefined || game === undefined || opened === undefined ? null : (
         <ConfigureTask
           declaration={open.declaration}
           loadEntry={(familyId, configurationId) => loadEntry(open, familyId, configurationId)}
@@ -784,7 +806,9 @@ export function App({
             availability === undefined ? undefined : taskAvailability(availability, open.declaration.id)
           }
           formatPrice={formatPrice}
-          initialFamily={selectedFamilyFor(game, open.declaration).id}
+          initialFamily={
+            selectedFamilyFor(game, open.declaration, familyAvailableFor(open.declaration.id))?.id
+          }
           onFamilyChange={(familyId) => rememberFamily(open.declaration.id, familyId)}
           initialValues={(familyId) =>
             knobValuesFor(game, open.declaration, selectedFamily(open.declaration, familyId))
@@ -805,7 +829,13 @@ export function App({
           onTutorialComplete={completeTutorial}
           tutorialKinds={tutorialKinds}
           tutorialBodies={tutorialBodies}
-          onBack={() => setSelected(undefined)}
+          bench={benchView(open.declaration, opened.catalog, game.owned, game.farm.balance)}
+          onBuyUpgrade={buy}
+          purchaseRefusal={refusal}
+          onBack={() => {
+            setRefusal(undefined)
+            setSelected(undefined)
+          }}
         />
       )}
     </main>

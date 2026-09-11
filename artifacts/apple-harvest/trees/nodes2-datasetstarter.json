@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.2.0",
+  "taskId": "apple-harvest",
+  "familyId": "decision-tree",
+  "configurationId": "nodes2-datasetstarter",
+  "model": {
+    "splits": [
+      {
+        "feature": "darkSpotArea",
+        "threshold": 0.0205,
+        "whenAbove": [
+          0.08,
+          0.05,
+          0.87
+        ]
+      },
+      {
+        "feature": "redness",
+        "threshold": 0.4513,
+        "whenAbove": [
+          0.86,
+          0.04,
+          0.1
+        ]
+      }
+    ],
+    "otherwise": [
+      0.09,
+      0.78,
+      0.13
+    ]
+  }
+}

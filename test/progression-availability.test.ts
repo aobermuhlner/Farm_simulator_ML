@@ -10,7 +10,14 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { computeAvailability, knobAvailability, lockedValue, taskAvailability } from '../src/progression/index.js'
+import {
+  computeAvailability,
+  declaredValues,
+  knobAvailability,
+  lockedValue,
+  taskAvailability,
+} from '../src/progression/index.js'
+import { configurationId } from '../src/task/configId.js'
 import { firstFamily } from '../src/task/families.js'
 import { appleDeclaration } from './helpers/apple.js'
 import { loadRawDeclaration } from './helpers/load-raw.js'
@@ -264,5 +271,97 @@ describe('a dataset tier is gated exactly as any other knob value is', () => {
       'bulk',
       'checked',
     ])
+  })
+})
+
+describe('regrouping the catalog changed nothing a student can select', () => {
+  /**
+   * Every configuration reachable from the shipped catalog, per family.
+   *
+   * The whole powerset of what can be owned, because a purchase is what widens the set:
+   * checking full ownership alone would miss a family that a purchase made *un*reachable.
+   * A family the ownership does not open contributes nothing, which is the point.
+   */
+  function selectable(): Readonly<Record<string, readonly string[]>> {
+    const catalog = soundCatalog(shippedCatalogJson(), shippedFarm())
+    const obtainable = catalog.items
+      .filter((item) => item.priceUnits !== undefined || catalog.ownedAtStart.includes(item.id))
+      .map((item) => item.id)
+    const ownerships: string[][] = [[]]
+    for (const id of obtainable) {
+      for (const owned of [...ownerships]) ownerships.push([...owned, id])
+    }
+
+    const reached: Record<string, Set<string>> = {}
+    for (const owned of ownerships) {
+      const task = taskAvailability(computeAvailability(catalog, tasks, owned), apple.id)
+      for (const declared of apple.families) {
+        const open = task?.families.find((entry) => entry.familyId === declared.id)?.available
+        if (open !== true) continue
+        let rows: (readonly [string, string | number])[][] = [[]]
+        for (const knob of declared.knobs) {
+          const entry = knobAvailability(task!, knob.id)
+          const next: (readonly [string, string | number])[][] = []
+          for (const value of declaredValues(knob)) {
+            const permitted =
+              entry?.values.find((candidate) => String(candidate.value) === String(value))
+                ?.available ?? true
+            if (!permitted) continue
+            for (const row of rows) next.push([...row, [knob.id, value] as const])
+          }
+          rows = next
+        }
+        reached[declared.id] ??= new Set()
+        for (const row of rows) {
+          reached[declared.id]!.add(
+            configurationId({ taskId: apple.id, familyId: declared.id, values: row }),
+          )
+        }
+      }
+    }
+    return Object.fromEntries(
+      Object.entries(reached).map(([id, set]) => [id, [...set].sort()]),
+    )
+  }
+
+  /**
+   * The identifiers a student could select before the shelves were rearranged.
+   *
+   * Pinned rather than derived, because "the same as it computes now" would agree with
+   * itself however the catalog moved. The counter an item stands at is where it is
+   * bought and nothing more, and this is what makes that testable.
+   */
+  const BEFORE: Readonly<Record<string, readonly string[]>> = {
+    convolutional: [
+      'blocks2-channels16-regularization1-dropout0-datasetstarter',
+      'blocks2-channels32-regularization1-dropout0-datasetstarter',
+      'blocks2-channels8-regularization1-dropout0-datasetstarter',
+    ],
+    'decision-tree': ['nodes2-datasetstarter', 'nodes4-datasetstarter', 'nodes6-datasetstarter'],
+  }
+
+  it('reaches exactly the configurations it reached before, for both families', () => {
+    expect(selectable()).toEqual(BEFORE)
+  })
+
+  it('covers every one of them with a shipped model, for both families', () => {
+    // The other half of *nothing selectable changed*: the set above is the same, and
+    // every identifier in it still resolves to a model that shipped.
+    const reached = selectable()
+    expect(Object.keys(reached).sort()).toEqual(
+      apple.families.map((declared) => declared.id).sort(),
+    )
+
+    for (const declared of apple.families) {
+      // Whichever of the two a family ships: one directory of models, one index.
+      const store = declared.models ?? declared.predictions
+      if (store === undefined) throw new Error(`family "${declared.id}" ships nothing`)
+      const index = JSON.parse(readFileSync(join(process.cwd(), store, 'index.json'), 'utf8')) as {
+        configurations: Record<string, unknown>
+      }
+      for (const id of reached[declared.id] ?? []) {
+        expect(Object.keys(index.configurations), `${declared.id} ${id}`).toContain(id)
+      }
+    }
   })
 })

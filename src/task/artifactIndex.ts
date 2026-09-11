@@ -15,7 +15,7 @@
  * See openspec/changes/prediction-artifacts/specs/prediction-artifacts/spec.md.
  */
 
-import type { ConfigurationEntry, SplitPredictions, TrainingEpoch } from './artifact.js'
+import type { ConfigurationEntry, SplitPredictions, TrainingStep } from './artifact.js'
 import { ID_SEPARATOR } from './configId.js'
 import type { ModelFamilyDeclaration, TaskDeclaration } from './types.js'
 import type { ValidationIssue } from './validate.js'
@@ -47,7 +47,20 @@ export interface ConfigurationRecord {
    * against the identifier at load, so the two cannot drift apart.
    */
   readonly tier: string
-  readonly epochs: number
+  /**
+   * How many steps the run performed, or nothing when it performed none.
+   *
+   * A step, not an epoch: what one *is* comes from the model family, so a reviewer can
+   * count a run's steps without knowing which family produced it. Optional because a
+   * family may record no history at all — a fitted tree that is authored rather than
+   * grown has no run to count — and `model-families` already requires that such a
+   * family declare no history rather than declare an empty one.
+   *
+   * Absent here and present in the file, or the other way round, is the disagreement
+   * `readConfigurationFile` refuses: the provenance and the history are two statements
+   * about one run and they may not differ.
+   */
+  readonly steps?: number
   readonly seed: number
   readonly pipeline: { readonly revision: string; readonly dirty: boolean }
   readonly architecture: {
@@ -85,11 +98,16 @@ export const UNTRAINED_CONFIGURATION = 'untrained-configuration'
 /** Field names that would make an artifact state ground truth or a decision. */
 const FORBIDDEN_FIELDS = ['category', 'truth', 'label', 'action', 'correct']
 
+/**
+ * What every record must carry, whatever its family records about its run.
+ *
+ * The step count is not among them, and its absence is the statement that the run
+ * performed no steps. It is read separately, under either spelling — see `stepsIn`.
+ */
 const REQUIRED_RECORD_FIELDS = [
   'file',
   'knobs',
   'tier',
-  'epochs',
   'seed',
   'pipeline',
   'architecture',
@@ -139,6 +157,18 @@ function tierIn(configurationId: string, knobId: string): string | undefined {
   return undefined
 }
 
+/**
+ * How many steps a record says its run performed, or nothing when it says none.
+ *
+ * `steps` is the vocabulary; `epochs` is what the three shipped convolutional records
+ * still write, and reading both is what lets the word move without a retrain. REMOVE
+ * THE `epochs` FALLBACK with the `heirloom-cultivars` retrain, alongside the one in
+ * `stepOf`.
+ */
+function stepsIn(raw: Record<string, unknown>): unknown {
+  return raw.steps ?? raw.epochs
+}
+
 function readRecord(
   id: string,
   raw: unknown,
@@ -163,6 +193,18 @@ function readRecord(
     }
   }
   if (!complete) return undefined
+
+  const steps = stepsIn(raw)
+  if (steps !== undefined && (typeof steps !== 'number' || !Number.isInteger(steps) || steps < 1)) {
+    issues.push(
+      issue(
+        'malformed-provenance',
+        `Configuration "${id}" records ${JSON.stringify(steps)} steps, which is not a count of them.`,
+        id,
+      ),
+    )
+    return undefined
+  }
 
   const pipeline = raw.pipeline
   if (!isRecord(pipeline) || typeof pipeline.revision !== 'string' || pipeline.revision === '') {
@@ -198,7 +240,9 @@ function readRecord(
     }
   }
 
-  return raw as unknown as ConfigurationRecord
+  // Normalized onto `steps`, so nothing past the reader has to know which spelling the
+  // record it came from happened to use.
+  return { ...(raw as unknown as ConfigurationRecord), steps: steps as number | undefined }
 }
 
 /**
@@ -389,34 +433,51 @@ export function coverageIssue(index: LoadedIndex, configurationId: string): Vali
   }
 }
 
+/**
+ * Which step one history entry describes, whichever key it is written under.
+ *
+ * The vocabulary is "step" and the on-disk key still says `epoch` for the three
+ * convolutional artifacts already shipped. Renaming the key now would invalidate all
+ * three and force a retrain this change exists not to cause, so the reader accepts both
+ * and prefers `step`.
+ *
+ * REMOVE THE `epoch` FALLBACK when `heirloom-cultivars` retrains the convolutional
+ * artifacts (§11, change 14). That retrain rewrites every shipped file anyway, so it is
+ * the moment the old key stops existing and this branch stops earning its keep.
+ */
+function stepOf(entry: Record<string, unknown>): unknown {
+  return entry.step ?? entry.epoch
+}
+
 function readHistory(
   id: string,
   raw: unknown,
-  epochs: number,
+  steps: number,
   issues: ValidationIssue[],
-): readonly TrainingEpoch[] | undefined {
+): readonly TrainingStep[] | undefined {
   if (!Array.isArray(raw) || raw.length === 0) {
     issues.push(issue('missing-history', `Configuration "${id}" carries no training history.`, id))
     return undefined
   }
-  if (raw.length !== epochs) {
+  if (raw.length !== steps) {
     issues.push(
       issue(
         'history-length-mismatch',
-        `Configuration "${id}" records ${epochs} epochs but its history holds ${raw.length}.`,
+        `Configuration "${id}" records ${steps} steps but its history holds ${raw.length}.`,
         id,
       ),
     )
     return undefined
   }
+  const history: TrainingStep[] = []
   for (let index = 0; index < raw.length; index += 1) {
     const entry: unknown = raw[index]
     const expected = index + 1
-    if (!isRecord(entry) || entry.epoch !== expected) {
+    if (!isRecord(entry) || stepOf(entry) !== expected) {
       issues.push(
         issue(
           'history-not-contiguous',
-          `Configuration "${id}" has no entry for epoch ${expected}; epochs must run from 1 to ${epochs} with none missing or repeated.`,
+          `Configuration "${id}" has no entry for step ${expected}; steps must run from 1 to ${steps} with none missing or repeated.`,
           id,
         ),
       )
@@ -425,7 +486,7 @@ function readHistory(
     for (const field of ['trainLoss', 'valLoss'] as const) {
       if (typeof entry[field] !== 'number' || !Number.isFinite(entry[field])) {
         issues.push(
-          issue('malformed-history', `Configuration "${id}" epoch ${expected} records no usable ${field}.`, id),
+          issue('malformed-history', `Configuration "${id}" step ${expected} records no usable ${field}.`, id),
         )
         return undefined
       }
@@ -438,17 +499,39 @@ function readHistory(
         issues.push(
           issue(
             'malformed-history',
-            `Configuration "${id}" epoch ${expected} records no usable ${field}; accuracies are shares in 0 to 1.`,
+            `Configuration "${id}" step ${expected} records no usable ${field}; accuracies are shares in 0 to 1.`,
             id,
           ),
         )
         return undefined
       }
     }
+    // Normalized to the step vocabulary on the way in, so nothing past the reader has to
+    // know which key the file it came from happened to use.
+    history.push({
+      step: expected,
+      trainLoss: entry.trainLoss as number,
+      valLoss: entry.valLoss as number,
+      trainAccuracy: entry.trainAccuracy as number,
+      valAccuracy: entry.valAccuracy as number,
+    })
   }
-  return raw as readonly TrainingEpoch[]
+  return history
 }
 
+/**
+ * One split's stored distributions, checked against the manifest's own enumeration.
+ *
+ * The enumerated half of completeness. An artifact that *stores* its distributions
+ * satisfies "every manifest image of both splits, exactly once" by being counted against
+ * the pool: a name the manifest does not declare, a manifest image the entry set omits,
+ * or a repeat is a refusal naming the configuration and the defect.
+ *
+ * An artifact that stores a fitted *model* has no set to count and satisfies the same
+ * requirement structurally instead — see `modelSpanIssues` in `src/families/model.ts`.
+ * The two forms are deliberately separate functions rather than one with a mode: what
+ * they check has nothing in common but the sentence they are both discharging.
+ */
 function readSplit(
   id: string,
   split: string,
@@ -615,7 +698,24 @@ export function readConfigurationFile(
 
   if (issues.length > 0) return { ok: false, issues }
 
-  const history = readHistory(configurationId, raw.history, record.epochs, issues)
+  // A record that counts no steps describes a configuration with no run to replay, and
+  // its file carries no history. The two statements must agree in both directions: a
+  // history beside a record that counts nothing is as much a disagreement as a record
+  // counting forty beside a history of ten, and neither is repaired into the other.
+  let history: readonly TrainingStep[] | undefined
+  if (record.steps === undefined) {
+    if (raw.history !== undefined) {
+      issues.push(
+        issue(
+          'history-length-mismatch',
+          `Configuration "${configurationId}" records no steps but carries a history, so nothing can say how long its run was.`,
+          configurationId,
+        ),
+      )
+    }
+  } else {
+    history = readHistory(configurationId, raw.history, record.steps, issues)
+  }
   const predictions: Record<string, SplitPredictions> = {}
   const rows = isRecord(raw.predictions) ? raw.predictions : undefined
   if (rows === undefined) {
@@ -669,10 +769,13 @@ export function readConfigurationFile(
     }
   }
 
-  if (issues.length > 0 || history === undefined) return { ok: false, issues }
+  if (issues.length > 0) return { ok: false, issues }
 
   return {
     ok: true,
-    entry: { history, predictions: predictions as ConfigurationEntry['predictions'] },
+    entry: {
+      ...(history === undefined ? {} : { history }),
+      predictions: predictions as ConfigurationEntry['predictions'],
+    },
   }
 }

@@ -10,17 +10,21 @@
  * See openspec/changes/cnn-architecture/specs/network-diagram/spec.md.
  */
 
-import type { ResolvedArchitecture } from '../../../../src/task/diagram.js'
+import type { ResolvedArchitecture, TreePath } from '../../../../src/task/diagram.js'
 import { CnnDiagram } from './CnnDiagram.js'
 import { FeedforwardDiagram } from './FeedforwardDiagram.js'
+import { TreeDiagram } from './TreeDiagram.js'
 
 export interface ArchitectureDiagramProps {
   readonly architecture: ResolvedArchitecture
+  /** One apple's route through the drawing, for a kind that can trace one. */
+  readonly path?: TreePath
 }
 
-export function ArchitectureDiagram({ architecture }: ArchitectureDiagramProps) {
+export function ArchitectureDiagram({ architecture, path }: ArchitectureDiagramProps) {
   if (architecture.kind === 'feedforward') {
     return <FeedforwardDiagram architecture={architecture} />
   }
-  return <CnnDiagram architecture={architecture} />
+  if (architecture.kind === 'cnn') return <CnnDiagram architecture={architecture} />
+  return <TreeDiagram architecture={architecture} path={path} />
 }

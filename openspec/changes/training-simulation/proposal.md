@@ -43,10 +43,13 @@ because the separation is real and not because the screen implies it.
   who catches the game lying about a mechanism stops trusting its claims too.
 - Pair the curves with the train-versus-held-out accuracy gap, which is the clearest
   overfitting visual available and now has something to show.
-- **Only artifact-backed families have a history to replay.** A live family's workshop
-  diagnostic is its mistakes list (`decision-tree-builder`) instead. The workshop must
-  present whichever the active family declares, without naming either — which is the
-  `no-task-specific-code` invariant applied to a new noun.
+- **Not every family has a history to replay.** `decision-tree-builder` was to have
+  supplied the counter-example, a live family diagnosed by its mistakes list; that change is
+  withdrawn (see `fitted-tree` — Why) and the tree family supplies it instead, by declaring
+  no history at all while its trees are placeholders. The workshop must present whichever
+  diagnostic the active family declares, without naming either — the `no-task-specific-code`
+  invariant applied to a new noun. `model-families` already requires a history-less family to
+  be shown no curve and no empty axis; this change owes the positive half of that.
 - The replay is a workshop activity: free, unlimited, and no money moves. That is a
   requirement, because it is what makes forming hypotheses cheap.
 

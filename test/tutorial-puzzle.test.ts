@@ -14,7 +14,7 @@
  * See openspec/changes/fitted-tree-tutorial/specs/fitted-tree-tutorial/spec.md.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { validateDeclaration } from '../src/task/validate.js'
@@ -83,8 +83,14 @@ function drifted(puzzle: LabelTheLeavesPuzzle): readonly string[] {
 }
 
 describe('the authored puzzle is declared data the validator accepts', () => {
-  it('is committed where the change that ships its family will pick it up', () => {
-    expect(LEAF_TUTORIAL_PATH).toBe('declarations/tutorials/label-the-leaves.json')
+  it('is committed on the family that ships with it, in one copy', () => {
+    // It waited on its own at `declarations/tutorials/label-the-leaves.json` while the
+    // family it teaches did not exist. `fitted-tree` shipped that family and the block
+    // moved onto it, which is what makes the puzzle exercised here the puzzle played.
+    expect(LEAF_TUTORIAL_PATH).toBe('declarations/apple-harvest.json')
+    expect(existsSync(join(process.cwd(), 'declarations/tutorials/label-the-leaves.json'))).toBe(
+      false,
+    )
     expect(leafTutorial().kind).toBe(LABEL_THE_LEAVES)
   })
 

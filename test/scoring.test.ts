@@ -28,19 +28,19 @@ function run(knobs: Readonly<Record<string, unknown>>, split: 'training' | 'pool
 
 describe('earnings are the sum of payoff entries', () => {
   it('earns little on the over-regularized configuration, which crates wormy apples', () => {
-    // 3 reds crated as red at +0.40, one green crated as green at +0.20, and 2 wormy
-    // apples crated as red at -0.50 each. The per-apple fine is mild now that the batch
+    // 3 reds crated as red at +1.20, one green crated as green at +0.60, and 2 wormy
+    // apples crated as red at -1.50 each. The per-apple fine is mild now that the batch
     // term carries the worm lesson, so this is a thin year rather than a losing one.
     const { outcome } = run(OVER_REGULARIZED, 'pool')
     expect(outcome.evaluated).toBe(6)
-    expect(outcome.earnings).toBeCloseTo(0.4, 10)
+    expect(outcome.earnings).toBeCloseTo(1.2, 10)
   })
 
   it('earns little on the over-selective configuration, which downgrades good reds', () => {
-    // One red crated as red at +0.40, two more crated as green at +0.20 each, one green
-    // crated as green at +0.20, and both worms thrown away at nothing.
+    // One red crated as red at +1.20, two more crated as green at +0.60 each, one green
+    // crated as green at +0.60, and both worms thrown away at nothing.
     const { outcome } = run(OVER_SELECTIVE, 'pool')
-    expect(outcome.earnings).toBeCloseTo(1, 10)
+    expect(outcome.earnings).toBeCloseTo(3, 10)
   })
 
   it('equals the sum of the per-image payoffs it reports', () => {

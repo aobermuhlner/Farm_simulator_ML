@@ -22,14 +22,36 @@ import type { FarmDeclaration } from '../economy/index.js'
 import { toUnits } from '../economy/index.js'
 import type { ValidationIssue } from '../task/validate.js'
 
-/** A heading items are shown under in the market, in the order the catalog lists them. */
+/** The counters a group's items can stand at. One anywhere else is refused by name. */
+export const COUNTERS = ['market', 'bench'] as const
+
+/** Where a group's items are bought: the farm's market, or the workshop's bench. */
+export type Counter = (typeof COUNTERS)[number]
+
+/**
+ * A heading items are shown under, in the order the catalog lists them.
+ *
+ * A group carries two facts beyond its heading: the counter its items stand at, and the
+ * part of the farm they belong to. Both are on the group rather than on the item, so
+ * that a group stays one shelf — two items of one group standing at different counters
+ * would leave the heading meaning nothing — and so that a missing field is a refusal
+ * rather than a silent default that moves an item to another shop.
+ *
+ * The part of the farm is a task id, because the parts of the farm *are* the tasks. A
+ * catalog declaring its own places would name the apple orchard twice, in two files,
+ * with nothing able to say which is right when one is edited. A group naming no task
+ * belongs to the farm rather than to any one part of it.
+ */
 export interface GroupDeclaration {
   readonly id: string
   readonly label: string
+  readonly soldAt: Counter
+  /** The task its items are for, or absent when they belong to the whole farm. */
+  readonly task?: string
 }
 
 /** Kinds of thing an item can open. A kind not in this list is refused, never ignored. */
-export const UNLOCK_KINDS = ['knob-values', 'farm-land'] as const
+export const UNLOCK_KINDS = ['knob-values', 'farm-land', 'model-family'] as const
 
 /** Values of one knob of one task that owning an item makes selectable. */
 export interface KnobValuesUnlock {
@@ -51,7 +73,25 @@ export interface FarmLandUnlock {
   readonly units: number
 }
 
-export type Unlock = KnobValuesUnlock | FarmLandUnlock
+/**
+ * A whole kind of model that owning the item makes selectable.
+ *
+ * Its own kind rather than a knob value, because a family is not a setting of anything:
+ * it brings its own knobs, its own drawing and its own models, and a knob whose values
+ * were family ids would put every family's identity into one task-level list.
+ *
+ * What it opens is *selection*, and only that. Whether a family may be put to work has
+ * a second input — its declared tutorial — which `model-tutorials` owns and which no
+ * purchase touches. Buying a family and being handed a puzzle is the market saying that
+ * money was not the key, which the market has promised it will never say.
+ */
+export interface ModelFamilyUnlock {
+  readonly kind: 'model-family'
+  readonly task: string
+  readonly family: string
+}
+
+export type Unlock = KnobValuesUnlock | FarmLandUnlock | ModelFamilyUnlock
 
 export interface CatalogItem {
   readonly id: string
@@ -147,8 +187,48 @@ function readGroups(raw: unknown, issues: ValidationIssue[]): GroupDeclaration[]
       )
       return
     }
+    if (entry.soldAt === undefined || entry.soldAt === null) {
+      issues.push(
+        issue(
+          'missing-field',
+          `Group "${entry.id}" does not say which counter its items are sold at; it must declare "soldAt" as one of ${COUNTERS.join(', ')}.`,
+          `groups[${index}].soldAt`,
+        ),
+      )
+      return
+    }
+    if (
+      typeof entry.soldAt !== 'string' ||
+      !COUNTERS.includes(entry.soldAt as (typeof COUNTERS)[number])
+    ) {
+      issues.push(
+        issue(
+          'unknown-counter',
+          `Group "${entry.id}" is sold at ${JSON.stringify(entry.soldAt)}, which is not a counter this build has; it knows ${COUNTERS.join(', ')}.`,
+          `groups[${index}].soldAt`,
+        ),
+      )
+      return
+    }
+    // Absent is the farm-wide reading, so only a present-but-malformed task is refused.
+    // Whether the task it names exists is a cross-file question `check.ts` answers.
+    if (entry.task !== undefined && entry.task !== null && !isNonEmptyString(entry.task)) {
+      issues.push(
+        issue(
+          'malformed-field',
+          `Group "${entry.id}" field "task" must be a non-empty task id when it is declared.`,
+          `groups[${index}].task`,
+        ),
+      )
+      return
+    }
     seen.add(entry.id)
-    groups.push({ id: entry.id, label: entry.label })
+    groups.push({
+      id: entry.id,
+      label: entry.label,
+      soldAt: entry.soldAt as Counter,
+      ...(isNonEmptyString(entry.task) ? { task: entry.task } : {}),
+    })
   })
   return groups
 }
@@ -209,6 +289,21 @@ function readOpens(id: string, raw: unknown, issues: ValidationIssue[]): Unlock[
         return
       }
       opens.push({ kind: 'farm-land', units })
+      return
+    }
+    if (kind === 'model-family') {
+      if (!isNonEmptyString(entry.task) || !isNonEmptyString(entry.family)) {
+        issues.push(
+          issue(
+            'malformed-entry',
+            `Item "${id}" opens a model family without naming a task and a family.`,
+            where,
+          ),
+        )
+        usable = false
+        return
+      }
+      opens.push({ kind: 'model-family', task: entry.task, family: entry.family })
       return
     }
     if (!isNonEmptyString(entry.task) || !isNonEmptyString(entry.knob)) {
@@ -293,7 +388,7 @@ function readPrice(
 function readItem(
   raw: unknown,
   index: number,
-  groupIds: readonly string[],
+  groups: readonly GroupDeclaration[],
   farm: FarmDeclaration,
   issues: ValidationIssue[],
 ): CatalogItem | undefined {
@@ -334,7 +429,8 @@ function readItem(
   }
   if (!complete || id === undefined) return undefined
 
-  if (!groupIds.includes(raw.group as string)) {
+  const group = groups.find((candidate) => candidate.id === raw.group)
+  if (group === undefined) {
     issues.push(
       issue(
         'unknown-group',
@@ -390,6 +486,24 @@ function readItem(
   if (opens === undefined) return undefined
   if (forSale && priceUnits === undefined) return undefined
 
+  // What the bench is for is reading a price against the knob it moves, so an item with
+  // no one knob to sit under has no place there. Land and a whole family are refused
+  // here, where no task is needed to see them; reaching across two families needs the
+  // declarations to resolve a knob to a family, and is `check.ts`'s half of this rule.
+  if (group.soldAt === 'bench') {
+    const stray = opens.find((unlock) => unlock.kind !== 'knob-values')
+    if (stray !== undefined) {
+      issues.push(
+        issue(
+          'bench-item-is-no-upgrade',
+          `Item "${id}" stands at the bench but opens something of kind "${stray.kind}"; only values of one model family's knobs are sold there.`,
+          `${id}.opens`,
+        ),
+      )
+      return undefined
+    }
+  }
+
   return {
     id,
     group: raw.group as string,
@@ -431,7 +545,6 @@ export function validateCatalog(input: unknown, farm: FarmDeclaration): CatalogV
   }
 
   const groups = readGroups(input.groups, issues)
-  const groupIds = groups.map((group) => group.id)
 
   const items: CatalogItem[] = []
   const seen = new Set<string>()
@@ -439,7 +552,7 @@ export function validateCatalog(input: unknown, farm: FarmDeclaration): CatalogV
     issues.push(issue('malformed-field', 'Field "items" must be a list.', 'items'))
   } else {
     input.items.forEach((raw, index) => {
-      const item = readItem(raw, index, groupIds, farm, issues)
+      const item = readItem(raw, index, groups, farm, issues)
       if (item === undefined) return
       if (seen.has(item.id)) {
         issues.push(issue('duplicate-item', `Item id "${item.id}" is declared twice.`, item.id))

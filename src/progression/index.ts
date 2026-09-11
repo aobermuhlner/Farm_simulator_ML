@@ -10,12 +10,15 @@ export type {
   Catalog,
   CatalogItem,
   CatalogValidation,
+  Counter,
   FarmLandUnlock,
   GroupDeclaration,
   KnobValuesUnlock,
+  ModelFamilyUnlock,
   Unlock,
 } from './catalog.js'
 export {
+  COUNTERS,
   itemById,
   maxLand,
   repeatLimit,
@@ -63,5 +66,14 @@ export { ALREADY_OWNED, buyItem, countOwned, NOT_FOR_SALE, UNKNOWN_ITEM } from '
 export type { SelectableConfiguration } from './locked.js'
 export { LOCKED_CONFIGURATION, lockedIssues, resolveSelectable } from './locked.js'
 
-export type { MarketGroup, MarketItem, MarketItemState, MarketView } from './market.js'
-export { marketView } from './market.js'
+export type {
+  BenchFamily,
+  BenchKnob,
+  BenchView,
+  MarketGroup,
+  MarketItem,
+  MarketItemState,
+  MarketSection,
+  MarketView,
+} from './market.js'
+export { benchView, marketView } from './market.js'

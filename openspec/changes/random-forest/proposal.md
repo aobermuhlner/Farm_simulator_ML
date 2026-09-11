@@ -49,3 +49,15 @@ block, and that is what turns the student from asking *what should I buy* into a
 To be determined. A family declaration, a fitting step or an evaluator alongside
 `fitted-tree`'s, catalog entries, and its diagram. Shares whatever `fitted-tree` settles
 about artifact-versus-live, and should not settle it differently.
+
+## Note added 2026-09-10
+
+`CLAUDE.md` now carries a prototype-first rule: build the frame before the contents. This
+change inherits it. "The knob must show diminishing returns honestly" is a measurement, and
+measurements wait until the frame is complete — a forest family with placeholder members is
+the version to author first, and the honest diminishing return arrives with the fitting that
+`fitted-tree` defers. Read `fitted-tree`'s proposal, including its *Deferred* section, before
+filling this in.
+
+Its dependency on `fitted-tree` is unchanged. `decision-tree-builder`, which `fitted-tree`
+previously depended on, is withdrawn — the node budget is declared by the tree family itself.

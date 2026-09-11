@@ -2,13 +2,13 @@
   "name": "Green Hollow Farm",
   "currency": "CHF",
   "precision": 2,
-  "openingBalance": 2000,
+  "openingBalance": 0,
   "openingYear": 1,
   "orchard": {
     "label": "Orchard",
     "unit": "trees",
-    "opening": 100,
-    "piecesPerUnit": 60
+    "opening": 1,
+    "piecesPerUnit": 5
   },
   "cropComposition": {
     "red": 0.55,
@@ -20,6 +20,9 @@
       "min": 0.07,
       "max": 0.14
     }
+  },
+  "automation": {
+    "item": "sorting-tree"
   },
   "manualLabour": {
     "icon": "✋",

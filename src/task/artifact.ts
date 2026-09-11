@@ -20,16 +20,28 @@ import { checkArtifactVersion } from './version.js'
 
 export type SplitName = 'training' | 'pool'
 
-export interface TrainingEpoch {
-  readonly epoch: number
+/**
+ * One step of a run, as the artifact records it.
+ *
+ * A step, not an epoch. What a step *is* comes from the model family the configuration
+ * belongs to — an epoch for a family that trains iteratively, a split added for a family
+ * that fits a tree — so a reader holding a history can count its steps without knowing
+ * which family produced it. The family declares what to call one; nothing here does.
+ *
+ * The on-disk key is a separate question, and lags this one deliberately: see
+ * `readHistory` in `artifactIndex.ts`.
+ */
+export interface TrainingStep {
+  /** Which step of the run this is, counted from one. */
+  readonly step: number
   readonly trainLoss: number
   readonly valLoss: number
   /**
-   * Share of images the model called correctly after this epoch, in 0..1 — over the
+   * Share of images the model called correctly after this step, in 0..1 — over the
    * images it was fitted on, and over the held-out ones.
    *
    * Measured during training rather than derived here: it is the state of the model at
-   * that epoch, and only the pipeline ever had it.
+   * that step, and only the pipeline ever had it.
    */
   readonly trainAccuracy: number
   readonly valAccuracy: number
@@ -39,7 +51,14 @@ export interface TrainingEpoch {
 export type SplitPredictions = Readonly<Record<string, readonly number[]>>
 
 export interface ConfigurationEntry {
-  readonly history: readonly TrainingEpoch[]
+  /**
+   * The run this configuration replays, or nothing when there was no run.
+   *
+   * Optional because a family may record no history — `model-families` requires such a
+   * family to declare none rather than declare an empty one, and the workshop then shows
+   * no curve rather than an empty axis.
+   */
+  readonly history?: readonly TrainingStep[]
   readonly predictions: Readonly<Record<SplitName, SplitPredictions>>
 }
 

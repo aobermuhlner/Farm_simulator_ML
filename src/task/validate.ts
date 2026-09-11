@@ -611,7 +611,28 @@ function checkDiagram(
 
   const drawn: DiagramScope = { at, of, knobs, family: scope.family }
   if (kind === 'feedforward') checkFeedforwardDiagram(diagram, drawn, issues)
-  else checkCnnDiagram(diagram, drawn, issues)
+  else if (kind === 'cnn') checkCnnDiagram(diagram, drawn, issues)
+  else checkTreeDiagram(diagram, drawn, issues)
+}
+
+/**
+ * Refuses a tree drawing that cannot name its own budget.
+ *
+ * There is almost nothing to check, and that is the kind's whole character: what a tree
+ * looks like is in the shipped model rather than in the declaration, so the only thing
+ * declared is which knob the budget is, and the only thing it is used for is that knob's
+ * label. The budget has to be a whole count of questions all the same — half a question
+ * is not one, and the drawing sizes itself on the number.
+ */
+function checkTreeDiagram(
+  diagram: Record<string, unknown>,
+  scope: DiagramScope,
+  issues: ValidationIssue[],
+): void {
+  requireDiagramFields(diagram, ['nodesKnob'], scope, issues)
+  const knob = diagramKnob(diagram, 'nodesKnob', scope, issues)
+  if (knob === undefined) return
+  wholeCountsOf(knob, 'nodesKnob', 'questions', scope, issues)
 }
 
 /**
@@ -856,18 +877,19 @@ function referrableKnobs(knobs: unknown): readonly Record<string, unknown>[] | u
 }
 
 /**
- * Validates what one person can get through doing this task's job by hand.
+ * Validates what a task declares about doing its job by hand.
  *
- * Two values that cannot work are refused by name rather than clamped. A limit below the
- * number of declared categories cannot present one image of every category, which is the
- * one thing a first harvest has to do; and a time cap of zero or less would make the
- * measured rate either infinite or negative, which is worse than no rate at all.
+ * One value, and one value that cannot work is refused by name rather than clamped: a
+ * time cap of zero or less would make the measured rate either infinite or negative,
+ * which is worse than no rate at all.
+ *
+ * Nothing declares how many images one person may be shown any more, and a declaration
+ * still carrying the field it used to is refused rather than ignored. A number left in a
+ * file that nothing reads is the worst of both: an author would go on believing it bounds
+ * the sort, and the only place that belief could be corrected is a screen that offers the
+ * whole crop regardless.
  */
-function checkHandSorting(
-  handSorting: unknown,
-  categoryIds: readonly string[],
-  issues: ValidationIssue[],
-): void {
+function checkHandSorting(handSorting: unknown, issues: ValidationIssue[]): void {
   if (!isRecord(handSorting)) {
     issues.push({
       code: 'malformed-field',
@@ -877,18 +899,12 @@ function checkHandSorting(
     return
   }
 
-  const perHarvest = handSorting.perHarvest
-  if (!isPositiveInteger(perHarvest)) {
+  if (handSorting.perHarvest !== undefined) {
     issues.push({
-      code: 'malformed-field',
+      code: 'unknown-field',
       field: 'handSorting.perHarvest',
-      message: `Field "handSorting.perHarvest" must be a whole number of images, one or more; found ${JSON.stringify(perHarvest)}.`,
-    })
-  } else if (categoryIds.length > 0 && perHarvest < categoryIds.length) {
-    issues.push({
-      code: 'sorting-limit-too-small',
-      field: 'handSorting.perHarvest',
-      message: `Field "handSorting.perHarvest" is ${perHarvest}, fewer than the ${categoryIds.length} categories this task declares, so a harvest could not show one image of every category.`,
+      message:
+        'Field "handSorting.perHarvest" is no longer read: hand sorting offers the whole crop, the student decides when to stop, and what bounds it is how many distinct photographs the evaluation split holds. Remove it.',
     })
   }
 
@@ -2027,7 +2043,7 @@ export function validateDeclaration(
     checkPayoffAgreement(input.payoffs, input.categoryActions, categoryIds, actionIds, issues)
   }
   if (input.handSorting !== undefined) {
-    checkHandSorting(input.handSorting, categoryIds, issues)
+    checkHandSorting(input.handSorting, issues)
   }
   if (input.policy !== undefined) checkPolicy(input.policy, categoryIds, actionIds, issues)
 

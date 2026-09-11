@@ -136,7 +136,12 @@ describe('coverage', () => {
       taskId: index.taskId,
       familyId: family.id,
       categories: index.categories,
-      configurations: { [id]: { history: file.history, predictions: file.predictions as never } },
+      configurations: {
+        [id]: {
+          history: file.history.map(({ epoch, ...rest }) => ({ step: epoch, ...rest })),
+          predictions: file.predictions as never,
+        },
+      },
     }
     const lookup = lookupConfiguration(apple, family, defaultConfiguration(apple, family), artifact)
     expect(lookup.ok).toBe(true)

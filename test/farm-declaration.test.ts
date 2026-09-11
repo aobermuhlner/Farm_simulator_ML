@@ -127,16 +127,16 @@ describe('a farm declaration that cannot be trusted', () => {
 
 describe('the orchard the farm declares', () => {
   it('opens at the orchard the shipped declaration bears', () => {
-    // A hundred trees at sixty pieces each, which is what `Game_design.md` §4.5 quotes and
-    // what every earnings figure in this repository is set against. It is also well above
-    // the floor the draw guard sets — `harvest-scoring/design.md`, decision 7 — below which
-    // which photographs were drawn would decide a year more than the model does.
+    // One tree bearing five apples. The farm opens on the smallest orchard that can still
+    // hold one of every declared category, because every capability on it is bought with
+    // apples the student sorted and the first of them has to be sortable by hand in a
+    // sitting — `smallholding-economy/design.md`.
     const parsed = shippedFarmJson() as Record<string, unknown>
     const orchard = parsed.orchard as Record<string, unknown>
 
-    expect(orchard.opening).toBe(100)
-    expect(orchard.piecesPerUnit).toBe(60)
-    expect((orchard.opening as number) * (orchard.piecesPerUnit as number)).toBe(6000)
+    expect(orchard.opening).toBe(1)
+    expect(orchard.piecesPerUnit).toBe(5)
+    expect((orchard.opening as number) * (orchard.piecesPerUnit as number)).toBe(5)
     expect(orchard.unit).toBe('trees')
     expect(orchard.label).toBe('Orchard')
   })
@@ -145,7 +145,23 @@ describe('the orchard the farm declares', () => {
     const validated = validateFarmDeclaration(shippedFarmJson())
     expect(validated.ok).toBe(true)
     if (!validated.ok) return
-    expect(cropSize(openFarm(validated.declaration))).toBe(6000)
+    expect(cropSize(openFarm(validated.declaration))).toBe(5)
+  })
+
+  it('opens broke on one tree, with nothing refused for being that small', () => {
+    // The whole of the opening state, read off the shipped file through the real
+    // validator: no money, one tree, five apples. A zero balance and a one-unit orchard
+    // are ordinary declarations rather than edge cases, and nothing here may refuse them —
+    // every capability on this farm is bought with apples the student sorted, so the farm
+    // has to be able to start owning none of them.
+    const validated = validateFarmDeclaration(shippedFarmJson())
+    expect(validated.ok ? [] : validated.issues).toEqual([])
+    if (!validated.ok) return
+
+    const farm = openFarm(validated.declaration)
+    expect(farm.balance).toBe(0)
+    expect(farm.land).toBe(1)
+    expect(cropSize(farm)).toBe(5)
   })
 
   it('states the size of the crop in no declared field, so nothing can disagree', () => {

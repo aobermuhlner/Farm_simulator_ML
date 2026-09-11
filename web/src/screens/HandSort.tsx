@@ -13,13 +13,21 @@
  * a lesson and the number into something else. Everything worth seeing is shown once the
  * crop is sorted, which is where the mistakes become worth looking at.
  *
+ * That rule is what shapes the offer to stop. Once an apple has been decided the student
+ * may deliver what they have and discard the rest, and the figures beside that choice are
+ * the argument for buying something that does the job — but the apples being left are
+ * still on screen, and their categories are exactly what the student is being paid to work
+ * out one picture at a time. So what the remainder is worth comes off the farm's declared
+ * composition rather than off those apples, and it is presented as what the orchard bears
+ * on that many rather than as what these ones hold.
+ *
  * The arithmetic is `src/sorting/`. This screen measures the time, collects the choices
  * and hands them over; it computes no wage of its own.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Decision, SortOutcome } from '../../../src/sorting/index.js'
-import { measureSort } from '../../../src/sorting/index.js'
+import { measureSort, whatStoppingCosts } from '../../../src/sorting/index.js'
 import type { ActionId, TaskDeclaration } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import { Issues } from '../components/Issues.js'
@@ -75,6 +83,14 @@ export interface HandSortProps {
   readonly onSettle: (outcome: SortOutcome, crop: CropView) => void
   /** Presents an amount in the farm's declared currency. */
   readonly formatAmount: (amount: number) => string
+  /**
+   * What the farm declares its crop is made of, as a share per category.
+   *
+   * The farm's declaration, never the crop's drawn counts: it prices what the student
+   * would be leaving without saying anything about the particular apples they are
+   * leaving. See the module note above.
+   */
+  readonly cropComposition: Readonly<Record<string, number>>
   /** What a purchase that would do this job costs, when the farm declares one. */
   readonly automation?: { readonly label: string; readonly price: string }
   readonly onBack: () => void
@@ -106,6 +122,7 @@ export function HandSort({
   outcome,
   onSettle,
   formatAmount,
+  cropComposition,
   automation,
   onBack,
   now = Date.now,
@@ -113,6 +130,7 @@ export function HandSort({
   const [loading, setLoading] = useState<Loading>({ state: 'loading' })
   const [decisions, setDecisions] = useState<readonly Decision[]>([])
   const [reviewing, setReviewing] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const shownAt = useRef<number>(now())
 
   useEffect(() => {
@@ -137,7 +155,7 @@ export function HandSort({
 
   const choose = useCallback(
     (action: ActionId) => {
-      if (crop === undefined || settled) return
+      if (crop === undefined || settled || confirming) return
       const current = crop.presented[decisions.length]
       if (current === undefined) return
 
@@ -153,15 +171,36 @@ export function HandSort({
         onSettle(measureSort(declaration, crop, crop.truth, decided), crop)
       }
     },
-    [crop, decisions, declaration, now, onSettle, settled],
+    [confirming, crop, decisions, declaration, now, onSettle, settled],
   )
+
+  /**
+   * What the student is choosing between, measured over the apples decided so far.
+   *
+   * Computed by `src/sorting/` rather than here, for the reason the wage is: one
+   * arithmetic, in one place, that a test can hold without a renderer.
+   */
+  const stopping = useMemo(() => {
+    if (crop === undefined || settled || decisions.length === 0) return undefined
+    const so_far = measureSort(declaration, crop, crop.truth, decisions)
+    return whatStoppingCosts(declaration, cropComposition, crop.presented.length, so_far)
+  }, [crop, cropComposition, decisions, declaration, settled])
+
+  /** Delivers what has been decided and discards the rest, closing the year. */
+  function deliver(): void {
+    if (crop === undefined || settled || decisions.length === 0) return
+    setConfirming(false)
+    onSettle(measureSort(declaration, crop, crop.truth, decisions), crop)
+  }
 
   const gestures = GESTURES[declaration.actions.length]
 
   // Bound on the window rather than on a control, so no action needs focus first: a
   // student's hand stays on the keys and their eyes stay on the picture.
   useEffect(() => {
-    if (image === undefined) return undefined
+    // Silent while the confirmation is open: a key pressed to dismiss it must not decide
+    // the apple underneath it.
+    if (image === undefined || confirming) return undefined
     const listen = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const index = ACTION_KEYS.indexOf(event.key.toLowerCase())
@@ -172,7 +211,7 @@ export function HandSort({
     }
     window.addEventListener('keydown', listen)
     return () => window.removeEventListener('keydown', listen)
-  }, [choose, declaration.actions, image])
+  }, [choose, confirming, declaration.actions, image])
 
   const from = useRef<{ x: number; y: number } | undefined>(undefined)
 
@@ -294,6 +333,61 @@ export function HandSort({
               ))}
             </tbody>
           </table>
+
+          {stopping === undefined ? null : (
+            <div className="sort-stop" data-stop>
+              <h3>Stop here and deliver?</h3>
+
+              <table className="stop-figures">
+                <tbody>
+                  <tr>
+                    <th scope="row">What you have sorted would pay</th>
+                    <td data-stop-wage>{formatAmount(stopping.wage)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Left on the ground</th>
+                    <td data-stop-discarded>{stopping.discarded}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">What the orchard bears on that many</th>
+                    <td data-stop-worth>about {formatAmount(stopping.worth)}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">What they would take you, at your pace</th>
+                    <td data-stop-time>{describeSeconds(stopping.seconds)}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {automation === undefined ? null : (
+                <p data-stop-automation>
+                  {automation.label} would do the rest of them, and costs{' '}
+                  <span data-stop-automation-price>{automation.price}</span>.
+                </p>
+              )}
+
+              {confirming ? (
+                <div className="stop-confirm" role="alertdialog" aria-label="Deliver and stop" data-stop-confirm>
+                  <p>
+                    Delivering <span data-confirm-delivered>{decisions.length}</span> sorted,
+                    and leaving <span data-confirm-discarded>{stopping.discarded}</span> on the
+                    ground. This year closes either way, and the ones you leave do not come
+                    back.
+                  </p>
+                  <button type="button" data-deliver onClick={deliver}>
+                    Deliver and close the year
+                  </button>
+                  <button type="button" data-keep-sorting onClick={() => setConfirming(false)}>
+                    Keep sorting
+                  </button>
+                </div>
+              ) : (
+                <button type="button" data-stop-offer onClick={() => setConfirming(true)}>
+                  Deliver what you have sorted
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

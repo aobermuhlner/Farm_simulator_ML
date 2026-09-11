@@ -17,11 +17,24 @@
  * See openspec/changes/model-families/specs/model-families/spec.md.
  */
 
-import type { ConfigurationEntry, SplitName, TrainingEpoch } from '../task/artifact.js'
+import type { ConfigurationEntry, SplitName, TrainingStep } from '../task/artifact.js'
+import type { ShippedModel } from './model.js'
 
 export interface FamilyEntry {
   /** The configuration's training history, for a family that records one. */
-  readonly history?: readonly TrainingEpoch[]
+  readonly history?: readonly TrainingStep[]
+  /**
+   * The model itself, for a family that ships one.
+   *
+   * Optional for the same reason the history is: a family whose predictions ship has no
+   * structure to show, and offering an empty one would be a shape nothing could draw.
+   *
+   * It is carried on the entry rather than fetched a second time so that the model
+   * drawn on screen and the model that scores the harvest are the same object. `fitted-tree`
+   * requires the two to be one — a drawing fetched separately could be a version behind
+   * the one at work, and a student would be reading a tree that is not sorting their apples.
+   */
+  readonly structure?: ShippedModel
   /** The distribution for one image of one split, or nothing where there is none. */
   distributionFor(split: SplitName, imageId: string): readonly number[] | undefined
   /** The images one split holds, in the order the pool enumerates them. */

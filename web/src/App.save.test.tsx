@@ -27,7 +27,15 @@ import { loadsCatalog, memoryStorage, savesTo, shopCatalog } from './test-suppor
 afterEach(cleanup)
 
 const appleTask = committedAppleTask()
-const declaration = farmDeclaration()
+
+/**
+ * The shipped farm with a purse, because these are tests about what is kept.
+ *
+ * The farm ships broke, and a purchase is the change these tests watch being written,
+ * read back and discarded. The money is put there rather than earned so that a save test
+ * is not also a sorting test.
+ */
+const declaration = { ...farmDeclaration(), openingBalance: 2000 }
 const catalog = shopCatalog()
 
 function renderApp(storage: SaveStorage, options: { readonly drawSeed?: () => number } = {}) {
@@ -35,7 +43,7 @@ function renderApp(storage: SaveStorage, options: { readonly drawSeed?: () => nu
     <App
       load={() => Promise.resolve({ ok: true as const, value: [appleTask] })}
       loadEntry={loadEntryFor}
-      loadFarm={loadsFarm()}
+      loadFarm={loadsFarm(declaration)}
       loadShop={loadsCatalog(catalog)}
       {...savesTo(storage)}
       drawSeed={options.drawSeed}
@@ -268,7 +276,7 @@ describe('a save that could not be read is disclosed, never migrated', () => {
       <App
         load={() => Promise.resolve({ ok: true as const, value: [appleTask] })}
         loadEntry={loadEntryFor}
-        loadFarm={loadsFarm()}
+        loadFarm={loadsFarm(declaration)}
         loadShop={loadsCatalog(catalog)}
         readSave={() => ({ ok: false as const, issue: refused })}
         writeSave={() => ({ ok: false as const, issue: refused })}

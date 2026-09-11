@@ -97,7 +97,7 @@ function catalogWithRig(owned: readonly string[]) {
   return soundCatalog(
     {
       schemaVersion: '1.0.0',
-      groups: [{ id: 'yard', label: 'Yard' }],
+      groups: [{ id: 'yard', label: 'Yard', soldAt: 'market' }],
       ownedAtStart: [...owned],
       items: [
         {
@@ -286,6 +286,88 @@ describe('a completed sort is that year’s harvest', () => {
       shipped.openingYear + 1,
     ])
     expect(record.year).toBe(shipped.openingYear + 2)
+  }, SORTING_TIME)
+})
+
+describe('a sort delivered part way is that year’s harvest too', () => {
+  /** Runs the year, enters the labour and decides `count` pieces, then delivers. */
+  async function deliverAfter(count: number, year = shipped.openingYear): Promise<void> {
+    await runTheYear(year)
+    await userEvent.click(await screen.findByRole('button', { name: SORT_BUTTON }))
+    await screen.findByRole('img', { name: 'The piece you are deciding about' })
+
+    const label = declaration.actions[0]?.label ?? ''
+    for (let index = 0; index < count; index += 1) {
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+    }
+    await userEvent.click(screen.getByRole('button', { name: /Deliver what you have sorted/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Deliver and close the year/ }))
+  }
+
+  /** What the three apples the student did decide come to, priced in advance. */
+  const partial = measureSort(
+    declaration,
+    crop,
+    crop.truth,
+    crop.presented
+      .slice(0, 3)
+      .map((piece) => ({ imageId: piece.imageId, action: firstAction, elapsedMs: 0 })),
+  )
+
+  it('settles the wage, appends one record and advances the year', async () => {
+    // Three of the five apples decided, and the year closes on exactly the same step a
+    // completed sort closes on — the one indivisible harvest the economy defines.
+    const storage = renderApp()
+    await deliverAfter(3)
+
+    const record = saved(storage)
+    expect(crop.presented).toHaveLength(5)
+    expect(record.ledger).toHaveLength(1)
+    expect(record.ledger[0]?.year).toBe(shipped.openingYear)
+    expect(record.ledger[0]?.harvest).toBeCloseTo(partial.wage, 2)
+    expect(record.year).toBe(shipped.openingYear + 1)
+    expect(record.balance).toBeCloseTo(shipped.openingBalance + partial.wage, 2)
+    expect(shown('Year')).toBe(String(shipped.openingYear + 1))
+  }, SORTING_TIME)
+
+  it('pays over the apples decided and nothing for the ones left', async () => {
+    renderApp()
+    await deliverAfter(3)
+
+    expect(document.querySelector('[data-correct]')?.textContent).toBe(String(partial.correct))
+    expect(document.querySelector('[data-unsorted]')?.getAttribute('data-unsorted')).toBe('2')
+    expect(document.querySelector('[data-unsorted]')?.textContent).toContain('earned nothing')
+  }, SORTING_TIME)
+
+  it('shows that year’s outcome and offers no apple once it has been delivered', async () => {
+    const storage = renderApp()
+    await deliverAfter(3)
+
+    // The year is closed. What is on screen is what it came to, and the two apples that
+    // were discarded are not a decision waiting to be re-opened for more pay.
+    expect(screen.queryByRole('img', { name: 'The piece you are deciding about' })).toBeNull()
+    expect(document.querySelector('[data-stop]')).toBeNull()
+    expect(document.querySelector('[data-wage]')?.textContent).toBeTruthy()
+    expect(saved(storage).ledger).toHaveLength(1)
+  }, SORTING_TIME)
+
+  it('draws the next year a whole crop rather than handing back what was left', async () => {
+    const storage = renderApp()
+    await deliverAfter(3)
+    const credited = saved(storage)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to the farm' }))
+    await runTheYear(shipped.openingYear + 1)
+    await userEvent.click(await screen.findByRole('button', { name: SORT_BUTTON }))
+    await screen.findByRole('img', { name: 'The piece you are deciding about' })
+
+    // A crop of its own, entire — not the two the student walked away from.
+    expect(document.querySelector('[data-progress]')?.textContent).toBe('Piece 1 of 5')
+
+    // And nothing was credited for entering it: the closed year is still the only record.
+    const after = saved(storage)
+    expect(after.balance).toBe(credited.balance)
+    expect(after.ledger).toEqual(credited.ledger)
   }, SORTING_TIME)
 })
 

@@ -29,11 +29,17 @@ function issuesOf(declaration: Record<string, unknown>): readonly string[] {
   return result.issues.map((issue) => `${issue.code} ${issue.field ?? ''} ${issue.message}`)
 }
 
-describe('the shipped game is untouched by this change', () => {
-  it('declares no tutorial on any family, so the gate is inert', () => {
-    // `model-tutorials` ships the frame; `fitted-tree-tutorial` ships the first puzzle.
-    // Until then a gate on a shipped family would be a wall, so there is none.
-    for (const family of appleDeclaration().families) expect(family.tutorial).toBeUndefined()
+describe('the shipped game declares one gate, on the family it was written for', () => {
+  it('gates exactly the family that ships its model, and no other', () => {
+    // `model-tutorials` shipped the frame, `fitted-tree-tutorial` shipped the puzzle,
+    // and `fitted-tree` is where the two meet: the tree family declares it, and the
+    // convolutional family declares none, because a gate on a family whose lesson
+    // nothing teaches would be a wall.
+    const gated = appleDeclaration().families.filter((family) => family.tutorial !== undefined)
+
+    expect(gated).toHaveLength(1)
+    expect(gated[0]?.ships).toBe('model')
+    expect(gated[0]?.tutorial?.id).toBe('first-tree-leaves')
   })
 
   it('validates against the registry the browser actually loads', () => {
@@ -48,10 +54,12 @@ describe('the shipped game is untouched by this change', () => {
 })
 
 describe('a family may declare a tutorial, and may not', () => {
-  it('accepts a family that declares none, which is every family shipped today', () => {
+  it('accepts a family that declares none, alongside one that does', () => {
     const shipped = appleDeclaration()
 
-    for (const family of shipped.families) expect(family.tutorial).toBeUndefined()
+    // Both cases ship, in one task, which is the whole of what "may and may not" means.
+    expect(shipped.families.some((family) => family.tutorial === undefined)).toBe(true)
+    expect(shipped.families.some((family) => family.tutorial !== undefined)).toBe(true)
     expect(validateDeclaration(rawTwoFamilyTask()).ok).toBe(true)
   })
 

@@ -21,13 +21,13 @@ import type { ModelFamilyDeclaration, ShippedForm, TaskDeclaration } from '../ta
 import type { ValidationIssue } from '../task/validate.js'
 import type { FamilyEntry } from './entry.js'
 import { entryFromPredictions } from './entry.js'
-import { entryFromModel, readModelFile } from './model.js'
+import { entryFromModel, modelSpanIssues, readModelFile } from './model.js'
 import { readModelIndex } from './modelIndex.js'
 
 export type { FamilyEntry } from './entry.js'
 export { entryFromPredictions } from './entry.js'
 export type { ModelDocument, ModelSplit, ShippedModel } from './model.js'
-export { entryFromModel, predictWith, readModelFile } from './model.js'
+export { entryFromModel, featuresRead, modelSpanIssues, predictWith, readModelFile } from './model.js'
 export type { LoadedModelIndex } from './modelIndex.js'
 export { readModelIndex } from './modelIndex.js'
 
@@ -127,6 +127,14 @@ const evaluateModel: FamilyEvaluator = (request) => {
 
   const read = readModelFile(document, declaration, family, configurationId)
   if (!read.ok) return { ok: false, issues: read.issues }
+
+  // Completeness, in the form a stored model takes it. A family evaluated from the
+  // manifest's recorded values reads no delivered image — its chain of custody to the
+  // pixels is the measurement the pool tooling already performed — so what has to be
+  // checked is that those values are there for every image, not that a distribution is.
+  const span = modelSpanIssues(read.document.model, configurationId, imageIds, features)
+  if (span.length > 0) return { ok: false, issues: span }
+
   return { ok: true, entry: entryFromModel(read.document, imageIds, features) }
 }
 

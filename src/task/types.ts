@@ -138,7 +138,7 @@ export interface DeliveryTerm {
 }
 
 /** The architectures a task can ask to have drawn. */
-export const DIAGRAM_KINDS = ['feedforward', 'cnn'] as const
+export const DIAGRAM_KINDS = ['feedforward', 'cnn', 'tree'] as const
 export type DiagramKind = (typeof DIAGRAM_KINDS)[number]
 
 /**
@@ -197,22 +197,44 @@ export interface CnnDiagram {
   readonly channelsShown: Readonly<Record<string, number>>
 }
 
-export type DiagramDeclaration = FeedforwardDiagram | CnnDiagram
+/**
+ * How a family that ships its own model should have that model drawn.
+ *
+ * The abstraction inverts again, and further than it did for the convolutional stack.
+ * The other two kinds declare which knob stands for which drawable quantity, because
+ * the architecture is a function of the knobs and nothing but the knobs. A tree is not:
+ * two trees at the same budget can ask entirely different questions, and which ones
+ * they ask is in the shipped model rather than in any declaration. So this kind
+ * declares almost nothing, and the drawing is resolved from the structure that scores
+ * the harvest — which is what makes the tree on screen and the tree in the field one
+ * object that cannot disagree.
+ *
+ * `nodesKnob` is here for its *label* alone. The drawing has to say what the budget is
+ * called in the words the task chose, and a screen that wrote those words itself would
+ * be a screen that had learned one family's vocabulary.
+ */
+export interface TreeDiagram {
+  readonly kind: 'tree'
+  /** Knob whose current value is the number of questions the tree may ask. */
+  readonly nodesKnob: KnobId
+}
+
+export type DiagramDeclaration = FeedforwardDiagram | CnnDiagram | TreeDiagram
 
 /**
- * What one person can get through when they do the task's job by hand.
+ * The one thing a task declares about doing its job by hand.
  *
- * Declared by the task rather than by the farm because it is a property of the lesson:
- * how many pictures a student can judge in one sitting, and how long a single one may be
- * allowed to count for. The farm declares how large the crop is; this declares how much
- * of it one pair of hands reaches.
+ * Nothing here bounds how many pictures a person may be shown. The whole of the year's
+ * crop is offered, the student decides when to stop, and what they run out of past that
+ * is distinct photographs in the evaluation split — a real shortage rather than a
+ * declared one. A declared cap made hand sorting a formality: a crop of six thousand
+ * offered sixty, and the throughput argument for automating the job cannot be made by a
+ * screen that stopped the student long before they were tired.
  *
- * Both numbers are required of every task. A task with no figure for either cannot be
- * done by hand at all, and a screen is a worse place to discover that than a validator.
+ * Required of every task. A task with no figure for it cannot be timed at all, and a
+ * screen is a worse place to discover that than a validator.
  */
 export interface HandSortingDeclaration {
-  /** How many images one person is presented with in a single harvest. */
-  readonly perHarvest: number
   /**
    * The most seconds any one image may contribute to the measured rate.
    *

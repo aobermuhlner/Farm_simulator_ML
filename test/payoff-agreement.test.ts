@@ -72,7 +72,10 @@ function screeningDeclaration(): TaskDeclaration {
         disclosure: 'Every one of these was confirmed by the vet who took it.',
       },
     ],
-    families: appleDeclaration().families.map((family) => ({
+    // The tutorial goes with the photographs. A comprehension puzzle names the
+    // categories of the task it teaches, so a lesson with another subject brings its
+    // own or declares none.
+    families: appleDeclaration().families.map(({ tutorial, ...family }) => ({
       ...family,
       knobs: [
         ...family.knobs.filter((knob) => knob.id !== family.datasetKnob),

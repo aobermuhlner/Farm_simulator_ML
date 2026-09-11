@@ -1,21 +1,74 @@
 {
   "schemaVersion": "1.0.0",
   "groups": [
-    { "id": "orchard", "label": "Orchard" },
-    { "id": "labour", "label": "Labour" },
-    { "id": "data", "label": "Data" },
-    { "id": "models", "label": "Models" }
+    { "id": "orchard", "label": "Orchard", "task": "apple-harvest", "soldAt": "market" },
+    { "id": "data", "label": "Data", "task": "apple-harvest", "soldAt": "market" },
+    { "id": "labour", "label": "Labour", "soldAt": "market" },
+    { "id": "models", "label": "Models", "soldAt": "market" },
+    { "id": "capacity", "label": "Model upgrades", "soldAt": "bench" }
   ],
   "ownedAtStart": [],
   "items": [
     {
-      "id": "orchard-expansion",
+      "id": "orchard-four-trees",
+      "group": "orchard",
+      "label": "Four more trees",
+      "copy": "The four saplings at the end of the row, old enough to bear. Twenty apples instead of five, which is four times the afternoon and four times the money.",
+      "price": 15,
+      "opens": [
+        { "kind": "farm-land", "units": 4 }
+      ]
+    },
+    {
+      "id": "orchard-five-trees",
+      "group": "orchard",
+      "label": "Five more trees",
+      "copy": "The far half of the top field, cleared and planted. Fifty apples a year once they are all bearing — and fifty apples is the point at which sorting them one at a time starts to feel like a job.",
+      "price": 55,
+      "opens": [
+        { "kind": "farm-land", "units": 5 }
+      ]
+    },
+    {
+      "id": "orchard-ten-trees",
+      "group": "orchard",
+      "label": "Ten more trees",
+      "copy": "Ten trees along the lane, bought off the neighbour who has given up on them. A hundred apples a year: more than one pair of hands will get through carefully, which is a problem worth having and worth solving.",
+      "price": 110,
+      "opens": [
+        { "kind": "farm-land", "units": 10 }
+      ]
+    },
+    {
+      "id": "orchard-thirty-trees",
+      "group": "orchard",
+      "label": "Thirty more trees",
+      "copy": "The whole of the lower field. Two hundred and fifty apples a year — a crop that pays properly, and one nobody is going to sort by hand for the pleasure of it.",
+      "price": 220,
+      "opens": [
+        { "kind": "farm-land", "units": 30 }
+      ]
+    },
+    {
+      "id": "orchard-fifty-trees",
+      "group": "orchard",
+      "label": "Fifty more trees",
+      "copy": "Fifty trees across the stream, and the bridge rebuilt to reach them. Five hundred apples a year, brought in by whatever you have taught to sort them.",
+      "price": 550,
+      "opens": [
+        { "kind": "farm-land", "units": 50 }
+      ]
+    },
+    {
+      "id": "orchard-hundred-trees",
       "group": "orchard",
       "label": "A hundred more trees",
-      "copy": "A hundred trees more to bring in, bearing sixty apples each. Six thousand more apples pass whatever sorts them, so whatever they earn — and whatever they cost — is six thousand apples more of it.",
-      "price": 1000,
-      "repeat": 5,
-      "opens": [{ "kind": "farm-land", "units": 100 }]
+      "copy": "A hundred trees more to bring in, bearing five apples each. Five hundred more apples pass whatever sorts them, so whatever they earn — and whatever they cost — is five hundred apples more of it. There is room on this land for three such plantings and no more.",
+      "price": 1100,
+      "repeat": 3,
+      "opens": [
+        { "kind": "farm-land", "units": 100 }
+      ]
     },
     {
       "id": "bulk-photos",
@@ -38,8 +91,48 @@
       ]
     },
     {
-      "id": "deeper-stacks",
+      "id": "robot-eye",
       "group": "models",
+      "label": "The robot's eye",
+      "copy": "The camera on the arm and the stack of pattern detectors behind it: a small one, two blocks deep, that learns what an apple looks like from photographs rather than from anything anyone can write down. It is the dearest thing on this list by a long way, and what it decided — and why — it cannot tell you. A hundred sorting trees cost the same and every one of them can.",
+      "price": 10000,
+      "opens": [
+        { "kind": "model-family", "task": "apple-harvest", "family": "convolutional" }
+      ]
+    },
+    {
+      "id": "sorting-tree",
+      "group": "models",
+      "label": "A sorting tree",
+      "copy": "The first model this farm can own, and the only one you can read from end to end: a short list of yes-or-no questions about the numbers measured from each photograph. Buy it and the apples stop going past you one at a time — it sorts the whole crop, it costs nothing to run, and it will show you why it decided what it decided, which the robot's eye will not.",
+      "price": 100,
+      "opens": [
+        { "kind": "model-family", "task": "apple-harvest", "family": "decision-tree" }
+      ]
+    },
+    {
+      "id": "straight-line-fit",
+      "group": "models",
+      "label": "A straight-line fit",
+      "copy": "The plainest model there is: one weight for each number measured off a photograph, added up, and a line drawn through the total. Too plain to sort three kinds of apple well — which is exactly why it is worth having sat with before you trust anything larger.",
+      "notForSaleReason": "Nothing of this kind has been built for this farm yet.",
+      "opens": [
+        { "kind": "model-family", "task": "apple-harvest", "family": "linear-regression" }
+      ]
+    },
+    {
+      "id": "dense-network",
+      "group": "models",
+      "label": "A fully connected network",
+      "copy": "Every measured number wired to every unit of a hidden layer, and that layer wired to the answer. More room than a straight line and fewer assumptions than the eye — it looks at the numbers rather than at the picture.",
+      "notForSaleReason": "Nothing of this kind has been built for this farm yet.",
+      "opens": [
+        { "kind": "model-family", "task": "apple-harvest", "family": "dense-network" }
+      ]
+    },
+    {
+      "id": "deeper-stacks",
+      "group": "capacity",
       "label": "Deeper stacks",
       "copy": "Two more blocks for the robot's eye, so it can recognise shapes larger than a patch — and has that much more room to memorise the orchard it was shown.",
       "notForSaleReason": "No model has been trained for a deeper stack yet, so buying this would buy a run that cannot be scored.",
@@ -49,7 +142,7 @@
     },
     {
       "id": "stronger-regularization",
-      "group": "models",
+      "group": "capacity",
       "label": "Loss regularization",
       "copy": "The dial that pushes training towards simpler answers. Turn it off to watch a model obsess over one perfect fruit; turn it up until it stops noticing the worm.",
       "notForSaleReason": "No model has been trained at any other setting yet, so buying this would buy a run that cannot be scored.",
@@ -59,12 +152,32 @@
     },
     {
       "id": "dropout-layers",
-      "group": "models",
+      "group": "capacity",
       "label": "Dropout layers",
       "copy": "Switches off a share of the pattern detectors at random during each training step, so no single one can carry the decision on its own.",
       "notForSaleReason": "No model has been trained with dropout yet, so buying this would buy a run that cannot be scored.",
       "opens": [
         { "kind": "knob-values", "task": "apple-harvest", "knob": "dropout", "values": [0.2, 0.5] }
+      ]
+    },
+    {
+      "id": "tree-four-questions",
+      "group": "capacity",
+      "label": "Two more questions",
+      "copy": "Room for the tree to ask four questions instead of two. The two it already asks stay exactly where they are; the new ones sort what used to fall out of the bottom without being looked at twice.",
+      "price": 150,
+      "opens": [
+        { "kind": "knob-values", "task": "apple-harvest", "knob": "nodes", "values": [4] }
+      ]
+    },
+    {
+      "id": "tree-six-questions",
+      "group": "capacity",
+      "label": "Two more again",
+      "copy": "Six questions. Every one you add cuts the pile finer — and gives the tree that much more room to describe the particular photographs it was shown rather than the fruit they are of.",
+      "price": 400,
+      "opens": [
+        { "kind": "knob-values", "task": "apple-harvest", "knob": "nodes", "values": [6] }
       ]
     }
   ]

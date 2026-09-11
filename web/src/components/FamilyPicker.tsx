@@ -13,6 +13,8 @@
  *
  * A task declaring one family renders nothing at all. One choice is not a choice, and a
  * picker with a single entry would make the shipped lesson look like a decision it is not.
+ * Unless nothing is selected: a task none of whose families is available has to show them
+ * all with what opens each, and a lone locked family is the case that needs saying most.
  */
 
 import type { FamilyAvailability } from '../../../src/progression/index.js'
@@ -20,7 +22,8 @@ import type { ModelFamilyDeclaration } from '../../../src/task/types.js'
 
 export interface FamilyPickerProps {
   readonly families: readonly ModelFamilyDeclaration[]
-  readonly selected: string
+  /** The family showing, or undefined when none of them is available. */
+  readonly selected: string | undefined
   readonly onSelect: (familyId: string) => void
   /** Which families may be selected, and what opens the rest. Undefined locks nothing. */
   readonly availability?: readonly FamilyAvailability[]
@@ -42,7 +45,7 @@ export function FamilyPicker({
   availability,
   formatPrice,
 }: FamilyPickerProps) {
-  if (families.length < 2) return null
+  if (families.length < 2 && families.some((family) => family.id === selected)) return null
 
   return (
     <fieldset className="family-picker">

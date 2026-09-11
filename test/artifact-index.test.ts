@@ -144,7 +144,11 @@ describe('coverage', () => {
 })
 
 describe('provenance', () => {
-  it.each(['knobs', 'epochs', 'seed', 'pipeline', 'architecture', 'shaping'] as const)(
+  // The step count is not in this list, and its absence is not an omission: a record
+  // that counts no steps is how an artifact says its configuration has no run to
+  // replay. What that costs is checked where it can be — against the file's history,
+  // in 'the training history' below — rather than by insisting on the field.
+  it.each(['knobs', 'seed', 'pipeline', 'architecture', 'shaping'] as const)(
     'refuses a configuration recording no %s, naming it',
     (field) => {
       const issues = indexIssues((draft) => {
@@ -226,12 +230,93 @@ describe('completeness', () => {
 })
 
 describe('the training history', () => {
-  it('refuses an epoch the run did not perform', () => {
+  it('refuses a step the run did not perform', () => {
     const issues = fileIssues((draft) => {
       draft.history[7].epoch = 99
     })
     expect(issues.some((entry) => entry.code === 'history-not-contiguous')).toBe(true)
-    expect(messages(issues)).toContain('epoch 8')
+    expect(messages(issues)).toContain('step 8')
+  })
+
+  /**
+   * Both spellings of the step key read, which is what lets the vocabulary move without
+   * a retrain. The three shipped files still write `epoch`; a tree writes `step`. When
+   * `heirloom-cultivars` rewrites the convolutional artifacts the `epoch` case here goes
+   * with the fallback it covers.
+   */
+  it('reads a history written under the step key', () => {
+    const draft = copy(rawFile)
+    draft.history = (draft.history as Record<string, unknown>[]).map(({ epoch, ...rest }) => ({
+      step: epoch,
+      ...rest,
+    }))
+    const result = readConfigurationFile(draft, apple, loadedIndex(), DEFAULT_ID, imageIds)
+    if (!result.ok) throw new Error(messages(result.issues))
+    expect(result.entry.history?.map((entry) => entry.step)).toEqual(
+      (rawFile.history as { epoch: number }[]).map((entry) => entry.epoch),
+    )
+  })
+
+  it('reads a history written under the epoch key to the same steps', () => {
+    const result = readConfigurationFile(copy(rawFile), apple, loadedIndex(), DEFAULT_ID, imageIds)
+    if (!result.ok) throw new Error(messages(result.issues))
+    expect(result.entry.history?.map((entry) => entry.step)).toEqual(
+      (rawFile.history as { epoch: number }[]).map((entry) => entry.epoch),
+    )
+  })
+
+  /**
+   * A run that performed no steps is a real case, not a malformed record: a family may
+   * record no history at all, and `model-families` requires it to declare none rather
+   * than declare an empty one. The provenance says so by counting no steps, and the two
+   * statements — the count and the history — have to agree in both directions.
+   */
+  it('accepts a configuration that records no steps and carries no history', () => {
+    const index = copy(rawIndex)
+    const record = (index.configurations as Record<string, Record<string, unknown>>)[DEFAULT_ID]
+    if (record === undefined) throw new Error('fixture record missing')
+    delete record.epochs
+
+    const read = readArtifactIndex(index, apple, family, binding)
+    if (!read.ok) throw new Error(messages(read.issues))
+    expect(read.index.configurations[DEFAULT_ID]?.steps).toBeUndefined()
+
+    const draft = copy(rawFile)
+    delete draft.history
+    const result = readConfigurationFile(draft, apple, read.index, DEFAULT_ID, imageIds)
+    if (!result.ok) throw new Error(messages(result.issues))
+    expect(result.entry.history).toBeUndefined()
+  })
+
+  it('still reads the epochs the convolutional records write as the steps they are', () => {
+    const record = loadedIndex().configurations[DEFAULT_ID]
+    expect(record?.steps).toBe((rawFile.history as readonly unknown[]).length)
+  })
+
+  it('refuses a history beside a record that counts no steps', () => {
+    const index = copy(rawIndex)
+    const record = (index.configurations as Record<string, Record<string, unknown>>)[DEFAULT_ID]
+    if (record === undefined) throw new Error('fixture record missing')
+    delete record.epochs
+
+    const read = readArtifactIndex(index, apple, family, binding)
+    if (!read.ok) throw new Error(messages(read.issues))
+
+    const result = readConfigurationFile(copy(rawFile), apple, read.index, DEFAULT_ID, imageIds)
+    if (result.ok) throw new Error('expected the configuration file to be refused')
+    expect(result.issues.some((entry) => entry.code === 'history-length-mismatch')).toBe(true)
+    expect(messages(result.issues)).toContain(DEFAULT_ID)
+  })
+
+  it('refuses a step count that is not a count of steps', () => {
+    const index = copy(rawIndex)
+    const record = (index.configurations as Record<string, Record<string, unknown>>)[DEFAULT_ID]
+    if (record === undefined) throw new Error('fixture record missing')
+    record.epochs = 0
+
+    const read = readArtifactIndex(index, apple, family, binding)
+    if (read.ok) throw new Error('expected the index to be refused')
+    expect(read.issues.some((entry) => entry.code === 'malformed-provenance')).toBe(true)
   })
 
   it('refuses a history shorter than the epochs the run recorded', () => {

@@ -382,7 +382,7 @@ describe('what the farm owns does not decide who works', () => {
     return loadsCatalog(
       soundCatalog({
         schemaVersion: '1.0.0',
-        groups: [{ id: 'toolshed', label: 'Toolshed' }],
+        groups: [{ id: 'toolshed', label: 'Toolshed', soldAt: 'market' }],
         ownedAtStart: items.map((item) => item.id),
         items,
       }),
@@ -461,10 +461,12 @@ describe('one crop, two labours', () => {
     await playYear(declaration.openingYear)
     await openReport(declaration.openingYear)
 
-    // The crop is six times the pool, so a run scored over the pool would say a thousand.
+    // The opening orchard is one tree. The pool holds a thousand photographs, so a run
+    // scored over the pool rather than over the crop would say so in as many words.
     const configuration = document.querySelector('.configuration') as HTMLElement
     expect(configuration.textContent).toContain(String(OPENING_CROP))
-    expect(appleTask.imageIds.pool?.length).toBeLessThan(OPENING_CROP)
+    expect(configuration.textContent).not.toContain(String(appleTask.imageIds.pool?.length))
+    expect(appleTask.imageIds.pool?.length).not.toBe(OPENING_CROP)
   })
 
   it('draws a new crop for the following year rather than repeating this one', async () => {
@@ -484,7 +486,14 @@ describe('one crop, two labours', () => {
       { ...farmSorting(OPENING_CROP), year: declaration.openingYear + 1 },
       SEED,
     )
-    expect(secondYear.composition).not.toEqual(firstYear.composition)
+
+    // Its own apples, off its own draw. At an orchard this small the counts cannot move —
+    // five apples are two, two and one in every year the farm ever draws — so what tells
+    // the two years apart is the photographs, and the report states the counts either way
+    // rather than presenting one year as differing from the other.
+    expect(secondYear.presented.map((piece) => piece.imageId)).not.toEqual(
+      firstYear.presented.map((piece) => piece.imageId),
+    )
     for (const [category, count] of Object.entries(secondYear.composition)) {
       expect(second.textContent, `"${category}" is not the second year's crop`).toContain(
         String(count),
@@ -498,8 +507,16 @@ describe('the orchard is on every screen of an opened farm', () => {
   const REACH = declaration.orchard.opening + 5 * 20
   const HELD = `${declaration.orchard.opening} / ${REACH} ${declaration.orchard.unit}`
 
+  /**
+   * The shipped farm with a purse, because these are tests about the orchard on screen.
+   *
+   * The farm ships broke, and a farm that can afford nothing offers no purchase to click.
+   * What is held here is what the bar says before and after one is made.
+   */
+  const withPurse = { ...declaration, openingBalance: 2000 }
+
   function renderWithLand() {
-    return renderApp(loadsFarm(), loadsCatalog(repeatShopCatalog()))
+    return renderApp(loadsFarm(withPurse), loadsCatalog(repeatShopCatalog([], withPurse)))
   }
 
   it('shows the land held, the land it could reach, and the declared unit', async () => {

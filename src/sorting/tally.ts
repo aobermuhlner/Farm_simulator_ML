@@ -185,3 +185,85 @@ export function measureSort(
     },
   }
 }
+
+/**
+ * The figures the choice to stop is made against.
+ *
+ * Both sides of it, because a student deciding whether to go on clicking is choosing
+ * between what they have and what they would be leaving, and a screen that states only
+ * one of them is not offering a choice. This is where the argument for automating the job
+ * gets made, and it gets made in the student's own measured numbers rather than in a
+ * claim.
+ */
+export interface StopChoice {
+  /** What the apples decided so far would pay, on the terms a completed sort settles on. */
+  readonly wage: number
+  /** How many of the apples presented would be discarded. */
+  readonly discarded: number
+  /**
+   * Roughly what the orchard bears on that many apples.
+   *
+   * Priced from the farm's declared composition and each category's own declared action,
+   * never from what those particular apples are. Their categories are exactly what the
+   * student is being paid to work out one picture at a time, and a figure drawn from them
+   * would answer that question in aggregate — "the 350 you are leaving are worth 91" tells
+   * a careful reader how many of them are wormy. So this is an estimate, it is allowed to
+   * be wrong for this crop, and it is presented in those words.
+   */
+  readonly worth: number
+  /** How long they would take at the rate this student has been sorting at, in seconds. */
+  readonly seconds: number
+}
+
+/**
+ * What one piece of an average crop bears, from the declaration alone.
+ *
+ * The declared composition against each category's own declared action: what the orchard
+ * yields a piece when the job is done right. Shares are normalised by their own sum
+ * rather than assumed to come to one, so a farm whose validator has not run yet gives a
+ * proportionate answer instead of an inflated one.
+ */
+function declaredPieceValue(
+  declaration: TaskDeclaration,
+  composition: Readonly<Record<string, number>>,
+): number {
+  let weight = 0
+  let value = 0
+  for (const category of declaration.categories) {
+    const share = composition[category.id]
+    if (typeof share !== 'number' || !Number.isFinite(share) || share <= 0) continue
+    const called = declaration.categoryActions[category.id]
+    const paid = called === undefined ? undefined : declaration.payoffs[category.id]?.[called]
+    if (paid === undefined) continue
+    weight += share
+    value += share * paid
+  }
+  return weight > 0 ? value / weight : 0
+}
+
+/**
+ * What stopping here would take and what it would leave, given a sort part way through.
+ *
+ * `composition` is the farm's declared one — what the orchard is made of — and not the
+ * crop's drawn counts. The two differ, deliberately: see `StopChoice.worth`.
+ */
+export function whatStoppingCosts(
+  declaration: TaskDeclaration,
+  composition: Readonly<Record<string, number>>,
+  presented: number,
+  outcome: SortOutcome,
+): StopChoice {
+  const discarded = Math.max(presented - outcome.decided, 0)
+  // The measured pace, which is already capped per image where it was measured. A sort
+  // with nothing decided has no pace of its own, and inventing one would put a number on
+  // screen the student did not produce — but the offer to stop is not present then.
+  const perPiece =
+    outcome.decided > 0 ? outcome.throughput.seconds / outcome.decided : 0
+
+  return {
+    wage: outcome.wage,
+    discarded,
+    worth: discarded * declaredPieceValue(declaration, composition),
+    seconds: discarded * perPiece,
+  }
+}

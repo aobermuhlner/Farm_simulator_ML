@@ -14,10 +14,10 @@
 
 import { useMemo, useState } from 'react'
 import type { FamilyEntry } from '../../../src/families/index.js'
-import type { TaskAvailability } from '../../../src/progression/index.js'
+import type { BenchView, TaskAvailability } from '../../../src/progression/index.js'
 import { knobAvailability } from '../../../src/progression/index.js'
 import { resolveArchitecture } from '../../../src/task/diagram.js'
-import { selectedFamily } from '../../../src/task/families.js'
+import { selectableFamily, selectedFamily } from '../../../src/task/families.js'
 import type { TaskDeclaration, TutorialId } from '../../../src/task/types.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
 import type { TutorialKinds } from '../../../src/tutorials/index.js'
@@ -34,6 +34,7 @@ import type { TutorialBodies } from '../components/tutorial/TutorialBody.js'
 import { defaultKnobValues, identifyConfiguration, type KnobValues } from '../model/run.js'
 import { TrainingBrowser } from './TrainingBrowser.js'
 import { TrainingRun } from './TrainingRun.js'
+import { UpgradeBench } from './UpgradeBench.js'
 
 export interface ConfigureTaskProps {
   readonly declaration: TaskDeclaration
@@ -119,6 +120,18 @@ export interface ConfigureTaskProps {
   readonly tutorialKinds?: TutorialKinds
   /** Injected by tests, which mount a fixture body no shipped build carries. */
   readonly tutorialBodies?: TutorialBodies
+  /**
+   * What the upgrade bench sells for this task, when the shell offers one.
+   *
+   * A stage of the workshop rather than a screen beside it, for the reason the browser
+   * is one: leaving it has to leave the knob values, the replay and the family selection
+   * exactly as they were, and a sibling stage would unmount this screen.
+   */
+  readonly bench?: BenchView
+  /** Buys one item at the bench. The same `purchase()` the market's control calls. */
+  readonly onBuyUpgrade?: (itemId: string) => void
+  /** Why the last purchase at the bench did not happen, as the engine reported it. */
+  readonly purchaseRefusal?: readonly ValidationIssue[]
 }
 
 /**
@@ -159,30 +172,61 @@ export function ConfigureTask({
   onTutorialComplete,
   tutorialKinds,
   tutorialBodies,
+  bench,
+  onBuyUpgrade,
+  purchaseRefusal,
 }: ConfigureTaskProps) {
-  const [familyId, setFamilyId] = useState<string>(
-    () => selectedFamily(declaration, initialFamily).id,
+  /**
+   * Whether a family may be selected. Silence locks nothing, which is what a shell that
+   * supplies no availability means and what every build meant before anything could
+   * lock a family.
+   */
+  const isAvailable =
+    availability === undefined
+      ? undefined
+      : (candidate: string) =>
+          availability.families.find((entry) => entry.familyId === candidate)?.available ?? true
+
+  const [familyId, setFamilyId] = useState<string | undefined>(
+    () => selectableFamily(declaration, initialFamily, isAvailable)?.id,
   )
-  const family = selectedFamily(declaration, familyId)
-  const [values, setValues] = useState<KnobValues>(
-    () => initialValues?.(family.id) ?? defaultKnobValues(declaration, family),
+  // The first declared *available* family, so a task whose first rung is still in the
+  // market opens on one the student can use. Undefined is a real answer: a task none of
+  // whose families is owned is a farm at the start of the game, not a farm in error.
+  const family = selectableFamily(declaration, familyId, isAvailable)
+  const [values, setValues] = useState<KnobValues>(() =>
+    family === undefined ? {} : (initialValues?.(family.id) ?? defaultKnobValues(declaration, family)),
   )
   const [refusal, setRefusal] = useState<readonly ValidationIssue[] | undefined>(undefined)
   const [browsing, setBrowsing] = useState(false)
   const [stage, setStage] = useState<Stage>({ kind: 'untrained' })
   const [sitting, setSitting] = useState(false)
+  const [atBench, setAtBench] = useState(false)
 
   // The one question the gate turns on. A family declaring no tutorial is fielded the
   // moment it is owned, which is what every family did before tutorials existed.
-  const tutorial = family.tutorial
+  const tutorial = family?.tutorial
   const tutorialDone = isTutorialComplete(tutorial, completedTutorials)
 
-  const identified = identifyConfiguration(declaration, family, values, availability)
-  const currentId = identified.ok ? identified.id : undefined
+  const identified =
+    family === undefined ? undefined : identifyConfiguration(declaration, family, values, availability)
+  const currentId = identified?.ok === true ? identified.id : undefined
   // Derived, not stored: the drawing is a function of the values already held above, so
   // there is no second copy of the configuration to keep in step. Undefined for a family
   // declaring no diagram, and beside a configuration the engine will not resolve.
-  const architecture = resolveArchitecture(declaration, family, values)
+  // A family that ships its model is drawn from the model, which arrives with the entry
+  // — so its drawing appears once the configuration has been fetched and not before.
+  // The entry is passed rather than fetched again, which is what makes the tree on
+  // screen and the tree that scores the harvest the same object.
+  const architecture =
+    family === undefined
+      ? undefined
+      : resolveArchitecture(
+          declaration,
+          family,
+          values,
+          stage.kind === 'training' || stage.kind === 'trained' ? stage.entry.structure : undefined,
+        )
 
   /**
    * The photographs of the tier the dataset knob currently names.
@@ -194,7 +238,7 @@ export function ConfigureTask({
    *
    * Sits above every early return below, because a hook has to run on every render.
    */
-  const selectedTier = String(values[family.datasetKnob] ?? '')
+  const selectedTier = family === undefined ? '' : String(values[family.datasetKnob] ?? '')
   /** The declared tier that value names, for the copy shown beside the knobs. */
   const browsedTier = declaration.datasets.find((tier) => tier.id === selectedTier)
   const browseSelectedTier = useMemo(
@@ -203,6 +247,7 @@ export function ConfigureTask({
   )
 
   function setKnob(id: string, value: string | number): void {
+    if (family === undefined) return
     const next = { ...values, [id]: value }
     setValues(next)
     // Reported from the handler rather than from inside the updater: a state updater must
@@ -237,6 +282,7 @@ export function ConfigureTask({
   }
 
   async function train(): Promise<void> {
+    if (family === undefined) return
     const identified = identifyConfiguration(declaration, family, values, availability)
     if (!identified.ok) {
       // Not repeated as a second refusal: the settings block below already carries these
@@ -284,6 +330,24 @@ export function ConfigureTask({
     )
   }
 
+  // Mounted the way the browser and the puzzle are, and for the same reason: buying an
+  // upgrade must leave the knobs exactly as the student left them, with more of their
+  // values selectable. Reaching the bench selects nothing and commits nothing.
+  if (atBench && bench !== undefined) {
+    return (
+      <section aria-labelledby="task-heading">
+        <h1 id="task-heading">{declaration.title}</h1>
+        <UpgradeBench
+          view={bench}
+          formatPrice={formatPrice ?? ((units) => String(units))}
+          onBuy={(itemId) => onBuyUpgrade?.(itemId)}
+          onBack={() => setAtBench(false)}
+          refusal={purchaseRefusal}
+        />
+      </section>
+    )
+  }
+
   // This screen stays mounted while the browser is open, so the knob values, the run
   // and its refusal are all still here when the student comes back.
   if (browsing && browseSelectedTier !== undefined) {
@@ -312,12 +376,31 @@ export function ConfigureTask({
 
       <FamilyPicker
         families={declaration.families}
-        selected={family.id}
+        selected={family?.id}
         onSelect={selectFamily}
         availability={availability?.families}
         formatPrice={formatPrice}
       />
 
+      {bench === undefined ? null : (
+        <p className="bench-offer">
+          <button type="button" onClick={() => setAtBench(true)}>
+            Upgrades
+          </button>
+        </p>
+      )}
+
+      {/*
+        A task none of whose models the farm owns. Something to go and buy, not a fault:
+        the picker above has already said what opens each, so this says only that there
+        is nothing to tune yet and offers no knobs, no model to make and no refusal.
+      */}
+      {family === undefined ? (
+        <p className="no-family">
+          Nothing here is yours yet. Each of these is opened by what is beside it.
+        </p>
+      ) : (
+        <>
       <p className="family-summary">{family.teaching.summary}</p>
       <HelpDisclosure label={`How does ${family.label} work?`}>
         {family.teaching.theory}
@@ -354,7 +437,7 @@ export function ConfigureTask({
         <div className="configure-columns">
           <fieldset>
             <legend>Settings</legend>
-            {family.knobs.map((knob) => (
+            {(family?.knobs ?? []).map((knob) => (
               <KnobControl
                 key={knob.id}
                 knob={knob}
@@ -399,7 +482,7 @@ export function ConfigureTask({
         </button>
       </form>
 
-      {identified.ok ? null : (
+      {identified === undefined || identified.ok ? null : (
         <Issues title="These settings cannot be used" issues={identified.issues} />
       )}
 
@@ -451,6 +534,9 @@ export function ConfigureTask({
           </button>
         </p>
       ) : null}
+
+        </>
+      )}
 
       {atWork === undefined ? null : (
         <p className="at-work">

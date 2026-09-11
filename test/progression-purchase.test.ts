@@ -234,7 +234,8 @@ describe('an item the catalog permits to be bought more than once', () => {
 
   it('is reported as bought so far against what the catalog still permits', () => {
     const { farm, owned } = buyTimes(2)
-    const entry = marketView(repeatable, owned, farm.balance).groups
+    const entry = marketView(repeatable, [], testFarm, owned, farm.balance).sections
+      .flatMap((section) => section.groups)
       .flatMap((group) => group.items)
       .find((item) => item.item.id === 'starter-plot')
 
@@ -246,7 +247,8 @@ describe('an item the catalog permits to be bought more than once', () => {
 
   it('is owned rather than saving at its limit, so no money is implied to obtain more', () => {
     const { farm, owned } = buyTimes(5)
-    const entry = marketView(repeatable, owned, farm.balance).groups
+    const entry = marketView(repeatable, [], testFarm, owned, farm.balance).sections
+      .flatMap((section) => section.groups)
       .flatMap((group) => group.items)
       .find((item) => item.item.id === 'starter-plot')
 
@@ -256,7 +258,8 @@ describe('an item the catalog permits to be bought more than once', () => {
   })
 
   it('is saving for while the balance does not cover it, limit remaining or not', () => {
-    const entry = marketView(repeatable, [], 100).groups
+    const entry = marketView(repeatable, [], testFarm, [], 100).sections
+      .flatMap((section) => section.groups)
       .flatMap((group) => group.items)
       .find((item) => item.item.id === 'starter-plot')
 

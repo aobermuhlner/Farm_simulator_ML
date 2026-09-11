@@ -66,7 +66,7 @@ export function repeatShopCatalog(
   return soundCatalog(
     {
       schemaVersion: '1.0.0',
-      groups: [{ id: 'planting', label: 'Planting' }],
+      groups: [{ id: 'planting', label: 'Planting', soldAt: 'market' }],
       ownedAtStart: owned,
       items: [
         {
@@ -95,9 +95,9 @@ export function shopCatalog(farm: FarmDeclaration = farmDeclaration()): Catalog 
     {
       schemaVersion: '1.0.0',
       groups: [
-        { id: 'planting', label: 'Planting' },
-        { id: 'sheds', label: 'Sheds' },
-        { id: 'quiet', label: 'Quiet corner' },
+        { id: 'planting', label: 'Planting', soldAt: 'market' },
+        { id: 'sheds', label: 'Sheds', soldAt: 'market' },
+        { id: 'quiet', label: 'Quiet corner', soldAt: 'market' },
       ],
       ownedAtStart: ['starter-plot'],
       items: [

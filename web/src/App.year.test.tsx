@@ -39,21 +39,19 @@ const bothCards = farmCarrying([apple.declaration, screening.declaration])
 const FIRST_YEAR = declaration.openingYear
 const OPENING_BALANCE = formatUnits(openFarm(declaration).balance, declaration)
 /**
- * How many pieces one person is put in front of, which is not the crop.
+ * How many pieces one person is put in front of.
  *
- * The orchard bears far more than a pair of hands reaches, so a loop over the crop would
- * click six thousand times at a screen that stops after sixty.
+ * The whole of the opening crop: nothing declares a limit, and the shipped orchard is one
+ * tree. A larger orchard would be bounded only by the photographs the split holds, which
+ * is far above this.
  */
-const PRESENTED = Math.min(
-  declaration.orchard.opening * declaration.orchard.piecesPerUnit,
-  apple.declaration.handSorting.perHarvest,
-)
+const PRESENTED = declaration.orchard.opening * declaration.orchard.piecesPerUnit
 
 /**
  * How long a test that brings a crop in by hand may take.
  *
- * Sixty simulated clicks through the real shell outruns the default five seconds whenever
- * the suite is busy. The test is genuinely doing sixty of everything.
+ * Every simulated click goes through the real shell, which outruns the default five
+ * seconds whenever the suite is busy.
  */
 const SORTING_TIME = 60_000
 

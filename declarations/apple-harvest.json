@@ -163,6 +163,148 @@
           "32": 4
         }
       }
+    },
+    {
+      "id": "decision-tree",
+      "label": "Decision tree",
+      "ships": "model",
+      "models": "artifacts/apple-harvest/trees",
+      "slot": {
+        "icon": "🌳",
+        "label": "Sorting tree"
+      },
+      "knobs": [
+        {
+          "kind": "choice",
+          "id": "nodes",
+          "label": "Questions the tree may ask",
+          "values": [
+            2,
+            4,
+            6
+          ],
+          "default": 2,
+          "help": "How many questions the tree is allowed to ask before it has to answer. Each question cuts one of the measured numbers at one value, and an apple takes the first branch whose question it answers yes to. Buying more questions extends the tree you have rather than replacing it: the ones already there stay where they are, and the new ones sort what used to fall out of the bottom. More questions separate kinds of apple that fewer have to lump together — and give the tree room to describe the particular apples it was shown instead of apples in general."
+        },
+        {
+          "kind": "choice",
+          "id": "dataset",
+          "label": "Photos to learn from",
+          "values": [
+            "starter",
+            "bulk",
+            "checked"
+          ],
+          "default": "starter",
+          "help": "Which set of photographs this model is fitted on. Every other setting here changes how the robot's eye learns; this one changes what it learns from. Look at a set before you fit to it — how many of each kind it holds, and how carefully somebody filed them, is the difference between a model that has seen the orchard and one that has been misinformed about it."
+        }
+      ],
+      "datasetKnob": "dataset",
+      "teaching": {
+        "summary": "A tree of yes-or-no questions about the numbers measured from each photograph. An apple goes in at the top, takes the first branch whose question it answers yes to, and comes to rest in exactly one leaf. That leaf says how likely each kind of apple is, and the sorting rule decides what to do about it — the same division the robot's eye works under. It is the one model on this farm you can read from end to end.",
+        "theory": "The trees offered here were written out by hand. Nothing on this screen was worked out from your photographs, and pressing the button below neither fits a tree nor changes one: it shows you the tree that ships for the budget you chose. They were written this way on purpose, so that the rest of the farm — buying a model, tuning it, putting it to work, reading what it earned — could be built and tried before any fitting existed.\n\nWhat fitting one would do is choose the questions itself. For every measured number it would try every place to cut it, keep whichever cut separates the kinds of apple best, and go on cutting inside the branches until it runs out of questions it is allowed to ask. That is why the budget below is the whole of this model's capacity. It is also where a tree goes wrong: given enough questions it can carve out the particular apples it was shown, one by one, and be right about every one of them without having learned anything about apples."
+      },
+      "diagram": {
+        "kind": "tree",
+        "nodesKnob": "nodes"
+      },
+      "tutorial": {
+        "id": "first-tree-leaves",
+        "title": "Say what each leaf is for",
+        "teaching": {
+          "summary": "The questions on this tree are already written. What is missing is what its answers mean: drop one apple into each empty leaf to say what that leaf is for, then test it against nine real apples out of the training set.",
+          "theory": "A tree asks one question at a time. An apple goes in at the top, follows the first branch whose question it answers yes to, and comes to rest in exactly one leaf — and that leaf is the tree's answer for it. Nothing else about the apple matters: two apples that answer every question the same way get the same verdict, however different they look to you. That is what makes a tree readable, and it is also where one can be honestly wrong. If the numbers a tree asks about do not separate what you care about, no labelling of its leaves can rescue it."
+        },
+        "disclosure": "The two questions this tree asks were given to you. Choosing the questions — which measurement to cut, and where to cut it — is the whole of what fitting a tree is, and the model this lesson introduces chooses its own.",
+        "kind": "label-the-leaves",
+        "puzzle": {
+          "questions": [
+            {
+              "feature": "darkSpotArea",
+              "threshold": 0.0205
+            },
+            {
+              "feature": "redness",
+              "threshold": 0.4513
+            }
+          ],
+          "items": [
+            {
+              "image": "t-006",
+              "category": "wormy",
+              "features": {
+                "darkSpotArea": 0.0559,
+                "redness": 0.4692
+              }
+            },
+            {
+              "image": "t-013",
+              "category": "wormy",
+              "features": {
+                "darkSpotArea": 0.0559,
+                "redness": 0.4688
+              }
+            },
+            {
+              "image": "t-134",
+              "category": "wormy",
+              "features": {
+                "darkSpotArea": 0.0612,
+                "redness": 0.4934
+              }
+            },
+            {
+              "image": "t-025",
+              "category": "red",
+              "features": {
+                "darkSpotArea": 0,
+                "redness": 0.5202
+              }
+            },
+            {
+              "image": "t-163",
+              "category": "red",
+              "features": {
+                "darkSpotArea": 0,
+                "redness": 0.5191
+              }
+            },
+            {
+              "image": "t-043",
+              "category": "red",
+              "features": {
+                "darkSpotArea": 0,
+                "redness": 0.5181
+              }
+            },
+            {
+              "image": "t-074",
+              "category": "wormy",
+              "features": {
+                "darkSpotArea": 0,
+                "redness": 0.4954
+              }
+            },
+            {
+              "image": "t-016",
+              "category": "green",
+              "features": {
+                "darkSpotArea": 0,
+                "redness": -0.4191
+              }
+            },
+            {
+              "image": "t-193",
+              "category": "green",
+              "features": {
+                "darkSpotArea": 0,
+                "redness": -0.4426
+              }
+            }
+          ],
+          "mark": 8
+        }
+      }
     }
   ],
   "features": [
@@ -242,18 +384,18 @@
   },
   "payoffs": {
     "red": {
-      "crate-red": 0.4,
-      "crate-green": 0.2,
+      "crate-red": 1.2,
+      "crate-green": 0.6,
       "discard": 0
     },
     "green": {
-      "crate-red": -0.3,
-      "crate-green": 0.2,
+      "crate-red": -0.9,
+      "crate-green": 0.6,
       "discard": 0
     },
     "wormy": {
-      "crate-red": -0.5,
-      "crate-green": -0.5,
+      "crate-red": -1.5,
+      "crate-green": -1.5,
       "discard": 0
     }
   },
@@ -267,13 +409,12 @@
     ],
     "tolerance": 0.12,
     "warnAbove": 0.09,
-    "downgradedValue": 0.05
+    "downgradedValue": 0.15
   },
   "policy": {
     "kind": "highest-probability"
   },
   "handSorting": {
-    "perHarvest": 60,
     "secondsPerImage": 60
   },
   "teaching": {

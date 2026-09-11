@@ -125,8 +125,8 @@ export function twoFamilyArtifact(familyId = SHIPS_PREDICTIONS.id): PredictionAr
     configurations: {
       'depth1-datasetstarter': {
         history: [
-          { epoch: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
-          { epoch: 2, trainLoss: 0.5, valLoss: 0.6, trainAccuracy: 0.8, valAccuracy: 0.7 },
+          { step: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
+          { step: 2, trainLoss: 0.5, valLoss: 0.6, trainAccuracy: 0.8, valAccuracy: 0.7 },
         ],
         predictions: {
           training: { 'a-1': [0.9, 0.05, 0.05] },

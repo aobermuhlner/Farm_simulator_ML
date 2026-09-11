@@ -55,8 +55,8 @@ export interface TaskAvailability {
    * Computed here rather than read off the declaration, for the same reason a knob
    * value's availability is: a declaration reads the same whatever a student owns, and
    * a screen that decided for itself could disagree with the one that refuses the run.
-   * Nothing in the catalog opens a family yet, so every family is open — which is the
-   * default-open rule, not a gap.
+   * The rule is the same default-open one: a family the catalog never mentions is
+   * available, and one it does is available exactly when the item opening it is owned.
    */
   readonly families: readonly FamilyAvailability[]
 }
@@ -79,8 +79,14 @@ export function computeAvailability(
 ): Availability {
   /** "task knob value" to the item that opens it, for everything the catalog mentions. */
   const opener = new Map<string, CatalogItem>()
+  /** "task family" to the item that opens it, for every family the catalog mentions. */
+  const familyOpener = new Map<string, CatalogItem>()
   for (const item of catalog.items) {
     for (const unlock of item.opens) {
+      if (unlock.kind === 'model-family') {
+        familyOpener.set(`${unlock.task} ${unlock.family}`, item)
+        continue
+      }
       // Growth opens no knob value, so it puts nothing in this map. Availability is
       // therefore identical for a farm that owns a growth item once, twice or not at
       // all — which is what keeps a repeated id from meaning anything here.
@@ -94,7 +100,13 @@ export function computeAvailability(
   return {
     tasks: tasks.map((task) => ({
       taskId: task.id,
-      families: task.families.map((family) => ({ familyId: family.id, available: true })),
+      families: task.families.map((family) => {
+        const item = familyOpener.get(`${task.id} ${family.id}`)
+        if (item === undefined || owned.includes(item.id)) {
+          return { familyId: family.id, available: true }
+        }
+        return { familyId: family.id, available: false, openedBy: item }
+      }),
       knobs: declaredKnobs(task).map((knob) => ({
         knobId: knob.id,
         values: declaredValues(knob).map((value) => {

@@ -917,14 +917,14 @@ describe('the families of a task', () => {
 
   it('record which family a task has selected, because choosing one is progress', () => {
     expect(restored(tuned(), twoFamilyContext).families[twoFamily.id]).toBe(chain)
-    expect(selectedFamilyFor(restored(tuned(), twoFamilyContext), twoFamily).id).toBe(chain)
+    expect(selectedFamilyFor(restored(tuned(), twoFamilyContext), twoFamily)?.id).toBe(chain)
   })
 
   it('open at the task’s first declared family when the save records none', () => {
     const silent: GameState = { ...tuned(), families: {} }
     const back = restored(silent, twoFamilyContext)
 
-    expect(selectedFamilyFor(back, twoFamily).id).toBe(twoFamily.families[0]?.id)
+    expect(selectedFamilyFor(back, twoFamily)?.id).toBe(twoFamily.families[0]?.id)
     // And the rest of the save is kept rather than refused.
     expect(back.knobs[twoFamily.id]?.[network]).toEqual({ depth: 2 })
     expect(back.farm.balance).toBe(played().farm.balance)
@@ -939,7 +939,7 @@ describe('the families of a task', () => {
 
     expect(outcome.kind).toBe('restored')
     if (outcome.kind !== 'restored') return
-    expect(selectedFamilyFor(outcome.state, twoFamily).id).toBe(twoFamily.families[0]?.id)
+    expect(selectedFamilyFor(outcome.state, twoFamily)?.id).toBe(twoFamily.families[0]?.id)
     expect(outcome.state.knobs[twoFamily.id]?.[chain]).toEqual({ depth: 1 })
     expect(outcome.dropped.map((issue) => issue.message).join(' ')).toContain('withdrawn-rung')
   })
@@ -982,8 +982,8 @@ describe('the families of a task', () => {
     const back = restored(tuned(), { ...twoFamilyContext, tasks: [relabelled] })
     const selected = selectedFamilyFor(back, relabelled)
 
-    expect(selected.label).toBe('A quite different name')
-    expect(selected.teaching.summary).toBe('New copy.')
+    expect(selected?.label).toBe('A quite different name')
+    expect(selected?.teaching.summary).toBe('New copy.')
   })
 })
 
@@ -1081,5 +1081,57 @@ describe('a farm saved before the datasets were declared', () => {
     if (outcome.kind !== 'restored') return
     expect(outcome.state.slots[apple.id]).toEqual({ configurationId: AT_WORK, family: FAMILY })
     expect(outcome.dropped).toEqual([])
+  })
+})
+
+describe('what every farm owns is a floor, not an opening state', () => {
+  /** A catalog whose unpriced row every farm owns, priced row buyable five times. */
+  function withFloor(): Catalog {
+    const raw = catalogWith([pricedItem({ repeat: 5 }), unpricedItem()])
+    raw.ownedAtStart = ['deeper-blocks']
+    return soundCatalog(raw)
+  }
+
+  const floored: SaveContext = { declaration: testFarm, catalog: withFloor(), tasks: [apple] }
+
+  /** A played farm whose save records exactly `owned`. */
+  function owning(owned: readonly string[]): GameState {
+    return { ...played(), owned: [...owned] }
+  }
+
+  it('gives a farm saved before the item was declared everything owned at the start', () => {
+    // The case this rule exists for: a save written against a catalog that did not
+    // carry the row comes back owning it, rather than finding what it had been using
+    // locked and unbuyable.
+    const back = restored(owning([]), floored)
+
+    expect(back.owned).toEqual(['deeper-blocks'])
+    expect(parseSave(serializeSave(owning([])), floored)).toMatchObject({ dropped: [] })
+  })
+
+  it('keeps what the farm had already bought beside it', () => {
+    const back = restored(owning(['wider-blocks']), floored)
+
+    expect(back.owned).toContain('wider-blocks')
+    expect(back.owned).toContain('deeper-blocks')
+  })
+
+  it('credits a save that already names the item once with it once, not twice', () => {
+    const back = restored(owning(['deeper-blocks']), floored)
+
+    expect(back.owned.filter((id) => id === 'deeper-blocks')).toHaveLength(1)
+  })
+
+  it('leaves a repeatable item already bought twice reading as bought twice', () => {
+    const raw = catalogWith([pricedItem({ repeat: 5 }), unpricedItem()])
+    raw.ownedAtStart = ['wider-blocks']
+    const context: SaveContext = { declaration: testFarm, catalog: soundCatalog(raw), tasks: [apple] }
+    const back = restored(owning(['wider-blocks', 'wider-blocks']), context)
+
+    expect(back.owned.filter((id) => id === 'wider-blocks')).toHaveLength(2)
+  })
+
+  it('changes nothing for a catalog that says every farm owns nothing', () => {
+    expect(restored(owning(['wider-blocks'])).owned).toEqual(['wider-blocks'])
   })
 })

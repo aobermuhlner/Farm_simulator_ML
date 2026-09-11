@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Farm, FarmDeclaration } from '../src/economy/index.js'
-import { openFarm } from '../src/economy/index.js'
+import { openFarm, toUnits } from '../src/economy/index.js'
 import type { LoadedPool } from '../src/pool/index.js'
 import { readPool } from '../src/pool/index.js'
 import {
@@ -24,6 +24,7 @@ import {
   CROP_SIZE_MISSING,
   CROP_TOO_SMALL,
   drawCrop,
+  measureSort,
 } from '../src/sorting/index.js'
 import type { TaskDeclaration } from '../src/task/types.js'
 import { appleDeclaration } from './helpers/apple.js'
@@ -160,32 +161,89 @@ describe('the crop follows the orchard', () => {
   })
 })
 
-describe('what one person can get through', () => {
+describe('what one person is offered', () => {
+  it('presents the opening crop of five entire', () => {
+    const crop = drawn(farm({ land: 5 }))
+    expect(crop.presented).toHaveLength(5)
+    expect(crop.unsorted).toBe(0)
+  })
+
   it('presents a small crop entire and reports nothing unsorted', () => {
     const crop = drawn(farm({ land: 10 }))
     expect(crop.presented).toHaveLength(10)
     expect(crop.unsorted).toBe(0)
   })
 
-  it('presents the declared limit of a large crop and names the shortfall', () => {
-    const limit = declaration.handSorting.perHarvest
+  it('presents a four-hundred-apple crop entire, bounded by no declared number', () => {
+    // Far more than anyone will click through in a sitting, and offered anyway: where the
+    // sort stops is the student's own decision, and the only thing that takes it out of
+    // their hands is running out of photographs.
     const crop = drawn(farm({ land: 400 }))
-    expect(crop.presented).toHaveLength(limit)
-    expect(crop.size).toBe(400)
-    expect(crop.unsorted).toBe(400 - limit)
-  })
-
-  it('presents exactly the crop when it comes to the limit itself', () => {
-    const limit = declaration.handSorting.perHarvest
-    const crop = drawn(farm({ land: limit }))
-    expect(crop.presented).toHaveLength(limit)
+    expect(crop.presented).toHaveLength(400)
     expect(crop.unsorted).toBe(0)
   })
 
-  it('presents no more of a bigger crop than of one already past the limit', () => {
+  it('cuts a crop past the split back to what its shortest category can supply', () => {
+    // 2 000 apples drawn 1 100 / 700 / 200 against a split holding 500 / 250 / 250. Green
+    // runs out first — 250 photographs against a category that is 35% of the crop — so the
+    // portion is 250 / 0.35 of it, about 714 apples, and the rest is left undecided.
+    const crop = drawn(farm({ land: 2000 }))
+    expect(crop.composition).toEqual({ red: 1100, green: 700, wormy: 200 })
+    expect(crop.presented).toHaveLength(714)
+    expect(countsOf(crop)).toEqual({ red: 393, green: 250, wormy: 71 })
+    expect(crop.unsorted).toBe(2000 - 714)
+  })
+
+  it('holds each category in the crop’s own proportions, not the split’s', () => {
+    // Filling the portion out with whichever categories still had photographs left would
+    // hand the student a crop richer in worms than the one their robot faces, which makes
+    // hand sorting a different task rather than a smaller one.
+    const crop = drawn(farm({ land: 2000 }))
+    const shown = countsOf(crop)
+    for (const category of categories) {
+      expect(
+        (shown[category] as number) / crop.presented.length,
+        `"${category}" is over- or under-represented in the portion`,
+      ).toBeCloseTo((crop.composition[category] as number) / crop.size, 2)
+    }
+  })
+
+  it('presents no more of a bigger crop than of one already past the split', () => {
     expect(drawn(farm({ land: 4000 })).presented).toHaveLength(
-      drawn(farm({ land: 400 })).presented.length,
+      drawn(farm({ land: 2000 })).presented.length,
     )
+  })
+})
+
+describe('growing past the split does not raise what one pair of hands brings in', () => {
+  /**
+   * What a faultless sort of this portion pays, in the farm's own whole units.
+   *
+   * Crossed into units rather than compared as a fraction, because that is the crossing
+   * the wage actually makes on its way to the balance, and two sums of the same payoffs
+   * added in a different order differ in the last bit of a double.
+   */
+  function faultlessWage(crop: ReturnType<typeof drawn>): number {
+    const decisions = crop.presented.map((piece) => ({
+      imageId: piece.imageId,
+      action: declaration.categoryActions[piece.category] as string,
+      elapsedMs: 1000,
+    }))
+    return toUnits(measureSort(declaration, crop, committed.truth, decisions).wage, 2)
+  }
+
+  it('offers the same portion, apple for apple of each kind, and pays the same wage', () => {
+    // Two crops of one year, twice the size apart, both past what the split can supply.
+    // `count x portion` is `share x min(held / share)`, and the crop's size cancels out of
+    // it — so the orchard can go on growing and the hands cannot go on earning. That is
+    // the plateau, and nothing declares it.
+    const smaller = drawn(farm({ land: 2000 }))
+    const larger = drawn(farm({ land: 4000 }))
+
+    expect(larger.size).toBe(2 * smaller.size)
+    expect(countsOf(larger)).toEqual(countsOf(smaller))
+    expect(larger.presented).toHaveLength(smaller.presented.length)
+    expect(faultlessWage(larger)).toBe(faultlessWage(smaller))
   })
 })
 
@@ -224,14 +282,9 @@ describe('a crop that cannot be presented refuses with its cause', () => {
     // A composition demanding more distinct pictures of one category than the split holds.
     // The crop is drawn all the same — it repeats pictures — and the sort is shortened to
     // what a person can be shown without meeting the same picture twice.
-    const greedy = {
-      ...declaration,
-      handSorting: { ...declaration.handSorting, perHarvest: 600 },
-    }
     const crop = drawn(
       farm({ land: 600 }, { cropComposition: { red: 0.2, green: 0.6, wormy: 0.2 } }),
       4242,
-      greedy,
     )
     expect(crop.size).toBe(600)
     expect(new Set(crop.presented.map((piece) => piece.imageId)).size).toBe(crop.presented.length)
@@ -294,7 +347,7 @@ describe('no picture is shown twice to a person, however often the crop repeats 
 
     const shown = crop.presented.map((piece) => piece.imageId)
     expect(new Set(shown).size).toBe(shown.length)
-    expect(shown).toHaveLength(declaration.handSorting.perHarvest)
+    expect(shown).toHaveLength(714)
   })
 
   it('draws what is presented from the crop itself rather than beside it', () => {
@@ -308,9 +361,10 @@ describe('no picture is shown twice to a person, however often the crop repeats 
   })
 
   it('presents the year’s own mix rather than a slice off the front of the crop', () => {
-    // Two crops of very different sizes, one year: what one person is shown is the same
-    // mix in both, which is what stops the wage moving when the orchard grows.
-    const smaller = countsOf(drawn(farm({ land: 400 })))
+    // Two crops of very different sizes, one year, both past what the split can supply:
+    // what one person is shown is the same mix in both, which is what stops the wage
+    // moving when the orchard grows.
+    const smaller = countsOf(drawn(farm({ land: 2000 })))
     const larger = countsOf(drawn(farm({ land: 6000 })))
     expect(larger).toEqual(smaller)
   })

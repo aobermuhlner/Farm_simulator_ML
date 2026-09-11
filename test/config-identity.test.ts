@@ -109,7 +109,7 @@ describe('artifact lookup by configuration identity', () => {
     const { entry, configurationId: id } = result
     expect(artifact.configurations[id]?.history).toBe(entry.history)
     expect(artifact.configurations[id]?.predictions).toBe(entry.predictions)
-    expect(entry.history.length).toBeGreaterThan(0)
+    expect(entry.history?.length ?? 0).toBeGreaterThan(0)
   })
 
   it('refuses a configuration the artifact has no entry for, naming it', () => {

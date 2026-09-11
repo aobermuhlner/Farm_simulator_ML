@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "1.2.0",
+  "taskId": "apple-harvest",
+  "familyId": "decision-tree",
+  "pool": {
+    "poolId": "pools/apple-harvest",
+    "schemaVersion": "1.2.0",
+    "seed": 855711213
+  },
+  "configurations": {
+    "nodes2-datasetstarter": {
+      "file": "nodes2-datasetstarter.json",
+      "knobs": {
+        "nodes": 2,
+        "dataset": "starter"
+      },
+      "tier": "starter",
+      "provenance": {
+        "origin": "authored",
+        "authoredBy": "Hand-authored for openspec/changes/fitted-tree, in the shape a fit will later produce. No model was fitted to any photograph to obtain these numbers."
+      }
+    },
+    "nodes4-datasetstarter": {
+      "file": "nodes4-datasetstarter.json",
+      "knobs": {
+        "nodes": 4,
+        "dataset": "starter"
+      },
+      "tier": "starter",
+      "provenance": {
+        "origin": "authored",
+        "authoredBy": "Hand-authored for openspec/changes/fitted-tree, in the shape a fit will later produce. No model was fitted to any photograph to obtain these numbers."
+      }
+    },
+    "nodes6-datasetstarter": {
+      "file": "nodes6-datasetstarter.json",
+      "knobs": {
+        "nodes": 6,
+        "dataset": "starter"
+      },
+      "tier": "starter",
+      "provenance": {
+        "origin": "authored",
+        "authoredBy": "Hand-authored for openspec/changes/fitted-tree, in the shape a fit will later produce. No model was fitted to any photograph to obtain these numbers."
+      }
+    }
+  }
+}

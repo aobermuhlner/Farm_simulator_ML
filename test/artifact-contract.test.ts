@@ -98,7 +98,7 @@ describe('the artifact covers both splits', () => {
       for (const split of ['training', 'pool'] as const) {
         expect(Object.keys(found.entry.predictions[split]).length).toBeGreaterThan(0)
       }
-      expect(found.entry.history.length).toBeGreaterThan(0)
+      expect(found.entry.history?.length ?? 0).toBeGreaterThan(0)
     }
   })
 

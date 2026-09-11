@@ -50,12 +50,57 @@ export function firstFamily(declaration: TaskDeclaration): ModelFamilyDeclaratio
  * withdrawn rung leaves a workshop that opens rather than one that refuses. What a
  * withdrawn family does to a *labour slot* is a different question with a different
  * answer — `src/save/` drops the slot and reports it, because a slot is a commitment.
+ *
+ * Knows nothing about what is owned: for the answer that does, see `selectableFamily`.
+ * This one is what a caller with a family already in hand — a labour slot, a report, a
+ * crop — reads a label off, and a locked family still has a label.
  */
 export function selectedFamily(
   declaration: TaskDeclaration,
   familyId: FamilyId | undefined,
 ): ModelFamilyDeclaration {
   return familyById(declaration, familyId) ?? firstFamily(declaration)
+}
+
+/**
+ * Whether a family may be selected. Absent locks nothing.
+ *
+ * A predicate rather than the availability value itself, so that `src/task/` stays
+ * unaware of the catalog: the progression module is the one place unlock rules live,
+ * and threading its answer in is what keeps this from becoming a second place.
+ */
+export type FamilyAvailable = (familyId: FamilyId) => boolean
+
+/**
+ * The first family a student may actually select, or nothing when none is open.
+ *
+ * Declared order still, because that is where the ladder's order is written down — but
+ * the first *available* rung rather than the first rung, or a farm one priced item away
+ * from opening a task would open it on a model the student cannot use.
+ */
+export function firstAvailableFamily(
+  declaration: TaskDeclaration,
+  available?: FamilyAvailable,
+): ModelFamilyDeclaration | undefined {
+  if (available === undefined) return declaration.families[0]
+  return declaration.families.find((family) => available(family.id))
+}
+
+/**
+ * The family a task opens at once what is owned is taken into account.
+ *
+ * Silence and a family that has since become unavailable are given the same answer, so
+ * a farm always opens on something it can use. Undefined is a real answer and not a
+ * defect: a task none of whose families is owned is a farm at the start of the game.
+ */
+export function selectableFamily(
+  declaration: TaskDeclaration,
+  familyId: FamilyId | undefined,
+  available?: FamilyAvailable,
+): ModelFamilyDeclaration | undefined {
+  const named = familyById(declaration, familyId)
+  if (named !== undefined && (available === undefined || available(named.id))) return named
+  return firstAvailableFamily(declaration, available)
 }
 
 /**

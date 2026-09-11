@@ -161,7 +161,10 @@ describe('categories, actions and their mapping', () => {
           disclosure: 'Every one of these was confirmed by the vet who took it.',
         },
       ],
-      families: (apple.families as Record<string, unknown>[]).map((family) => ({
+      // The tutorial goes with them. A comprehension puzzle is written against the
+      // categories of the task it teaches, so a lesson with a different subject brings
+      // its own or declares none — the same thing that is true of its photographs.
+      families: (apple.families as Record<string, unknown>[]).map(({ tutorial, ...family }) => ({
         ...family,
         knobs: [
           ...(family.knobs as Record<string, unknown>[]).filter(
@@ -553,16 +556,11 @@ describe('a category’s declared action is its best-paying action', () => {
 })
 
 describe('what one person can sort by hand', () => {
-  it('requires both figures, naming the one that is missing', () => {
-    for (const field of ['perHarvest', 'secondsPerImage'] as const) {
-      const handSorting = structuredClone(apple.handSorting) as Record<string, unknown>
-      delete handSorting[field]
-      const issues = issuesOf(withField('handSorting', handSorting))
-      expect(
-        issues.map((issue) => issue.field),
-        `omitting "${field}" should be reported`,
-      ).toContain(`handSorting.${field}`)
-    }
+  it('requires the time cap, naming it when it is missing', () => {
+    const handSorting = structuredClone(apple.handSorting) as Record<string, unknown>
+    delete handSorting.secondsPerImage
+    const issues = issuesOf(withField('handSorting', handSorting))
+    expect(issues.map((issue) => issue.field)).toContain('handSorting.secondsPerImage')
   })
 
   it('refuses a field that is not an object at all', () => {
@@ -570,37 +568,24 @@ describe('what one person can sort by hand', () => {
     expect(issues.map((issue) => issue.field)).toContain('handSorting')
   })
 
-  it('refuses a sorting limit that could not show every category once', () => {
-    const categories = (apple.categories as { id: string }[]).length
-    const issues = issuesOf(
-      withField('handSorting', { perHarvest: categories - 1, secondsPerImage: 60 }),
-    )
-    const refusal = issues.find((issue) => issue.code === 'sorting-limit-too-small')
-    expect(refusal?.field).toBe('handSorting.perHarvest')
-    expect(refusal?.message).toContain(String(categories))
+  it('refuses a declaration still carrying the sorting limit rather than ignoring it', () => {
+    // Nothing reads it any more. Left in silently, an author would go on believing it
+    // bounds the sort, and the only place that belief could be corrected is a screen that
+    // offers the whole crop regardless.
+    const issues = issuesOf(withField('handSorting', { perHarvest: 60, secondsPerImage: 60 }))
+    const refusal = issues.find((issue) => issue.field === 'handSorting.perHarvest')
+    expect(refusal?.code).toBe('unknown-field')
+    expect(refusal?.message).toContain('no longer read')
   })
 
-  it('accepts a sorting limit of exactly one image per declared category', () => {
-    const categories = (apple.categories as { id: string }[]).length
-    const result = validateDeclaration(
-      withField('handSorting', { perHarvest: categories, secondsPerImage: 60 }),
-    )
+  it('accepts the time cap alone', () => {
+    const result = validateDeclaration(withField('handSorting', { secondsPerImage: 60 }))
     expect(result.ok ? [] : result.issues).toEqual([])
-  })
-
-  it('refuses a sorting limit that is not a whole number of images', () => {
-    for (const perHarvest of [0, -10, 12.5, '60', null]) {
-      const issues = issuesOf(withField('handSorting', { perHarvest, secondsPerImage: 60 }))
-      expect(
-        issues.map((issue) => issue.field),
-        `${JSON.stringify(perHarvest)} should be refused`,
-      ).toContain('handSorting.perHarvest')
-    }
   })
 
   it('refuses a time cap of zero or less, so no rate can be infinite or negative', () => {
     for (const secondsPerImage of [0, -1, Number.POSITIVE_INFINITY, '60']) {
-      const issues = issuesOf(withField('handSorting', { perHarvest: 60, secondsPerImage }))
+      const issues = issuesOf(withField('handSorting', { secondsPerImage }))
       const refusal = issues.find((issue) => issue.field === 'handSorting.secondsPerImage')
       expect(refusal, `${JSON.stringify(secondsPerImage)} should be refused`).toBeDefined()
       expect(refusal?.message).toContain('greater than zero')
@@ -608,9 +593,7 @@ describe('what one person can sort by hand', () => {
   })
 
   it('accepts a fractional time cap, which is a duration rather than a count', () => {
-    const result = validateDeclaration(
-      withField('handSorting', { perHarvest: 60, secondsPerImage: 2.5 }),
-    )
+    const result = validateDeclaration(withField('handSorting', { secondsPerImage: 2.5 }))
     expect(result.ok ? [] : result.issues).toEqual([])
   })
 })

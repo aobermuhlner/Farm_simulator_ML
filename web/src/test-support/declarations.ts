@@ -162,7 +162,7 @@ export function unrelatedDeclaration(): TaskDeclaration {
     },
     // Deliberately unlike the apple task's figures: a screen that had kept either of
     // those numbers would render this task with the wrong one.
-    handSorting: { perHarvest: 7, secondsPerImage: 45 },
+    handSorting: { secondsPerImage: 45 },
     teaching: {
       summary: 'Missing a diseased animal costs far more than a needless vet visit.',
       theory: 'When one error is dearer than the other, the best guess is not the best decision.',
@@ -192,9 +192,9 @@ export function unrelatedArtifact(): PredictionArtifact {
       // The tier the family's dataset knob names, appended as every identifier carries it.
       'sensitivitylow-photographsclinic': {
         history: [
-          { epoch: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
-          { epoch: 2, trainLoss: 0.6, valLoss: 0.68, trainAccuracy: 0.7, valAccuracy: 0.62 },
-          { epoch: 3, trainLoss: 0.4, valLoss: 0.55, trainAccuracy: 0.86, valAccuracy: 0.71 },
+          { step: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
+          { step: 2, trainLoss: 0.6, valLoss: 0.68, trainAccuracy: 0.7, valAccuracy: 0.62 },
+          { step: 3, trainLoss: 0.4, valLoss: 0.55, trainAccuracy: 0.86, valAccuracy: 0.71 },
         ],
         predictions: {
           training: { 'a-1': [0.9, 0.1] },
@@ -317,7 +317,7 @@ export function sharedActionDeclaration(): TaskDeclaration {
       national: { depot: 0.5, van: -0.1, airport: 0.1 },
       overseas: { depot: 0.3, van: -0.8, airport: 0.25 },
     },
-    handSorting: { perHarvest: 9, secondsPerImage: 30 },
+    handSorting: { secondsPerImage: 30 },
     teaching: {
       summary: 'Two of these three parcels take the same road out of the yard.',
       theory: 'A category and a treatment are different things, and nothing says a task must have one of each.',
@@ -615,8 +615,8 @@ export function ladderPredictions(): PredictionArtifact {
     configurations: {
       'depth1-photographsclinic': {
         history: [
-          { epoch: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
-          { epoch: 2, trainLoss: 0.5, valLoss: 0.6, trainAccuracy: 0.8, valAccuracy: 0.7 },
+          { step: 1, trainLoss: 0.9, valLoss: 0.95, trainAccuracy: 0.4, valAccuracy: 0.35 },
+          { step: 2, trainLoss: 0.5, valLoss: 0.6, trainAccuracy: 0.8, valAccuracy: 0.7 },
         ],
         predictions: {
           training: { 'a-1': [0.9, 0.1] },

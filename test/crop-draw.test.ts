@@ -254,6 +254,77 @@ describe('the same farm in the same year draws the same crop', () => {
   })
 })
 
+describe('a crop too small for its shares holds every category all the same', () => {
+  /** The shipped opening: one tree bearing five apples, at the shipped composition. */
+  function opening(variation?: YearVariation, year = 1): Crop {
+    const declared = shippedFarm()
+    return drawn(
+      farm(
+        { land: 5, year },
+        {
+          cropComposition: declared.cropComposition,
+          ...(variation === undefined ? {} : { yearVariation: variation }),
+        },
+      ),
+    )
+  }
+
+  it('draws two, two and one from five apples at fifty-five, thirty-five and ten', () => {
+    // The shares yield three, two and none; a whole apple is then taken from the largest
+    // to give the smallest one. Kept on purpose — the first crop a student meets contains
+    // all three kinds of apple, which is the first thing they need to see.
+    const crop = opening()
+    expect(crop.size).toBe(5)
+    expect(crop.composition).toEqual({ red: 2, green: 2, wormy: 1 })
+    expect(tally(crop)).toEqual({ red: 2, green: 2, wormy: 1 })
+  })
+
+  it('draws the same two, two and one across the whole of the declared range', () => {
+    // Both ends of the wormy range, and several years inside it. 0.07 of five apples is
+    // a third of one and 0.14 is two thirds, so no year this farm ever draws can put a
+    // second worm in the crop or take the one away — and nothing may present two such
+    // years as differing, or as noise, error or sampling variation.
+    const range = shippedFarm().yearVariation?.wormy
+    expect(range).toEqual({ min: 0.07, max: 0.14 })
+    if (range === undefined) return
+
+    for (const year of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      expect(opening(shippedFarm().yearVariation, year).composition, `year ${year}`).toEqual({
+        red: 2,
+        green: 2,
+        wormy: 1,
+      })
+    }
+
+    // And the ends of the range pinned, rather than left to whichever years came up.
+    for (const wormy of [range.min, range.max]) {
+      const pinned = opening({ wormy: { min: wormy, max: wormy } })
+      expect(pinned.composition, `a year at ${wormy}`).toEqual({ red: 2, green: 2, wormy: 1 })
+    }
+  })
+
+  it('records the drawn counts, which are not the shares the crop was drawn at', () => {
+    // What is recorded is what was drawn. The declared shares of this crop would be 2.75,
+    // 1.75 and 0.5 apples, and no screen may present them as what the year bore.
+    const crop = opening()
+    const declared = shippedFarm().cropComposition
+    for (const category of categories) {
+      const share = (crop.composition[category] as number) / crop.size
+      expect(share, `"${category}" drew its declared share after all`).not.toBeCloseTo(
+        declared[category] as number,
+        2,
+      )
+    }
+  })
+
+  it('leaves a crop large enough to express its shares alone', () => {
+    // Nothing is moved between categories once whole apples can carry the shares: the
+    // one-of-each rule is a floor, not a thumb on the scale.
+    const crop = drawn(farm({ land: 100 }, { cropComposition: shippedFarm().cropComposition }))
+    expect(crop.composition).toEqual({ red: 55, green: 35, wormy: 10 })
+  })
+})
+
 describe('the largest orchard the farm can reach is still cheap to draw', () => {
   /** The largest crop the shipped catalog could sell towards, in pieces. */
   const LARGEST = (() => {
@@ -262,8 +333,8 @@ describe('the largest orchard the farm can reach is still cheap to draw', () => 
     return maxLand(catalog, farmDeclaration) * farmDeclaration.orchard.piecesPerUnit
   })()
 
-  it('is thirty-six thousand pieces, which is what the shipped catalog reaches', () => {
-    expect(LARGEST).toBe(36000)
+  it('is two thousand pieces, which is what the shipped catalog reaches', () => {
+    expect(LARGEST).toBe(2000)
   })
 
   it('draws that crop inside a fixed budget, so a draw that stops being cheap fails loudly', () => {
@@ -288,12 +359,12 @@ describe('the largest orchard the farm can reach is still cheap to draw', () => 
       drawn(farm({ land: pieces }))
       return performance.now() - started
     }
-    time(LARGEST / 6)
-    const small = time(LARGEST / 6)
+    time(LARGEST / 4)
+    const small = time(LARGEST / 4)
     const large = time(LARGEST)
 
-    // Six times the pieces, generously under thirty times the work.
-    expect(large, `${small.toFixed(1)}ms at a sixth, ${large.toFixed(1)}ms at full size`).toBeLessThan(
+    // Four times the pieces, generously under thirty times the work.
+    expect(large, `${small.toFixed(1)}ms at a quarter, ${large.toFixed(1)}ms at full size`).toBeLessThan(
       Math.max(small, 1) * 30,
     )
   })

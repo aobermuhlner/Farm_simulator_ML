@@ -11,7 +11,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SortOutcome } from '../../../src/sorting/index.js'
-import { measureSort } from '../../../src/sorting/index.js'
+import { measureSort, whatStoppingCosts } from '../../../src/sorting/index.js'
 import { formatUnits, toUnits } from '../../../src/economy/index.js'
 import { appleDeclaration } from '../test-support/declarations.js'
 import { farmBearing, farmDeclaration } from '../test-support/farm.js'
@@ -25,6 +25,17 @@ const declaration = appleDeclaration()
 const farm = farmDeclaration()
 const actions = declaration.actions
 const REQUIRED = declaration.categoryActions
+
+/**
+ * A crop a student is shown entire: nothing declares a limit, so this is just a size.
+ *
+ * Sixty rather than the shipped orchard's five, because a screen test about the offer to
+ * stop needs a crop with a middle to stop in.
+ */
+const SITTING = 60
+
+/** A crop the evaluation split cannot supply whole, so a remainder is left behind. */
+const PAST_THE_SPLIT = 2000
 
 function formatAmount(amount: number): string {
   return formatUnits(toUnits(amount, farm.precision), farm)
@@ -41,6 +52,7 @@ function renderSort(
       load={loadsCrop(crop)}
       onSettle={(outcome) => settled.push(outcome)}
       formatAmount={formatAmount}
+      cropComposition={farm.cropComposition}
       onBack={() => undefined}
       {...over}
     />,
@@ -295,10 +307,10 @@ describe('the summary breaks the crop down and states its arithmetic', () => {
   })
 
   it('says nothing about a remainder when the crop was sorted entire', () => {
-    // A crop one person can get through, which the shipped orchard is far past: the
-    // remainder line is about the crop being larger than a pair of hands, so a crop that
-    // is not needs its own farm to say so.
-    const small = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    // A crop the split can supply whole, which the shipped orchard's endgame is far past:
+    // the remainder line is about the crop being larger than the photographs there are, so
+    // a crop that is not needs its own farm to say so.
+    const small = appleCrop(farmSorting(SITTING))
     const whole = sortedWith(small, (category) => REQUIRED[category] as string)
     renderSort(small, { outcome: whole })
     expect(whole.unsorted).toBe(0)
@@ -306,11 +318,12 @@ describe('the summary breaks the crop down and states its arithmetic', () => {
   })
 
   it('states how many were left and that they earned nothing when the crop was too big', () => {
-    const large = appleCrop(farmSorting(400))
+    const large = appleCrop(farmSorting(PAST_THE_SPLIT))
     const past = sortedWith(large, (category) => REQUIRED[category] as string)
     renderSort(large, { outcome: past })
 
-    expect(past.unsorted).toBe(400 - declaration.handSorting.perHarvest)
+    expect(past.unsorted).toBe(PAST_THE_SPLIT - large.presented.length)
+    expect(past.unsorted).toBeGreaterThan(0)
     const line = document.querySelector('[data-unsorted]')
     expect(line?.getAttribute('data-unsorted')).toBe(String(past.unsorted))
     expect(line?.textContent).toContain('earned nothing')
@@ -426,7 +439,7 @@ describe('the summary states what the buyer measured', () => {
    * The range is dropped and the share pinned at its upper bound rather than left to a
    * draw: a screen test about what the summary says must not depend on which year came up.
    */
-  function wettest(cropSize = declaration.handSorting.perHarvest): CropView {
+  function wettest(cropSize = SITTING): CropView {
     // Built from a farm declared to bear exactly this crop, not from the shipped one:
     // the size is the land times the yield now, so pinning the composition on the
     // shipped orchard would hand the draw sixty pieces per requested one.
@@ -436,7 +449,7 @@ describe('the summary states what the buyer measured', () => {
   }
 
   it('states the measured share and the limit it was measured against', () => {
-    const crop = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    const crop = appleCrop(farmSorting(SITTING))
     const careless = sortedWith(crop, () => term.delivering[0] as string)
     renderSort(crop, { outcome: careless })
 
@@ -471,7 +484,7 @@ describe('the summary states what the buyer measured', () => {
   })
 
   it('says the delivery was accepted when the share stayed under the limit', () => {
-    const crop = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    const crop = appleCrop(farmSorting(SITTING))
     const careful = sortedWith(crop, (category) => REQUIRED[category] as string)
     renderSort(crop, { outcome: careful })
 
@@ -484,7 +497,7 @@ describe('the summary states what the buyer measured', () => {
   })
 
   it('says nothing was measured when nothing went to the buyer', () => {
-    const crop = appleCrop(farmSorting(declaration.handSorting.perHarvest))
+    const crop = appleCrop(farmSorting(SITTING))
     const outside = actions.find((action) => !term.delivering.includes(action.id))
     if (outside === undefined) throw new Error('the term must leave an action outside it')
     const kept = sortedWith(crop, () => outside.id)
@@ -496,13 +509,14 @@ describe('the summary states what the buyer measured', () => {
   })
 
   it('leaves the unsorted line and the throughput figures exactly as they were', () => {
-    const crop = wettest(400)
+    const crop = wettest(PAST_THE_SPLIT)
     const careless = sortedWith(crop, () => term.delivering[0] as string)
     renderSort(crop, { outcome: careless })
 
     expect(careless.delivery.downgraded).toBe(true)
+    expect(careless.unsorted).toBeGreaterThan(0)
     expect(document.querySelector('[data-unsorted]')?.getAttribute('data-unsorted')).toBe(
-      String(400 - declaration.handSorting.perHarvest),
+      String(careless.unsorted),
     )
     expect(document.querySelector('[data-elapsed]')?.textContent).toBe(
       describeSeconds(careless.throughput.seconds),
@@ -510,5 +524,175 @@ describe('the summary states what the buyer measured', () => {
     expect(document.querySelector('[data-projection]')?.textContent).toBe(
       describeSeconds(careless.throughput.wholeCropSeconds),
     )
+  })
+})
+
+describe('the student decides when the sorting stops', () => {
+  /** Renders a crop and decides `count` of its apples the way their categories call for. */
+  async function partway(crop: CropView, count: number, over = {}) {
+    const rendered = renderSort(crop, over)
+    await screen.findByRole('img', { name: 'The piece you are deciding about' })
+    for (let done = 0; done < count; done += 1) await decideCorrectly(crop)
+    return rendered
+  }
+
+  /** What the stop figures come to for the first `count` apples of a crop, decided correctly. */
+  function stoppingAfter(crop: CropView, count: number, elapsedMs = 0) {
+    const sofar = measureSort(
+      declaration,
+      crop,
+      crop.truth,
+      crop.presented.slice(0, count).map((piece) => ({
+        imageId: piece.imageId,
+        action: REQUIRED[crop.truth[piece.imageId] as string] as string,
+        elapsedMs,
+      })),
+    )
+    return {
+      sofar,
+      stop: whatStoppingCosts(declaration, farm.cropComposition, crop.presented.length, sofar),
+    }
+  }
+
+  it('offers nothing before the first decision, so no year closes for nothing', async () => {
+    renderSort(appleCrop(farmSorting(SITTING)))
+    await screen.findByRole('img', { name: 'The piece you are deciding about' })
+
+    expect(document.querySelector('[data-stop]')).toBeNull()
+    expect(document.querySelector('[data-stop-offer]')).toBeNull()
+  })
+
+  it('offers to deliver once one apple has been decided', async () => {
+    await partway(appleCrop(farmSorting(SITTING)), 1)
+
+    expect(document.querySelector('[data-stop]')).not.toBeNull()
+    expect(document.querySelector('[data-stop-offer]')).not.toBeNull()
+  })
+
+  it('states both sides of the choice: the wage, the count, the worth and the time', async () => {
+    const crop = appleCrop(farmSorting(SITTING))
+    const { settled } = await partway(crop, 20)
+
+    // Nothing settled: the figures are shown while the sort is still open, because that
+    // is when the choice they are for is being made.
+    expect(settled).toEqual([])
+
+    const { stop } = stoppingAfter(crop, 20)
+    expect(document.querySelector('[data-stop-wage]')?.textContent).toBe(formatAmount(stop.wage))
+    expect(document.querySelector('[data-stop-discarded]')?.textContent).toBe(String(SITTING - 20))
+    expect(document.querySelector('[data-stop-worth]')?.textContent).toContain(
+      formatAmount(stop.worth),
+    )
+    expect(document.querySelector('[data-stop-time]')).not.toBeNull()
+  })
+
+  it('names what is delivered and what is discarded before anything is settled', async () => {
+    const crop = appleCrop(farmSorting(SITTING))
+    const { settled } = await partway(crop, 3)
+    await userEvent.click(screen.getByRole('button', { name: /Deliver what you have sorted/ }))
+
+    const confirm = document.querySelector('[data-stop-confirm]')
+    expect(confirm).not.toBeNull()
+    expect(confirm?.querySelector('[data-confirm-delivered]')?.textContent).toBe('3')
+    expect(confirm?.querySelector('[data-confirm-discarded]')?.textContent).toBe(String(SITTING - 3))
+    expect(settled).toEqual([])
+  })
+
+  it('leaves the sort, and everything it would have paid, untouched when abandoned', async () => {
+    const crop = appleCrop(farmSorting(SITTING))
+    const { settled } = await partway(crop, 3)
+    const before = document.querySelector('[data-stop-wage]')?.textContent
+
+    await userEvent.click(screen.getByRole('button', { name: /Deliver what you have sorted/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Keep sorting/ }))
+
+    // Nothing settled, so no balance moved and no year advanced; and the sort continues
+    // from the apple they were on, with the three already decided still counted.
+    expect(settled).toEqual([])
+    expect(document.querySelector('[data-stop-confirm]')).toBeNull()
+    expect(document.querySelector('[data-progress]')?.textContent).toContain('Piece 4 of')
+    expect(shownImage()).toBe(crop.presented[3]?.imageId)
+    expect(document.querySelector('[data-stop-discarded]')?.textContent).toBe(String(SITTING - 3))
+    expect(document.querySelector('[data-stop-wage]')?.textContent).toBe(before)
+  })
+
+  it('settles a delivered part of a crop exactly as a completed sort settles', async () => {
+    const crop = appleCrop(farmSorting(5))
+    const { settled } = await partway(crop, 3)
+    await userEvent.click(screen.getByRole('button', { name: /Deliver what you have sorted/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Deliver and close the year/ }))
+
+    // One outcome, over exactly the three decided, and the two left earn nothing. The
+    // shell does the rest: the wage against the balance, one ledger record, the year.
+    expect(settled).toHaveLength(1)
+    const outcome = settled[0] as SortOutcome
+    expect(outcome.decided).toBe(3)
+    expect(outcome.size).toBe(5)
+    expect(outcome.unsorted).toBe(2)
+    expect(outcome.correct).toBe(3)
+    expect(outcome.wage).toBeCloseTo(stoppingAfter(crop, 3).sofar.wage, 10)
+  })
+
+  it('shows that year outcome and offers no apple once it has been delivered', () => {
+    // What the shell hands back on re-entry: the settled outcome for a year already
+    // closed. No decision is open, so the discarded apples cannot be returned to.
+    const crop = appleCrop(farmSorting(5))
+    const early = stoppingAfter(crop, 3, 3000).sofar
+    const { settled } = renderSort(crop, { outcome: early })
+
+    expect(screen.queryByRole('img', { name: 'The piece you are deciding about' })).toBeNull()
+    expect(document.querySelector('[data-stop]')).toBeNull()
+    expect(document.querySelector('[data-wage]')?.textContent).toBe(formatAmount(early.wage))
+    expect(document.querySelector('[data-unsorted]')?.getAttribute('data-unsorted')).toBe('2')
+    expect(settled).toEqual([])
+  })
+
+  it('states the declared automation price beside the offer, and none when none is declared', async () => {
+    await partway(appleCrop(farmSorting(SITTING)), 1, {
+      automation: { label: 'Sorting rig', price: 'CHF 2 800.00' },
+    })
+
+    expect(document.querySelector('[data-stop-automation]')?.textContent).toContain('Sorting rig')
+    expect(document.querySelector('[data-stop-automation-price]')?.textContent).toBe('CHF 2 800.00')
+
+    cleanup()
+    await partway(appleCrop(farmSorting(SITTING)), 1)
+    expect(document.querySelector('[data-stop-automation]')).toBeNull()
+    expect(document.querySelector('[data-stop-automation-price]')).toBeNull()
+  })
+
+  it('says nothing about what any apple not yet decided is', async () => {
+    // The figure for the remainder comes off the farm declared composition, so it is the
+    // same whatever those apples turn out to be. The panel may not name a category
+    // either, which would be the same leak stated in words.
+    const crop = appleCrop(farmSorting(SITTING))
+    await partway(crop, 20, { automation: { label: 'Sorting rig', price: 'CHF 2 800.00' } })
+
+    const panel = document.querySelector('[data-stop]') as HTMLElement
+    for (const category of declaration.categories) {
+      expect(panel.textContent, `the stop panel names "${category.label}"`).not.toContain(
+        category.label,
+      )
+    }
+
+    // And the worth it states is the count left times what the farm's declared crop bears
+    // an apple — an estimate about the orchard, arrived at without reading a single one of
+    // the apples still on screen. That it does not move when those apples do is held in
+    // `test/sorting-tally.test.ts`, which can rewrite their categories; here the point is
+    // that the number on screen is the declaration's own.
+    const declared = declaration.categories.reduce(
+      (sum, category) =>
+        sum +
+        (farm.cropComposition[category.id] as number) *
+          (declaration.payoffs[category.id]?.[REQUIRED[category.id] as string] as number),
+      0,
+    )
+    expect(document.querySelector('[data-stop-worth]')?.textContent).toContain(
+      formatAmount((SITTING - 20) * declared),
+    )
+
+    // Presented as what the orchard bears, not as what these apples hold.
+    const row = document.querySelector('[data-stop-worth]')?.closest('tr')
+    expect(row?.textContent).toContain('the orchard bears')
   })
 })

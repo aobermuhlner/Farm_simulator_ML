@@ -227,18 +227,21 @@ describe('a family the student does not yet have', () => {
 
 describe('a task declaring one family is not made to look like a choice', () => {
   it('offers no picker at all, and presents that family’s knobs directly', () => {
+    // The shipped task declares two families now, so the single-family case is made
+    // rather than borrowed: it is a property of the screen, not of what happens to ship.
+    const alone = { ...apple, families: [firstFamily(apple)] }
     render(
       <ConfigureTask
-        declaration={apple}
-        loadEntry={entryLoader(apple, appleArtifact())}
+        declaration={alone}
+        loadEntry={entryLoader(alone, appleArtifact())}
         replayMs={0}
         onBack={() => {}}
       />,
     )
 
-    expect(apple.families).toHaveLength(1)
+    expect(alone.families).toHaveLength(1)
     expect(document.querySelectorAll('[data-family]')).toHaveLength(0)
-    for (const knob of firstFamily(apple).knobs) {
+    for (const knob of firstFamily(alone).knobs) {
       expect(screen.getByLabelText(knob.label)).toBeDefined()
     }
   })

@@ -161,7 +161,7 @@ describe('which cards are played', () => {
 
     const catalog = soundCatalog({
       schemaVersion: '1.0.0',
-      groups: [{ id: 'toolshed', label: 'Toolshed' }],
+      groups: [{ id: 'toolshed', label: 'Toolshed', soldAt: 'market' }],
       ownedAtStart: [],
       items: [
         {
@@ -189,7 +189,7 @@ describe('which cards are played', () => {
     const silent = computeAvailability(
       soundCatalog({
         schemaVersion: '1.0.0',
-        groups: [{ id: 'toolshed', label: 'Toolshed' }],
+        groups: [{ id: 'toolshed', label: 'Toolshed', soldAt: 'market' }],
         ownedAtStart: [],
         items: [],
       }),
@@ -220,7 +220,7 @@ describe('opening a value changes what can be made, not what is at work', () => 
     if (knob === undefined) throw new Error('the task must declare a knob')
     return soundCatalog({
       schemaVersion: '1.0.0',
-      groups: [{ id: 'toolshed', label: 'Toolshed' }],
+      groups: [{ id: 'toolshed', label: 'Toolshed', soldAt: 'market' }],
       ownedAtStart: [],
       items: [
         {

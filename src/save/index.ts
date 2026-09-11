@@ -49,7 +49,8 @@ import type { Catalog } from '../progression/catalog.js'
 import { itemById, repeatLimit } from '../progression/catalog.js'
 import { declaredValues } from '../progression/knobValues.js'
 import { valueKey } from '../progression/knobValues.js'
-import { familyById, selectedFamily } from '../task/families.js'
+import type { FamilyAvailable } from '../task/families.js'
+import { familyById, selectableFamily } from '../task/families.js'
 import { isTutorialComplete } from '../tutorials/index.js'
 import type {
   FamilyId,
@@ -878,6 +879,20 @@ export function decodeSave(raw: unknown, context: SaveContext): SaveRestore {
     owned.push(id)
   }
 
+  // What the catalog says every farm owns is a floor, not an opening state. A farm saved
+  // before the catalog named an item would otherwise come back to find the model it had
+  // been using locked and unbuyable — the same direction `game-save` already faces, that
+  // what the declarations say now decides what the farm has now. Topped up rather than
+  // added, so a save that already names one is not credited with it twice, and a
+  // repeatable one bought more often than the floor keeps every purchase.
+  for (const id of new Set(context.catalog.ownedAtStart)) {
+    const floor = context.catalog.ownedAtStart.filter((candidate) => candidate === id).length
+    for (let held = counts.get(id) ?? 0; held < floor; held += 1) {
+      counts.set(id, held + 1)
+      owned.push(id)
+    }
+  }
+
   return {
     kind: 'restored',
     state: {
@@ -944,14 +959,20 @@ export function knobValuesFor(
 }
 
 /**
- * The family one task opens at: the one progress recorded, or the first declared.
+ * The family one task opens at: the one progress recorded, or the first available.
  *
  * The single place the silence rule is applied to a save, so that a task whose selection
- * was dropped and a task that never had one open the same way.
+ * was dropped, a task whose recorded family has since been locked, and a task that never
+ * had one all open the same way.
+ *
+ * Undefined when nothing the task declares is available. That is a farm that has not
+ * bought a model for this task yet, which is a farm at the start of the game and not a
+ * farm in an invalid state; supplying no predicate locks nothing and always answers.
  */
 export function selectedFamilyFor(
   state: GameState,
   task: TaskDeclaration,
-): ModelFamilyDeclaration {
-  return selectedFamily(task, state.families[task.id])
+  available?: FamilyAvailable,
+): ModelFamilyDeclaration | undefined {
+  return selectableFamily(task, state.families[task.id], available)
 }

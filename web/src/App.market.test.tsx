@@ -7,20 +7,27 @@
  * market is shown behind it.
  */
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { formatUnits, toUnits } from '../../src/economy/index.js'
 import { App } from './App.js'
 import { SHIPPED_CATALOG, SHIPPED_FARM } from './data/paths.js'
 import { farmDeclaration, loadsFarm } from './test-support/farm.js'
-import { appleTask as committedAppleTask, loadEntryFor } from './test-support/pool.js'
+import type { Catalog } from '../../src/progression/index.js'
+import {
+  unrelatedArtifact,
+  unrelatedDeclaration,
+  unrelatedTruth,
+} from './test-support/declarations.js'
+import { appleTask as committedAppleTask, loadEntryFor, taskFrom } from './test-support/pool.js'
 import {
   loadsCatalog,
   memoryStorage,
   refusesCatalog,
   savesTo,
   shopCatalog,
+  soundCatalog,
 } from './test-support/progression.js'
 
 afterEach(() => {
@@ -29,7 +36,16 @@ afterEach(() => {
 })
 
 const appleTask = committedAppleTask()
-const declaration = farmDeclaration()
+
+/**
+ * The shipped farm with a purse, because these are tests about the market.
+ *
+ * The farm ships broke — every capability on it is bought with apples the student sorted
+ * — and a farm that can afford nothing offers no purchase to click. What is being held
+ * here is what the market does when one is made, so the money is put there rather than
+ * earned, and every figure below is read against this declaration's own opening.
+ */
+const declaration = { ...farmDeclaration(), openingBalance: 2000 }
 const catalog = shopCatalog()
 
 function renderApp() {
@@ -37,7 +53,7 @@ function renderApp() {
     <App
       load={() => Promise.resolve({ ok: true as const, value: [appleTask] })}
       loadEntry={loadEntryFor}
-      loadFarm={loadsFarm()}
+      loadFarm={loadsFarm(declaration)}
       loadShop={loadsCatalog(catalog)}
       {...savesTo(memoryStorage())}
       replayMs={0}
@@ -158,7 +174,7 @@ describe('a catalog that cannot be loaded has no market', () => {
           json: () =>
             Promise.resolve({
               schemaVersion: '1.0.0',
-              groups: [{ id: 'models', label: 'Models' }],
+              groups: [{ id: 'models', label: 'Models', soldAt: 'market' }],
               ownedAtStart: [],
               items: [
                 {
@@ -189,5 +205,125 @@ describe('a catalog that cannot be loaded has no market', () => {
 
     expect(await screen.findByText(/which the catalog does not declare/)).toBeDefined()
     expect(screen.queryByRole('heading', { name: 'The market' })).toBeNull()
+  })
+})
+
+describe('the market is sectioned by the part of the farm a shelf belongs to', () => {
+  const other = taskFrom(unrelatedDeclaration(), unrelatedArtifact(), unrelatedTruth())
+
+  /**
+   * A catalog with a shelf for each task and one for the farm.
+   *
+   * Its second task is one the shell has never presented, and its heading is that
+   * task's own declared title — so the section appears with no screen code added for
+   * it, which is the whole reason the heading is not written anywhere.
+   */
+  function sectioned(): Catalog {
+    return soundCatalog(
+      {
+        schemaVersion: '1.0.0',
+        groups: [
+          { id: 'orchard', label: 'Orchard', task: appleTask.declaration.id, soldAt: 'market' },
+          { id: 'clinic', label: 'Clinic', task: other.declaration.id, soldAt: 'market' },
+          { id: 'yard', label: 'Yard', soldAt: 'market' },
+          { id: 'capacity', label: 'Capacity', soldAt: 'bench' },
+        ],
+        ownedAtStart: [],
+        items: [
+          {
+            id: 'more-trees',
+            group: 'orchard',
+            label: 'More trees',
+            copy: 'A hundred more to bring in.',
+            price: 10,
+            opens: [{ kind: 'farm-land', units: 100 }],
+          },
+          {
+            id: 'a-second-camera',
+            group: 'clinic',
+            label: 'A second camera',
+            copy: 'One more lens for the other field.',
+            price: 20,
+            opens: [
+              {
+                kind: 'knob-values',
+                task: other.declaration.id,
+                knob: 'sensitivity',
+                values: ['high'],
+              },
+            ],
+          },
+          {
+            id: 'a-shed',
+            group: 'yard',
+            label: 'A shed',
+            copy: 'Somewhere dry for the crates.',
+            price: 30,
+            opens: [{ kind: 'farm-land', units: 1 }],
+          },
+          {
+            id: 'one-more-layer',
+            group: 'capacity',
+            label: 'One more layer',
+            copy: 'Room for a second layer.',
+            price: 40,
+            opens: [
+              { kind: 'knob-values', task: appleTask.declaration.id, knob: 'blocks', values: [3] },
+            ],
+          },
+        ],
+      },
+      declaration,
+    )
+  }
+
+  function renderBoth() {
+    return render(
+      <App
+        load={() => Promise.resolve({ ok: true as const, value: [appleTask, other] })}
+        loadEntry={loadEntryFor}
+        loadFarm={loadsFarm()}
+        loadShop={loadsCatalog(sectioned())}
+        {...savesTo(memoryStorage())}
+        replayMs={0}
+      />,
+    )
+  }
+
+  it('heads each part of the farm with that task’s own declared title', async () => {
+    renderBoth()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    expect(screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)).toEqual([
+      appleTask.declaration.title,
+      other.declaration.title,
+      declaration.name,
+    ])
+  })
+
+  it('shows a second task’s shelf with no screen change, under its own heading', async () => {
+    renderBoth()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    const section = within(screen.getByRole('region', { name: other.declaration.title }))
+    expect(section.getByRole('heading', { name: 'Clinic' })).toBeDefined()
+    expect(section.getByText('A second camera')).toBeDefined()
+    expect(section.queryByText('More trees')).toBeNull()
+  })
+
+  it('puts a shelf belonging to no task under the farm, after the parts', async () => {
+    renderBoth()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    const section = within(screen.getByRole('region', { name: declaration.name }))
+    expect(section.getByText('A shed')).toBeDefined()
+  })
+
+  it('shows nothing sold at the workshop’s bench', async () => {
+    renderBoth()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    expect(screen.queryByText('One more layer')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Capacity' })).toBeNull()
   })
 })

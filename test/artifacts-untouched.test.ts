@@ -153,7 +153,7 @@ describe('the shipped artifacts belong to a declared family', () => {
     for (const id of store.store.coverage) {
       const file = index.configurations[id]?.file ?? ''
       const document = read<{
-        history: readonly unknown[]
+        history: readonly Readonly<Record<string, number>>[]
         predictions: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>>
       }>(file)
 
@@ -167,7 +167,12 @@ describe('the shipped artifacts belong to a declared family', () => {
       })
 
       if (!resolved.ok) throw new Error(resolved.issues.map((issue) => issue.message).join(' '))
-      expect(resolved.entry.history, id).toEqual(document.history)
+      // The reader normalizes the on-disk step key, which these three files still write
+      // as `epoch`, to the step vocabulary the types now use. Nothing else about an
+      // entry moves, and the file on disk is untouched.
+      expect(resolved.entry.history, id).toEqual(
+        document.history.map(({ epoch, ...rest }) => ({ step: epoch, ...rest })),
+      )
       for (const split of ['training', 'pool'] as const) {
         expect([...resolved.entry.imageIdsIn(split)].sort(), `${id}/${split}`).toEqual(
           Object.keys(document.predictions[split] ?? {}).sort(),

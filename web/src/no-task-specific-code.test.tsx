@@ -4,7 +4,9 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { formatUnits } from '../../src/economy/index.js'
 import {
+  benchView,
   computeAvailability,
+  declaredValues,
   knobAvailability,
   taskAvailability,
 } from '../../src/progression/index.js'
@@ -12,6 +14,7 @@ import { firstFamily } from '../../src/task/families.js'
 import { SHIPPED_FORMS } from '../../src/task/types.js'
 import { KnobControl } from './components/KnobControl.js'
 import { HandSort } from './screens/HandSort.js'
+import { UpgradeBench } from './screens/UpgradeBench.js'
 import { measureSort } from '../../src/sorting/index.js'
 import {
   appleDeclaration,
@@ -568,7 +571,7 @@ describe('no screen names an unlock condition', () => {
     if (knob === undefined) throw new Error('the task must declare a knob')
     const other = soundCatalog({
       schemaVersion: '1.0.0',
-      groups: [{ id: 'toolshed', label: 'Toolshed' }],
+      groups: [{ id: 'toolshed', label: 'Toolshed', soldAt: 'market' }],
       ownedAtStart: [],
       items: [
         {
@@ -613,6 +616,11 @@ describe('a farm stage renders a task it has never heard of', () => {
     ]),
   )
 
+  /** That task's categories in even shares, which is a farm's business and not a screen's. */
+  const composition = Object.fromEntries(
+    categories.map((category) => [category, 1 / categories.length]),
+  )
+
   it('is a screen the source rules already cover', () => {
     const covered = screenSources().map((file) => relative(webSrc, file).split(sep).join('/'))
     expect(covered).toContain('screens/HandSort.tsx')
@@ -625,6 +633,7 @@ describe('a farm stage renders a task it has never heard of', () => {
         load={loadsCrop(crop)}
         onSettle={() => undefined}
         formatAmount={(amount) => String(amount)}
+        cropComposition={composition}
         onBack={() => undefined}
       />,
     )
@@ -664,6 +673,7 @@ describe('a farm stage renders a task it has never heard of', () => {
         outcome={outcome}
         onSettle={() => undefined}
         formatAmount={(amount) => String(amount)}
+        cropComposition={composition}
         onBack={() => undefined}
       />,
     )
@@ -877,5 +887,73 @@ describe('the tutorial frame names no family', () => {
     }
 
     expect(offences).toEqual([])
+  })
+})
+
+describe('the counters are under the same rule as every other screen', () => {
+  it('holds the market, the bench and the offer they share to it', () => {
+    // The walk is over every source under `web/src`, so a screen added anywhere is
+    // covered without being listed — this is the assertion that the two counters and
+    // the component between them are in fact reached by it.
+    const walked = screenSources().map((file) => relative(webSrc, file).replace(/\\/g, '/'))
+
+    for (const source of [
+      'screens/Market.tsx',
+      'screens/UpgradeBench.tsx',
+      'components/Offer.tsx',
+    ]) {
+      expect(walked, source).toContain(source)
+    }
+  })
+
+  it('renders a bench for a task and a catalog it has never heard of', () => {
+    // Every family label, knob label, price and piece of shop copy on the bench comes
+    // out of the value handed in. A bench that had learned any of the shipped task's
+    // words would render this one wrongly, or not at all.
+    const other = unrelatedDeclaration()
+    const family = other.families[0]
+    if (family === undefined) throw new Error('the fixture task must declare a family')
+    const knob = family.knobs[0]
+    if (knob === undefined) throw new Error('the fixture family must declare a knob')
+
+    const shop = soundCatalog({
+      schemaVersion: '1.0.0',
+      groups: [{ id: 'toolshed', label: 'Toolshed', soldAt: 'bench' }],
+      ownedAtStart: [],
+      items: [
+        {
+          id: 'brass-callipers',
+          group: 'toolshed',
+          label: 'Brass callipers',
+          copy: 'For measuring things very precisely.',
+          price: 5,
+          opens: [
+            {
+              kind: 'knob-values',
+              task: other.id,
+              knob: knob.id,
+              values: declaredValues(knob).filter((value) => value !== knob.default),
+            },
+          ],
+        },
+      ],
+    })
+
+    render(
+      <UpgradeBench
+        view={benchView(other, shop, [], 100000)}
+        formatPrice={(units) => formatUnits(units, farm)}
+        onBuy={() => undefined}
+        onBack={() => undefined}
+      />,
+    )
+
+    expect(screen.getByRole('region', { name: family.label })).toBeDefined()
+    expect(screen.getByRole('region', { name: knob.label })).toBeDefined()
+    expect(screen.getByText('Brass callipers')).toBeDefined()
+    expect(screen.getByTestId('state-brass-callipers').textContent).toContain(
+      formatUnits(500, farm),
+    )
+    cleanup()
   })
 })

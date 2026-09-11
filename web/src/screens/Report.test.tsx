@@ -880,6 +880,31 @@ describe('the year is stated so a lean year can be attributed', () => {
     expect(stated.textContent).toContain('10%')
   })
 
+  it('states an opening crop by what it drew, never by the shares it was drawn at', () => {
+    // Five apples cannot be 55 / 35 / 10. The crop is two, two and one in every year this
+    // farm ever draws, and printing the declared shares beside it would state something
+    // untrue at exactly the moment a student is learning whether to trust the numbers.
+    renderReport(BALANCED, {
+      declaration: delivering,
+      harvest: harvestOf({
+        cropSize: 5,
+        composition: { red: 2, green: 2, wormy: 1 },
+        recurred: false,
+      }),
+    })
+    const stated = document.querySelector('[data-crop-size]') as HTMLElement
+
+    expect(stated.getAttribute('data-crop-size')).toBe('5')
+    expect(stated.textContent).toContain('40%')
+    expect(stated.textContent).toContain('20%')
+    for (const declared of ['55%', '35%', '10%']) {
+      expect(
+        (document.querySelector('.report') as HTMLElement).textContent ?? '',
+        `the report states the declared share ${declared} beside a crop that did not draw it`,
+      ).not.toContain(declared)
+    }
+  })
+
   it('presents the difference between two years as neither noise, variance nor error', () => {
     for (const share of [0.07, 0.14]) {
       renderReport(BALANCED, {

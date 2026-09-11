@@ -28,6 +28,7 @@ import {
   shippedCatalogJson,
   soundCatalog,
   testFarm,
+  testGroups,
   unpricedItem,
 } from './helpers/catalog.js'
 
@@ -309,5 +310,190 @@ describe('a dataset tier no model was fitted on cannot be priced', () => {
       // The identifier it would open, so the author can see exactly what is missing.
       expect(named?.message, id).toContain('dataset')
     }
+  })
+})
+
+describe('a group belongs to a part of the farm that exists', () => {
+  /** The built groups, with `models` claiming to belong to `task`. */
+  function belongingTo(task: string): readonly Record<string, unknown>[] {
+    return testGroups.map((group) => (group.id === 'models' ? { ...group, task } : group))
+  }
+
+  it('accepts a group naming a task this build declares', () => {
+    const catalog = soundCatalog(catalogWith([pricedItem()], belongingTo(apple.id)))
+    expect(checkCatalogAgainstTasks(catalog, tasks)).toEqual([])
+  })
+
+  it('refuses a group naming a task no declaration carries, naming both', () => {
+    const catalog = soundCatalog(catalogWith([pricedItem()], belongingTo('plum-harvest')))
+    const found = checkCatalogAgainstTasks(catalog, tasks)
+      .map((issue) => `${issue.field ?? ''} ${issue.message}`)
+      .join(' | ')
+
+    expect(found).toContain('models')
+    expect(found).toContain('plum-harvest')
+  })
+})
+
+describe('a bench item that reaches across two families is refused', () => {
+  /**
+   * A task whose two families declare a knob of one id, permitting different values.
+   *
+   * The catalog names a task and a knob and no family, so the only thing that can say
+   * which family an unlock belongs to is which of them permits the values it opens.
+   * Both keep the same default, because a knob's default may never be locked.
+   */
+  function twoFamilies(): TaskDeclaration {
+    const [first, second] = apple.families
+    if (first === undefined || second === undefined) throw new Error('two families are needed')
+    const shared = {
+      kind: 'choice',
+      id: 'depth',
+      label: 'Depth',
+      values: [1, 2, 3],
+      default: 1,
+      help: 'How deep it goes.',
+    }
+    return {
+      ...apple,
+      families: [
+        { ...first, knobs: [...first.knobs, shared] },
+        { ...second, knobs: [...second.knobs, { ...shared, values: [1, 3] }] },
+      ],
+    } as TaskDeclaration
+  }
+
+  /** One bench item opening the shared knob at `values`. */
+  function benched(values: readonly number[]): Record<string, unknown> {
+    return pricedItem({
+      id: 'benched',
+      group: 'capacity',
+      opens: [{ kind: 'knob-values', task: apple.id, knob: 'depth', values }],
+    })
+  }
+
+  /** Every reference issue this catalog reports against the two-family task. */
+  function found(values: readonly number[]): string {
+    return checkCatalogAgainstTasks(soundCatalog(catalogWith([benched(values)])), [twoFamilies()])
+      .map((issue) => issue.message)
+      .join(' | ')
+  }
+
+  it('accepts one whose value only one of the two families permits', () => {
+    expect(found([2])).toBe('')
+  })
+
+  it('refuses one whose value both families permit, naming the item and both', () => {
+    const [first, second] = apple.families
+    const message = found([3])
+
+    expect(message).toContain('benched')
+    expect(message).toContain(first!.id)
+    expect(message).toContain(second!.id)
+  })
+})
+
+describe('an unpriced item may name a rung that has not been built', () => {
+  /** One item opening a family that no task declares, priced or not. */
+  function opensFamily(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    const item = pricedItem({
+      id: 'straight-line',
+      opens: [{ kind: 'model-family', task: apple.id, family: 'linear-regression' }],
+      ...overrides,
+    })
+    if (item.price === undefined) delete item.price
+    return item
+  }
+
+  /** Every reference issue the catalog holding just this item reports. */
+  function found(item: Record<string, unknown>): string {
+    return checkCatalogAgainstTasks(soundCatalog(catalogWith([item])), tasks)
+      .map((issue) => `${issue.field ?? ''} ${issue.message}`)
+      .join(' | ')
+  }
+
+  it('accepts an unpriced item naming a family its task does not declare', () => {
+    expect(
+      found(opensFamily({ price: undefined, notForSaleReason: 'It has not been built.' })),
+    ).toBe('')
+  })
+
+  it('refuses the same item once it carries a price, naming the item and the family', () => {
+    const message = found(opensFamily())
+    expect(message).toContain('straight-line')
+    expect(message).toContain('linear-regression')
+    expect(message).toContain(apple.id)
+  })
+
+  it('still refuses an unpriced item naming a task no declaration carries', () => {
+    // The latitude is about a rung that has not been built, not about a field the farm
+    // does not have: a shelf entry for another farm's task is not a rung at all.
+    const message = found(
+      opensFamily({
+        price: undefined,
+        notForSaleReason: 'It has not been built.',
+        opens: [{ kind: 'model-family', task: 'plum-harvest', family: 'linear-regression' }],
+      }),
+    )
+
+    expect(message).toContain('straight-line')
+    expect(message).toContain('plum-harvest')
+  })
+
+  it('still accepts a priced item opening a family the task does declare', () => {
+    const [, second] = apple.families
+    if (second === undefined) throw new Error('a second family is needed')
+    expect(
+      found(opensFamily({ opens: [{ kind: 'model-family', task: apple.id, family: second.id }] })),
+    ).toBe('')
+  })
+})
+
+describe('buying a model buys at least one configuration that can be run', () => {
+  const [, second] = apple.families
+
+  /** One priced item opening the task's second family. */
+  function buysTheFamily(): Record<string, unknown> {
+    return pricedItem({
+      id: 'a-second-model',
+      opens: [{ kind: 'model-family', task: apple.id, family: second!.id }],
+    })
+  }
+
+  /** The identifier the second family's declared defaults compose. */
+  function defaultsId(): string {
+    return configurationId({
+      taskId: apple.id,
+      familyId: second!.id,
+      values: second!.knobs.map((knob) => [knob.id, knob.default] as const),
+    })
+  }
+
+  it('accepts a priced family whose declared defaults are covered', () => {
+    const coverage = { [apple.id]: { [second!.id]: [defaultsId()] } }
+    expect(
+      checkCatalogCoverage(soundCatalog(catalogWith([buysTheFamily()])), tasks, coverage),
+    ).toEqual([])
+  })
+
+  it('refuses a priced family whose defaults are not, naming it and the identifier', () => {
+    const coverage = { [apple.id]: { [second!.id]: ['nothing-of-the-sort'] } }
+    const issues = checkCatalogCoverage(
+      soundCatalog(catalogWith([buysTheFamily()])),
+      tasks,
+      coverage,
+    )
+
+    expect(issues.map((issue) => issue.field)).toContain('a-second-model')
+    expect(issues.map((issue) => issue.message).join(' | ')).toContain(defaultsId())
+  })
+
+  it('says nothing about an unpriced item that opens the same family', () => {
+    const item = buysTheFamily()
+    delete item.price
+    item.notForSaleReason = 'No model of this kind has been made yet.'
+    const coverage = { [apple.id]: { [second!.id]: ['nothing-of-the-sort'] } }
+
+    expect(checkCatalogCoverage(soundCatalog(catalogWith([item])), tasks, coverage)).toEqual([])
   })
 })

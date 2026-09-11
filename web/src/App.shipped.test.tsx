@@ -1,11 +1,16 @@
 /**
- * What a student who buys nothing actually sees in this build.
+ * What a student who has bought a model and nothing else actually sees in this build.
  *
- * The visible change of `progression-catalog` is not the market — nothing in it is for
- * sale. It is here: three knobs go from freely turnable into a refusal to greyed with a
- * reason, and `channels` stays turnable across exactly the three values a model was
- * trained for. That is the claim, so it is asserted against the shipped catalog and the
- * shipped task rather than against a stand-in.
+ * The visible claim of `progression-catalog` is here rather than in the market: three
+ * knobs go from freely turnable into a refusal to greyed with a reason, and `channels`
+ * stays turnable across exactly the three values a model was trained for. That is the
+ * claim, so it is asserted against the shipped catalog and the shipped task rather than
+ * against a stand-in.
+ *
+ * The eye is owned rather than bought here. `smallholding-economy` made every capability
+ * on the farm something earned, and walking that ladder from a balance of zero is
+ * `App.sorting.figures.test.tsx`'s subject; what this suite is about begins once a model
+ * is on the farm, whichever way it got there.
  */
 
 import { cleanup, render, screen, within } from '@testing-library/react'
@@ -19,6 +24,19 @@ import {
   loadEntryFor,
 } from './test-support/pool.js'
 import { loadsCatalog, memoryStorage, savesTo, shippedCatalog } from './test-support/progression.js'
+
+/**
+ * One market row, found through something only that row carries.
+ *
+ * The market sells more than one thing now, so `getByRole('button', { name: /^Buy /})`
+ * no longer names anything in particular. Scoping to the row keeps each assertion about
+ * the item it is about.
+ */
+function rowOf(testId: string) {
+  const row = screen.getByTestId(testId).closest('li')
+  if (row === null) throw new Error(`no market row carries "${testId}"`)
+  return within(row)
+}
 
 afterEach(() => {
   cleanup()
@@ -44,13 +62,56 @@ function serveManifest(): void {
 const appleTask = committedAppleTask()
 const shipped = farmDeclaration()
 
+/** The shipped farm with enough in the purse to buy a rung of the orchard ladder. */
+const withPurse = { ...shipped, openingBalance: 2000 }
+
+/** The shipped catalog's item that opens the family the task opens at. */
+const opensTheFirstFamily = (() => {
+  const wanted = appleTask.declaration.families[0]?.id
+  const item = shippedCatalog().items.find((entry) =>
+    entry.opens.some((unlock) => unlock.kind === 'model-family' && unlock.family === wanted),
+  )
+  if (item === undefined) throw new Error(`the shipped catalog opens no family "${String(wanted)}"`)
+  return item
+})()
+
+/** The orchard rung that may be bought more than once, which is the one with a tally. */
+const repeatableRung = (() => {
+  const item = shippedCatalog().items.find(
+    (entry) =>
+      (entry.repeat ?? 1) > 1 && entry.opens.some((unlock) => unlock.kind === 'farm-land'),
+  )
+  if (item === undefined) throw new Error('the shipped catalog sells no repeatable rung')
+  return item
+})()
+
+/** The cheapest rung of the orchard ladder, which is the one a new farm reaches first. */
+const cheapestRung = (() => {
+  const rungs = shippedCatalog().items.filter(
+    (entry) =>
+      entry.priceUnits !== undefined &&
+      entry.opens.some((unlock) => unlock.kind === 'farm-land'),
+  )
+  const item = rungs.reduce((cheapest, entry) =>
+    (entry.priceUnits ?? 0) < (cheapest.priceUnits ?? 0) ? entry : cheapest,
+  )
+  return {
+    item,
+    units: item.opens.reduce(
+      (sum, unlock) => (unlock.kind === 'farm-land' ? sum + unlock.units : sum),
+      0,
+    ),
+  }
+})()
+
 function renderApp() {
+  const owning = shippedCatalog()
   return render(
     <App
       load={() => Promise.resolve({ ok: true as const, value: [appleTask] })}
       loadEntry={loadEntryFor}
-      loadFarm={loadsFarm()}
-      loadShop={loadsCatalog(shippedCatalog())}
+      loadFarm={loadsFarm(withPurse)}
+      loadShop={loadsCatalog({ ...owning, ownedAtStart: [opensTheFirstFamily.id] })}
       {...savesTo(memoryStorage())}
       replayMs={0}
     />,
@@ -72,7 +133,7 @@ function optionsOf(label: string): { readonly text: string; readonly enabled: bo
   }))
 }
 
-describe('a student who has bought nothing', () => {
+describe('a student who owns one model and nothing else', () => {
   it('still walks the whole loop: workshop, model at work, year run, report', async () => {
     renderApp()
     expect(await screen.findByRole('heading', { name: 'The farm' })).toBeDefined()
@@ -166,47 +227,85 @@ describe('a student who has bought nothing', () => {
     }
   })
 
-  it('sees a market selling the orchard and nothing else, each other row saying why', async () => {
+  it('reads its replay in the word the family declares for a step, which is "epoch"', async () => {
+    // The screen used to write `epoch <n>` itself. It now reads the axis the family
+    // declares, and the shipped convolutional family declares "epoch" — so nothing on
+    // screen moved, which is the whole of what taking a word out of a screen should do.
+    renderApp()
+    await openTask()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Train model' }))
+    const step = await screen.findByTestId('training-step')
+
+    const family = appleTask.declaration.families.find((candidate) => candidate.ships === 'predictions')
+    expect(family?.history?.axis).toBe('epoch')
+    expect(step.textContent).toContain('epoch')
+  })
+
+  it('sees a market selling the orchard ladder and the models, each other row saying why', async () => {
     renderApp()
     await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
 
-    // The orchard is the one thing a broke farmer can spend on: the robot, the datasets
-    // and the model families are all still unpriced, and each says so in its own words.
-    expect(screen.getAllByRole('button', { name: /^Buy / })).toHaveLength(1)
-    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(6)
-    for (const testId of ['state-deeper-stacks', 'state-stronger-regularization', 'state-dropout-layers']) {
-      expect(screen.getByTestId(testId).textContent).toContain('trained')
+    // What carries a price is what a model exists for. Six rungs of the orchard ladder
+    // and both families do; the one this student already owns shows as owned, and the
+    // larger photograph sets each say in their own words why they cannot be bought. Only
+    // the rungs this balance covers offer a button, which is the rule that nothing but
+    // money keeps a purchase out of reach.
+    const shelved = shippedCatalog().items.filter((item) => item.group !== 'capacity')
+    expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(shelved.length)
+    expect(screen.getByTestId(`state-${opensTheFirstFamily.id}`).textContent).toBe('Owned')
+    // The capacity items are sold at the workshop's bench now, so none of them is here.
+    for (const testId of ['state-deeper-stacks', 'state-stronger-regularization',
+      'state-dropout-layers', 'state-tree-four-questions', 'state-tree-six-questions']) {
+      expect(screen.queryByTestId(testId), testId).toBeNull()
     }
     // The two larger datasets: shown, explained, and honest about why they cannot be
     // bought — no model has been fitted on photographs that do not exist yet.
     for (const testId of ['state-bulk-photos', 'state-checked-photos']) {
       expect(screen.getByTestId(testId).textContent).toContain('fitted')
+      expect(rowOf(testId).queryByRole('button', { name: /^Buy / })).toBeNull()
     }
   })
 
-  it('shows how much of the orchard has been bought and how much the catalog permits', async () => {
+  it('sees the shelves sectioned by the part of the farm they belong to', async () => {
     renderApp()
     await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
 
-    expect(screen.getByTestId('tally-orchard-expansion').textContent).toBe(
-      '0 of 5 bought, 5 to go',
+    // The task's own declared title heads its section, and the farm-wide shelves come
+    // after it under the farm's own declared name. Neither word is in a screen.
+    const sections = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
+    expect(sections).toEqual([appleTask.declaration.title, shipped.name])
+  })
+
+  it('shows how much of a repeatable rung has been bought and how much the catalog permits', async () => {
+    renderApp()
+    await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
+
+    expect(screen.getByTestId(`tally-${repeatableRung.id}`).textContent).toBe(
+      `0 of ${String(repeatableRung.repeat ?? 1)} bought, ${String(repeatableRung.repeat ?? 1)} to go`,
     )
   })
 
-  it('buys the orchard with the money the farm opens with, and grows it', async () => {
+  it('buys a rung of the orchard ladder, and the land held rises by what it opens', async () => {
     renderApp()
     await userEvent.click(await screen.findByRole('button', { name: 'Go to the market' }))
 
     const bar = screen.getByRole('region', { name: 'Farm status' })
-    expect(bar.textContent).toContain('100 / 600 trees')
+    const reach = 400
+    expect(bar.textContent).toContain(`${String(shipped.orchard.opening)} / ${String(reach)} trees`)
 
-    await userEvent.click(screen.getByRole('button', { name: /^Buy / }))
+    // Scoped to the rung's own row: several things are for sale, and which one grows the
+    // orchard is exactly what is being asserted below.
+    await userEvent.click(
+      rowOf(`state-${cheapestRung.item.id}`).getByRole('button', { name: /^Buy / }),
+    )
     await userEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
 
-    expect(bar.textContent).toContain('200 / 600 trees')
-    expect(screen.getByTestId('tally-orchard-expansion').textContent).toBe(
-      '1 of 5 bought, 4 to go',
+    // The ladder terminates, so the land it could reach is a real figure and does not move.
+    expect(bar.textContent).toContain(
+      `${String(shipped.orchard.opening + cheapestRung.units)} / ${String(reach)} trees`,
     )
+    expect(screen.getByTestId(`state-${cheapestRung.item.id}`).textContent).toBe('Owned')
   })
 })
 
@@ -278,7 +377,7 @@ describe('farm to workshop to the training data to the market, in one sitting', 
 
     for (const tier of larger) {
       // Present, and described in the catalog's own declared copy.
-      const row = screen.getByRole('heading', { level: 3, name: tier.label })
+      const row = screen.getByRole('heading', { level: 4, name: tier.label })
       expect(row).toBeDefined()
     }
     // Neither is for sale, and each says why in words a student can act on.
@@ -287,7 +386,9 @@ describe('farm to workshop to the training data to the market, in one sitting', 
       expect(state.textContent).toContain('fitted')
       expect(state.textContent).not.toBe('Owned')
     }
-    // The orchard is the only thing a broke farmer can spend on.
-    expect(screen.getAllByRole('button', { name: /^Buy / })).toHaveLength(1)
+    // Whatever else the market has come to sell, neither of the larger sets is for sale.
+    for (const testId of ['state-bulk-photos', 'state-checked-photos']) {
+      expect(rowOf(testId).queryByRole('button', { name: /^Buy / })).toBeNull()
+    }
   })
 })

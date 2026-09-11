@@ -1,18 +1,16 @@
 /**
  * The authored puzzle played through the workshop, end to end, with nothing injected.
  *
- * The registries are the shipped ones, the puzzle is the block committed under
- * `declarations/tutorials/`, the pictures are the committed pool and the judge is the
- * engine's registered kind. That combination is the one thing no other test in this change
- * covers: the engine tests judge without a screen, the body tests pose without a gate, and
- * the shell tests gate with a fixture puzzle.
+ * The registries are the shipped ones, the puzzle is the block the tree family declares
+ * in `declarations/apple-harvest.json`, the pictures are the committed pool and the judge
+ * is the engine's registered kind. That combination is the one thing no other test covers:
+ * the engine tests judge without a screen, the body tests pose without a gate, and the
+ * shell tests gate with a fixture puzzle.
  *
- * The tutorial is hung on the shipped task's family *here in the test* rather than in
- * `declarations/apple-harvest.json`, because the family this lesson belongs to — the fitted
- * tree — is not built yet. `openspec/changes/fitted-tree-tutorial/tasks.md` §6 records the
- * arrangement and the reason: gating the only model the game currently has behind a lesson
- * about a different one would be a wall with the wrong sign on it. What that change adds is
- * the block; that it works is what this asserts.
+ * The tutorial is hung on the *first* family here rather than played on the family that
+ * declares it, because what this asserts is the workshop's handling of a gated family and
+ * not which family the shipped game gates. Two families declaring one tutorial id declare
+ * one tutorial and share its completion, which is what makes that substitution legal.
  */
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'

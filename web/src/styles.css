@@ -294,6 +294,56 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
   fill: color-mix(in srgb, var(--ink) 65%, transparent);
 }
 
+/*
+ * The tree drawing: a staircase of questions with a leaf hanging off each.
+ *
+ * Taller than it is wide, unlike the two network drawings, because the shape it has to
+ * show is a chain and a chain read left to right runs out of page at four questions.
+ * The walked classes are the traced path and are the only thing that changes when an
+ * apple is followed through it; everything else is drawn the same whether one is or not.
+ */
+.tree-drawing { max-block-size: 22rem; }
+
+.tree-drawing .tree-question rect {
+  fill: color-mix(in srgb, var(--accent) 14%, var(--paper));
+  stroke: var(--accent);
+  stroke-width: 0.8;
+}
+
+.tree-drawing .tree-leaf rect {
+  fill: var(--paper);
+  stroke: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.tree-drawing .tree-leaf .tree-share {
+  fill: color-mix(in srgb, var(--accent) 55%, transparent);
+  stroke: none;
+}
+
+.tree-drawing .tree-trunk, .tree-drawing .tree-branch {
+  stroke: color-mix(in srgb, var(--accent) 40%, transparent);
+  stroke-width: 0.9;
+}
+
+.tree-drawing .walked { stroke: var(--accent); stroke-width: 2; }
+.tree-drawing .tree-question.walked rect { stroke-width: 1.6; }
+.tree-drawing .tree-leaf.on-path rect {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-dasharray: none;
+}
+
+.tree-drawing text { font-size: 6px; text-anchor: middle; fill: var(--ink); }
+.tree-drawing text.tree-threshold {
+  font-size: 5.5px;
+  fill: color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.tree-drawing text.tree-share-value {
+  font-size: 5px;
+  text-anchor: end;
+  fill: color-mix(in srgb, var(--ink) 75%, transparent);
+}
+
 .network > p { font-size: 0.8rem; margin: 0.35rem 0 0; }
 .network > .abstracted { color: color-mix(in srgb, var(--ink) 70%, transparent); }
 
@@ -488,15 +538,20 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
 .locked-values > .locked { color: var(--line); }
 .locked-values .locked-value { font-weight: 600; }
 
-/* The market. A row's state is a word, not a colour, so it survives being read aloud. */
+/* The market. A row's state is a word, not a colour, so it survives being read aloud.
+ * Sections are the parts of the farm, shelves are the groups within them, and the same
+ * offer renders at the workshop's bench — so everything below is shared by both. */
+.market-section { margin-bottom: 2rem; }
+.market-section > h2 { margin: 0 0 0.75rem; }
 .market-group { margin-bottom: 1.5rem; }
+.market-group > h3 { margin: 0 0 0.5rem; font-size: 1rem; }
 .market-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
 .market-item {
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
-.market-item > h3 { margin: 0 0 0.25rem; }
+.market-item > h4 { margin: 0 0 0.25rem; font-size: 1rem; }
 .market-item .shop-copy { margin: 0 0 0.35rem; }
 .market-item .market-tally { margin: 0 0 0.35rem; font-size: 0.85rem; opacity: 0.8; }
 .market-item .market-state { margin: 0 0 0.5rem; font-weight: 600; }
@@ -509,6 +564,22 @@ caption { text-align: left; font-size: 0.9rem; padding-bottom: 0.4rem; }
   padding: 0.75rem 1rem;
   margin-top: 1rem;
 }
+
+/* The upgrade bench. A shop for one model at a time, laid out by the knob a price
+ * moves — so the family's own state sits above its upgrades rather than greying them
+ * out, which would be the shop saying money was not the key. */
+.bench-offer { margin: 0 0 1rem; }
+.upgrade-bench .bench-family { margin: 1.25rem 0 0; }
+.upgrade-bench .bench-family > h3 { margin: 0 0 0.2rem; font-size: 1.05rem; }
+.upgrade-bench .bench-family-state { margin: 0 0 0.6rem; font-size: 0.9rem; opacity: 0.85; }
+.upgrade-bench .bench-family.locked > h3 { color: var(--line); }
+.upgrade-bench .bench-empty { margin: 0; font-size: 0.9rem; opacity: 0.75; }
+.upgrade-bench .bench-knob { margin: 0 0 0.9rem; }
+.upgrade-bench .bench-knob > h4 { margin: 0 0 0.4rem; font-size: 0.95rem; }
+.upgrade-bench .bench-opens { margin: 0 0 0.35rem; font-size: 0.85rem; opacity: 0.8; }
+
+/* A task whose models the farm has none of. Something to go and buy, not a fault. */
+.no-family { margin: 0.5rem 0 1rem; opacity: 0.85; }
 
 .start-again { margin-top: 2rem; border-top: 1px solid var(--line); padding-top: 1rem; }
 

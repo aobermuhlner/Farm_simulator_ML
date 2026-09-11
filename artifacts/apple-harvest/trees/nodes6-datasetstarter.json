@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "1.2.0",
+  "taskId": "apple-harvest",
+  "familyId": "decision-tree",
+  "configurationId": "nodes6-datasetstarter",
+  "model": {
+    "splits": [
+      {
+        "feature": "darkSpotArea",
+        "threshold": 0.0205,
+        "whenAbove": [
+          0.08,
+          0.05,
+          0.87
+        ]
+      },
+      {
+        "feature": "redness",
+        "threshold": 0.4513,
+        "whenAbove": [
+          0.86,
+          0.04,
+          0.1
+        ]
+      },
+      {
+        "feature": "redness",
+        "threshold": 0.35,
+        "whenAbove": [
+          0.7,
+          0.2,
+          0.1
+        ]
+      },
+      {
+        "feature": "textureVar",
+        "threshold": 0.14,
+        "whenAbove": [
+          0.15,
+          0.7,
+          0.15
+        ]
+      },
+      {
+        "feature": "roundness",
+        "threshold": 1.02,
+        "whenAbove": [
+          0.1,
+          0.8,
+          0.1
+        ]
+      },
+      {
+        "feature": "redness",
+        "threshold": -0.25,
+        "whenAbove": [
+          0.12,
+          0.82,
+          0.06
+        ]
+      }
+    ],
+    "otherwise": [
+      0.04,
+      0.9,
+      0.06
+    ]
+  }
+}

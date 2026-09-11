@@ -21,7 +21,7 @@
 
 import type { FeatureVector } from '../features/index.js'
 import { distributionProblem } from '../policy/index.js'
-import type { SplitName, TrainingEpoch } from '../task/artifact.js'
+import type { SplitName, TrainingStep } from '../task/artifact.js'
 import type { ModelFamilyDeclaration, TaskDeclaration } from '../task/types.js'
 import type { ValidationIssue } from '../task/validate.js'
 import { checkArtifactVersion } from '../task/version.js'
@@ -54,7 +54,7 @@ export interface ShippedModel {
 export interface ModelDocument {
   readonly model: ShippedModel
   /** Present only for a family that records a training history. */
-  readonly history?: readonly TrainingEpoch[]
+  readonly history?: readonly TrainingStep[]
 }
 
 export type ModelValidation =
@@ -173,7 +173,6 @@ export function readModelFile(
     }
   }
 
-  const declaredFeatures = declaration.features.map((feature) => feature.id)
   const splits: ModelSplit[] = []
   model.splits.forEach((raw_: unknown, index: number) => {
     const where = `splits[${index}]`
@@ -187,11 +186,26 @@ export function readModelFile(
       )
       return
     }
-    if (typeof raw_.feature !== 'string' || !declaredFeatures.includes(raw_.feature)) {
+    const declared = declaration.features.find((feature) => feature.id === raw_.feature)
+    if (typeof raw_.feature !== 'string' || declared === undefined) {
       issues.push(
         issue(
           'unknown-feature',
           `Configuration "${configurationId}" splits at ${where} on ${JSON.stringify(raw_.feature)}, which task "${declaration.id}" does not measure.`,
+          where,
+        ),
+      )
+      return
+    }
+    // A cut outside the span the feature's values actually cover is not a question. It
+    // is either the whole pool or none of it, which makes the branch below it dead and
+    // makes the tree drawn on screen a lie about what it separates. Refused rather than
+    // clamped: a threshold at the wrong scale is an authoring mistake, not a rounding one.
+    if (raw_.threshold < declared.range.min || raw_.threshold > declared.range.max) {
+      issues.push(
+        issue(
+          'threshold-out-of-range',
+          `Configuration "${configurationId}" cuts "${declared.id}" at ${raw_.threshold} at ${where}, outside the ${declared.range.min} to ${declared.range.max} the pool's values cover.`,
           where,
         ),
       )
@@ -202,11 +216,24 @@ export function readModelFile(
     splits.push({ feature: raw_.feature, threshold: raw_.threshold, whenAbove })
   })
 
-  const otherwise = checkLeaf(declaration, model.otherwise, 'otherwise', configurationId, issues)
+  // Every path has to terminate in a leaf. In the chain shape that is one leaf per
+  // question plus the fallback, and it is the fallback that is easy to leave off — a
+  // chain without one leaves every apple no question claimed with no answer at all.
+  const otherwise =
+    model.otherwise === undefined
+      ? (issues.push(
+          issue(
+            'non-terminating-model',
+            `Configuration "${configurationId}" ends in no leaf, so an apple no question claims reaches no answer.`,
+            'otherwise',
+          ),
+        ),
+        undefined)
+      : checkLeaf(declaration, model.otherwise, 'otherwise', configurationId, issues)
 
   // A history is optional, and a family that declares one must carry it: a curve the
   // workshop is told to draw and cannot is worse than one it was never promised.
-  let history: readonly TrainingEpoch[] | undefined
+  let history: readonly TrainingStep[] | undefined
   if (family.history !== undefined) {
     if (!Array.isArray(raw.history) || raw.history.length === 0) {
       issues.push(
@@ -217,7 +244,7 @@ export function readModelFile(
         ),
       )
     } else {
-      history = raw.history as readonly TrainingEpoch[]
+      history = raw.history as readonly TrainingStep[]
     }
   }
 
@@ -227,6 +254,71 @@ export function readModelFile(
     ok: true,
     document: { model: { splits, otherwise }, ...(history === undefined ? {} : { history }) },
   }
+}
+
+/**
+ * Every feature a shipped model asks about, in the order it first asks.
+ *
+ * Read off the model rather than off the task, because what a model *may* read and what
+ * it *does* read are different sets: holding an evaluation to the whole declared feature
+ * list would refuse a perfectly good two-question tree over a manifest that records a
+ * fifth number for only some of its images.
+ */
+export function featuresRead(model: ShippedModel): readonly string[] {
+  const seen: string[] = []
+  for (const split of model.splits) if (!seen.includes(split.feature)) seen.push(split.feature)
+  return seen
+}
+
+/**
+ * Whether a shipped model can be evaluated over every image of every split, and why not.
+ *
+ * This is `prediction-artifacts`' completeness requirement in the form a stored model
+ * takes it: not an enumeration of distributions, which a model does not have, but the
+ * structural claim that evaluating it reaches exactly one outcome for every image the
+ * manifest declares. Half of that is free — a chain answers with the first split whose
+ * question an image says yes to and otherwise with `otherwise`, so there is always
+ * exactly one answer and never two. The half that is not free is whether the numbers the
+ * questions ask about are there, for every image, which is what this checks.
+ *
+ * Checked once when the model is read, over the manifest's own enumeration, rather than
+ * per image at harvest: a model that cannot span the pool must refuse rather than score
+ * the images it happens to resolve.
+ */
+export function modelSpanIssues(
+  model: ShippedModel,
+  configurationId: string,
+  imageIds: Readonly<Record<string, readonly string[]>>,
+  features: Readonly<Record<string, FeatureVector>>,
+): readonly ValidationIssue[] {
+  const read = featuresRead(model)
+  for (const [split, ids] of Object.entries(imageIds)) {
+    for (const imageId of ids) {
+      const vector = features[imageId]
+      if (vector === undefined) {
+        return [
+          issue(
+            'incomplete-configuration',
+            `Configuration "${configurationId}" cannot be evaluated over image "${imageId}" of "${split}", which the pool manifest declares but records no measured features for.`,
+            configurationId,
+          ),
+        ]
+      }
+      for (const feature of read) {
+        const value = vector[feature]
+        if (typeof value !== 'number' || !Number.isFinite(value)) {
+          return [
+            issue(
+              'incomplete-configuration',
+              `Configuration "${configurationId}" asks about "${feature}", which the pool manifest does not declare for image "${imageId}" of "${split}", so the model cannot span the pool.`,
+              feature,
+            ),
+          ]
+        }
+      }
+    }
+  }
+  return []
 }
 
 /** The distribution a shipped model gives an image, from the numbers measured of it. */
@@ -251,6 +343,9 @@ export function entryFromModel(
 ): FamilyEntry {
   return {
     ...(document.history === undefined ? {} : { history: document.history }),
+    // The same object the predictions below are computed from, handed on so the drawing
+    // and the scoring cannot come from two different trees.
+    structure: document.model,
     distributionFor: (split: SplitName, imageId: string) => {
       if (!(imageIds[split] ?? []).includes(imageId)) return undefined
       const vector = features[imageId]

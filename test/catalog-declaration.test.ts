@@ -14,8 +14,10 @@ import {
   pricedItem,
   shippedCatalogJson,
   testFarm,
+  testGroups,
   unpricedItem,
 } from './helpers/catalog.js'
+import { appleDeclaration } from './helpers/apple.js'
 import { shippedFarm } from './helpers/farm.js'
 
 function messages(input: unknown): string {
@@ -45,41 +47,72 @@ describe('the shipped catalog', () => {
     expect(validated.ok, validated.ok ? '' : messages(shippedCatalogJson())).toBe(true)
   })
 
-  it('sells the orchard and nothing else, and everything unpriced says why', () => {
+  it('sells the orchard and the tree, and everything unpriced says why', () => {
+    // What is priced is what a model has been made for. `fitted-tree` ships a second
+    // family and one tree per budget it sells, so the family and its budgets join the
+    // orchard; the convolutional knobs stay unpriced because nothing has been trained
+    // at those settings, which is the reason each of them gives.
     const validated = validateCatalog(shippedCatalogJson(), testFarm)
     if (!validated.ok) throw new Error('the shipped catalog must validate')
 
     const priced = validated.catalog.items.filter((item) => item.priceUnits !== undefined)
-    expect(priced.map((item) => item.id)).toEqual(['orchard-expansion'])
+    expect(priced.map((item) => item.id)).toEqual([
+      'orchard-four-trees',
+      'orchard-five-trees',
+      'orchard-ten-trees',
+      'orchard-thirty-trees',
+      'orchard-fifty-trees',
+      'orchard-hundred-trees',
+      'robot-eye',
+      'sorting-tree',
+      'tree-four-questions',
+      'tree-six-questions',
+    ])
     for (const item of validated.catalog.items) {
       if (item.priceUnits !== undefined) continue
       expect(item.notForSaleReason ?? '', `${item.id} says nothing about why`).not.toBe('')
     }
   })
 
-  it('prices the expansion at a thousand, five times over, a hundred units each', () => {
-    // 1 000 rather than §4.5's 1 200: at 6 000 apples the weakest shipped configuration
-    // earns 1 207 in the wettest declared year, so 1 200 pays an expansion back with
-    // 7 CHF to spare — a margin the first retune of a payoff would spend. See design.md,
-    // decision 4; the payback multiple itself is asserted in delivery-guards.
+  it('offers the orchard as a ladder of rungs, each its own item at its own price', () => {
+    // Six items rather than one repeatable one, because `progression-catalog` requires
+    // that money be the only key to a purchase: a rung whose price rose with how often it
+    // had been bought would need a new rule about ordering, where ascending prices order
+    // the ladder by themselves. The totals read 1, 5, 10, 20, 50, 100, 200, 300, 400.
+    // See `smallholding-economy/design.md`.
     const validated = validateCatalog(shippedCatalogJson(), shippedFarm())
     if (!validated.ok) throw new Error('the shipped catalog must validate')
 
-    const item = validated.catalog.items.find((entry) => entry.id === 'orchard-expansion')
-    expect(item?.priceUnits).toBe(100000)
-    expect(item?.group).toBe('orchard')
-    expect(repeatLimit(item!)).toBe(5)
-    expect(item?.opens).toEqual([{ kind: 'farm-land', units: 100 }])
+    const rungs: readonly (readonly [string, number, number, number])[] = [
+      ['orchard-four-trees', 1500, 4, 1],
+      ['orchard-five-trees', 5500, 5, 1],
+      ['orchard-ten-trees', 11000, 10, 1],
+      ['orchard-thirty-trees', 22000, 30, 1],
+      ['orchard-fifty-trees', 55000, 50, 1],
+      ['orchard-hundred-trees', 110000, 100, 3],
+    ]
+
+    for (const [id, priceUnits, units, repeat] of rungs) {
+      const item = validated.catalog.items.find((entry) => entry.id === id)
+      expect(item, `${id} is not in the catalog`).toBeDefined()
+      expect(item?.priceUnits, id).toBe(priceUnits)
+      expect(item?.group, id).toBe('orchard')
+      expect(repeatLimit(item!), id).toBe(repeat)
+      expect(item?.opens, id).toEqual([{ kind: 'farm-land', units }])
+    }
   })
 
-  it('reaches six hundred units and thirty-six thousand pieces, and no further', () => {
+  it('reaches four hundred units and two thousand pieces, and no further', () => {
+    // The ladder terminates, so the land the orchard *could* reach stays a real figure on
+    // screen. 2 000 apples at 0.87 perfect play is 1 740 — what `Game_design.md` §4.5
+    // quoted for the orchard the game used to open on.
     const farm = shippedFarm()
     const validated = validateCatalog(shippedCatalogJson(), farm)
     if (!validated.ok) throw new Error('the shipped catalog must validate')
 
     const reach = maxLand(validated.catalog, farm)
-    expect(reach).toBe(600)
-    expect(reach * farm.orchard.piecesPerUnit).toBe(36000)
+    expect(reach).toBe(400)
+    expect(reach * farm.orchard.piecesPerUnit).toBe(2000)
   })
 
   it('claims nothing about how well a model performs, in the orchard or its copy', () => {
@@ -91,19 +124,54 @@ describe('the shipped catalog', () => {
     const validated = validateCatalog(shippedCatalogJson(), farm)
     if (!validated.ok) throw new Error('the shipped catalog must validate')
 
-    const item = validated.catalog.items.find((entry) => entry.id === 'orchard-expansion')
     const words = ['error', 'accuracy', 'accurate', 'risk', 'noise', 'variance', 'overfit']
-    const copy = `${item?.label ?? ''} ${item?.copy ?? ''} ${farm.orchard.label} ${farm.orchard.unit}`
-    for (const word of words) {
-      expect(copy.toLowerCase(), `the orchard's copy reaches for "${word}"`).not.toContain(word)
+    const rungs = validated.catalog.items.filter((entry) => entry.group === 'orchard')
+    expect(rungs.length).toBeGreaterThan(0)
+    for (const item of rungs) {
+      const copy = `${item.label} ${item.copy} ${farm.orchard.label} ${farm.orchard.unit}`
+      for (const word of words) {
+        expect(copy.toLowerCase(), `${item.id}'s copy reaches for "${word}"`).not.toContain(word)
+      }
     }
   })
 
-  it('owns nothing at the start, and every group it declares is real', () => {
+  it('offers no model as free or already owned, in its price or in its copy', () => {
+    // The eye was a gift and the tree cost six hundred, so the first thing the game said
+    // about machine learning was that comprehensibility is the expensive option. Both are
+    // now bought, and no copy may go on claiming otherwise — a shop line saying an item
+    // came with the robot is the same false statement as an unpriced one.
+    const validated = validateCatalog(shippedCatalogJson(), shippedFarm())
+    if (!validated.ok) throw new Error('the shipped catalog must validate')
+
+    const claims = [
+      'came with the robot',
+      'comes with the robot',
+      'already own',
+      'free',
+      'nothing here to buy',
+      'no charge',
+      'costs you nothing',
+    ]
+    for (const item of validated.catalog.items) {
+      if (!item.opens.some((unlock) => unlock.kind === 'model-family')) continue
+      const copy = `${item.label} ${item.copy} ${item.notForSaleReason ?? ''}`.toLowerCase()
+      for (const claim of claims) {
+        expect(copy, `${item.id}'s copy claims "${claim}"`).not.toContain(claim)
+      }
+    }
+  })
+
+  it('gives away nothing priced, and every group it declares is real', () => {
     const validated = validateCatalog(shippedCatalogJson(), testFarm)
     if (!validated.ok) throw new Error('the shipped catalog must validate')
 
-    expect(validated.catalog.ownedAtStart).toEqual([])
+    // Every item owned at the start is an item, and none of them is for sale: a farm
+    // that begins owning something priced would be a farm given money's worth for free.
+    for (const id of validated.catalog.ownedAtStart) {
+      const item = validated.catalog.items.find((candidate) => candidate.id === id)
+      expect(item, id).toBeDefined()
+      expect(item?.priceUnits, id).toBeUndefined()
+    }
     const groups = validated.catalog.groups.map((group) => group.id)
     for (const item of validated.catalog.items) expect(groups).toContain(item.group)
   })
@@ -290,5 +358,196 @@ describe('an item that grows the farm', () => {
     const validated = validateCatalog(catalogWith([unbuyable]), testFarm)
     if (!validated.ok) throw new Error(messages(catalogWith([unbuyable])))
     expect(maxLand(validated.catalog, testFarm)).toBe(testFarm.orchard.opening)
+  })
+})
+
+describe('a group says which counter its items stand at, and which part of the farm they are for', () => {
+  /** The built groups, with one of them replaced wholesale. */
+  function groupsWith(models: Record<string, unknown>): readonly Record<string, unknown>[] {
+    return testGroups.map((group) => (group.id === 'models' ? models : group))
+  }
+
+  it('accepts a group that declares a counter and no task, which is the farm-wide reading', () => {
+    const validated = validateCatalog(catalogWith([pricedItem()]), testFarm)
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    expect(validated.catalog.groups[0]?.soldAt).toBe('market')
+    expect(validated.catalog.groups[0]?.task).toBeUndefined()
+  })
+
+  it('accepts a group that names the part of the farm its items are for', () => {
+    const validated = validateCatalog(
+      catalogWith(
+        [pricedItem()],
+        groupsWith({ id: 'models', label: 'Models', task: 'apple-harvest', soldAt: 'market' }),
+      ),
+      testFarm,
+    )
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    expect(validated.catalog.groups.find((group) => group.id === 'models')?.task).toBe(
+      'apple-harvest',
+    )
+  })
+
+  it('refuses a group that says nothing about its counter, naming the group', () => {
+    const found = messages(
+      catalogWith([pricedItem()], groupsWith({ id: 'models', label: 'Models' })),
+    )
+    expect(found).toContain('models')
+    expect(found).toContain('soldAt')
+    expect(refused(catalogWith([pricedItem()], groupsWith({ id: 'models', label: 'Models' }))).ok).toBe(
+      false,
+    )
+  })
+
+  it('refuses a counter this build does not have, naming that counter and the group', () => {
+    const found = messages(
+      catalogWith(
+        [pricedItem()],
+        groupsWith({ id: 'models', label: 'Models', soldAt: 'auction' }),
+      ),
+    )
+    expect(found).toContain('models')
+    expect(found).toContain('auction')
+  })
+
+  it('refuses a task id of the wrong shape, naming the group and the field', () => {
+    const found = messages(
+      catalogWith(
+        [pricedItem()],
+        groupsWith({ id: 'models', label: 'Models', soldAt: 'market', task: 7 }),
+      ),
+    )
+    expect(found).toContain('models')
+    expect(found).toContain('task')
+  })
+})
+
+describe('only an upgrade to one model stands at the bench', () => {
+  /** One item of the bench shelf, opening whatever the case is about. */
+  function benched(opens: readonly Record<string, unknown>[]): Record<string, unknown> {
+    return pricedItem({ id: 'benched', group: 'capacity', opens })
+  }
+
+  it('accepts an item opening values of one knob', () => {
+    const validated = validateCatalog(
+      catalogWith([
+        benched([{ kind: 'knob-values', task: 'apple-harvest', knob: 'channels', values: [8] }]),
+      ]),
+      testFarm,
+    )
+    expect(validated.ok, messages(catalogWith([benched([
+      { kind: 'knob-values', task: 'apple-harvest', knob: 'channels', values: [8] },
+    ])]))).toBe(true)
+  })
+
+  it('refuses one that grows the farm, naming the item and what it opens', () => {
+    const found = messages(catalogWith([benched([{ kind: 'farm-land', units: 10 }])]))
+    expect(found).toContain('benched')
+    expect(found).toContain('farm-land')
+  })
+
+  it('refuses one that opens a whole family, naming the item and what it opens', () => {
+    const found = messages(
+      catalogWith([
+        benched([{ kind: 'model-family', task: 'apple-harvest', family: 'decision-tree' }]),
+      ]),
+    )
+    expect(found).toContain('benched')
+    expect(found).toContain('model-family')
+  })
+})
+
+describe('the shipped models shelf shows the ladder, built rungs and unbuilt', () => {
+  /**
+   * The family ids the shelf names but no task declares, pinned.
+   *
+   * An unpriced item may name a family that does not exist yet — that latitude is what
+   * lets the shelf show the whole ladder from the first day. The cost is that a mistyped
+   * id is not caught at load, so it is caught here: a rename that should have updated
+   * the shelf fails loudly rather than leaving an entry that quietly never unlocks.
+   */
+  const UNBUILT_FAMILIES = ['linear-regression', 'dense-network'] as const
+
+  /** Every family id the shipped catalog opens, priced or not, in declared order. */
+  function shelvedFamilies(): readonly string[] {
+    const validated = validateCatalog(shippedCatalogJson(), testFarm)
+    if (!validated.ok) throw new Error('the shipped catalog must validate')
+    return validated.catalog.items.flatMap((item) =>
+      item.opens.flatMap((unlock) => (unlock.kind === 'model-family' ? [unlock.family] : [])),
+    )
+  }
+
+  it('names exactly the families the shipped task declares, plus the pinned unbuilt ones', () => {
+    const declared = appleDeclaration().families.map((family) => family.id)
+    const shelved = shelvedFamilies()
+
+    expect(shelved.filter((id) => !declared.includes(id))).toEqual([...UNBUILT_FAMILIES])
+    for (const id of declared) expect(shelved, id).toContain(id)
+  })
+
+  it('leaves every unbuilt rung unpriced, with the declared reason it cannot be bought', () => {
+    const validated = validateCatalog(shippedCatalogJson(), testFarm)
+    if (!validated.ok) throw new Error('the shipped catalog must validate')
+
+    for (const item of validated.catalog.items) {
+      const unbuilt = item.opens.some(
+        (unlock) =>
+          unlock.kind === 'model-family' &&
+          UNBUILT_FAMILIES.includes(unlock.family as (typeof UNBUILT_FAMILIES)[number]),
+      )
+      if (!unbuilt) continue
+      expect(item.priceUnits, item.id).toBeUndefined()
+      expect(item.notForSaleReason, item.id).toBeTruthy()
+    }
+  })
+
+  it('gives the farm nothing to open with, and sells nothing at two counters', () => {
+    const validated = validateCatalog(shippedCatalogJson(), testFarm)
+    if (!validated.ok) throw new Error('the shipped catalog must validate')
+    const { catalog } = validated
+
+    // Every capability on this farm is bought with apples the student sorted. A model
+    // handed over before the first one was sorted said, of the two on the shelf, that the
+    // unreadable one is the free option — which is the opposite of the lesson.
+    expect(catalog.ownedAtStart).toEqual([])
+
+    // Every item sits in exactly one group, so its counter is one fact with one place
+    // to read it — which is what makes "no item is offered at both" structural.
+    const counterOf = (id: string): string | undefined =>
+      catalog.groups.find((group) => group.id === catalog.items.find((item) => item.id === id)?.group)
+        ?.soldAt
+
+    for (const item of catalog.items) expect(counterOf(item.id), item.id).toBeDefined()
+  })
+
+  it('sells the capacity items at the bench and nowhere else', () => {
+    const validated = validateCatalog(shippedCatalogJson(), testFarm)
+    if (!validated.ok) throw new Error('the shipped catalog must validate')
+    const { catalog } = validated
+
+    const bench = new Set(
+      catalog.groups.filter((group) => group.soldAt === 'bench').map((group) => group.id),
+    )
+    const benched = catalog.items.filter((item) => bench.has(item.group)).map((item) => item.id)
+
+    expect(benched).toEqual([
+      'deeper-stacks',
+      'stronger-regularization',
+      'dropout-layers',
+      'tree-four-questions',
+      'tree-six-questions',
+    ])
+  })
+
+  it('gives every market shelf of a part of the farm a task the build declares', () => {
+    const validated = validateCatalog(shippedCatalogJson(), testFarm)
+    if (!validated.ok) throw new Error('the shipped catalog must validate')
+
+    const named = validated.catalog.groups.flatMap((group) =>
+      group.task === undefined ? [] : [group.task],
+    )
+    expect(named).toEqual(['apple-harvest', 'apple-harvest'])
   })
 })

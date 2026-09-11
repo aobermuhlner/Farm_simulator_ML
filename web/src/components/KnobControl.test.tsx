@@ -25,7 +25,7 @@ const farm = farmDeclaration()
 /** A catalog that locks two of `channels` and everything of `dropout` beyond its default. */
 const catalog = soundCatalog({
   schemaVersion: '1.0.0',
-  groups: [{ id: 'models', label: 'Models' }],
+  groups: [{ id: 'models', label: 'Models', soldAt: 'market' }],
   ownedAtStart: [],
   items: [
     {

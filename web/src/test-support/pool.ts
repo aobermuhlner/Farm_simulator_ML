@@ -16,10 +16,11 @@ import type { FamilyEntry } from '../../../src/families/index.js'
 import {
   entryFromPredictions,
   familyCoverageIssue,
+  readFamilyStore,
   resolveFamilyEntry,
 } from '../../../src/families/index.js'
 import type { ConfigurationEntry, PredictionArtifact } from '../../../src/task/artifact.js'
-import { readArtifactIndex, type LoadedIndex } from '../../../src/task/artifactIndex.js'
+import { type LoadedIndex } from '../../../src/task/artifactIndex.js'
 import { firstFamily } from '../../../src/task/families.js'
 import type { CategoryId, TaskDeclaration } from '../../../src/task/types.js'
 import type { Loaded, LoadedFamily, LoadedTask } from '../data/load.js'
@@ -75,44 +76,69 @@ export function appleTrainingSplit(tier?: string): TrainingSplitView {
  * The apple task as `loadTask` would return it, built from the committed files.
  *
  * Screen and shell tests need a `LoadedTask` without a server. Reading the shipped
- * artifact index and pool through their real readers keeps that stand-in honest: if the
+ * indexes and pool through their real readers keeps that stand-in honest: if the
  * committed data stops loading, these tests stop passing too.
+ *
+ * Every declared family, not the first. The task ships two rungs now, and a stand-in
+ * that carried one would let a shell test pass while the family it was about could not
+ * be reached at all — which is the failure a second family exists to catch.
  */
 export function appleTask(): LoadedTask {
   const declaration = appleDeclaration()
   const pool = applePool()
-  const family = firstFamily(declaration)
-  const directory = family.predictions ?? ''
-  const raw = JSON.parse(readFileSync(join(repoRoot, `${directory}/index.json`), 'utf8')) as unknown
-
-  const index = readArtifactIndex(raw, declaration, family, {
+  const binding = {
     poolId: pool.poolId,
     schemaVersion: pool.schemaVersion,
     seed: pool.seed,
-  })
-  if (!index.ok) {
-    throw new Error(
-      `The committed artifact index does not read: ${index.issues.map((issue) => issue.message).join(' ')}`,
-    )
   }
 
   const paths = taskDataPaths('data/declarations/apple-harvest.json', declaration)
   if (paths === undefined) throw new Error('the apple task names data this build does not serve')
 
-  const files = Object.fromEntries(
-    Object.entries(index.index.configurations).map(([id, record]) => [id, record.file]),
-  )
+  const families: Record<string, LoadedFamily> = {}
+  const artifacts: Record<string, PredictionArtifact> = {}
+  const models: Record<string, Record<string, unknown>> = {}
+
+  for (const family of declaration.families) {
+    const directory = family.predictions ?? family.models ?? ''
+    const raw = JSON.parse(
+      readFileSync(join(repoRoot, `${directory}/index.json`), 'utf8'),
+    ) as unknown
+
+    // Through the registry's own reader, chosen by what the family ships, so a stand-in
+    // cannot accept an index the app would refuse.
+    const store = readFamilyStore(raw, declaration, family, binding)
+    if (!store.ok) {
+      throw new Error(
+        `The committed index for "${family.id}" does not read: ${store.issues
+          .map((issue) => issue.message)
+          .join(' ')}`,
+      )
+    }
+
+    families[family.id] = {
+      family,
+      coverage: store.store.coverage,
+      files: store.store.files,
+      indexUrl: paths.families[family.id] ?? '',
+      ...(store.store.index === undefined ? {} : { index: store.store.index }),
+    }
+
+    if (store.store.index !== undefined) {
+      artifacts[family.id] = committedArtifact(declaration, directory, store.store.index, family.id)
+      continue
+    }
+    models[family.id] = Object.fromEntries(
+      Object.entries(store.store.files).map(([id, file]) => [
+        id,
+        JSON.parse(readFileSync(join(repoRoot, `${directory}/${file}`), 'utf8')) as unknown,
+      ]),
+    )
+  }
+
   const task: LoadedTask = {
     declaration,
-    families: {
-      [family.id]: {
-        family,
-        coverage: index.index.coverage,
-        files,
-        indexUrl: paths.families[family.id] ?? '',
-        index: index.index,
-      },
-    },
+    families,
     truth: pool.truth,
     imageIds: { training: pool.order.training, pool: pool.order.pool },
     tierImages: pool.tiers,
@@ -121,9 +147,8 @@ export function appleTask(): LoadedTask {
     ),
     paths,
   }
-  entries.set(task, {
-    [family.id]: committedArtifact(declaration, directory, index.index, family.id),
-  })
+  entries.set(task, artifacts)
+  shipped.set(task, models)
   return task
 }
 
@@ -224,7 +249,7 @@ export function taskFrom(
           // The tier the identifier itself carries, so a fixture index agrees with the
           // configuration ids it was built from rather than restating them.
           tier: tierOf(id, family.datasetKnob),
-          epochs: Object.values(artifact.configurations)[0]?.history.length ?? 0,
+          steps: Object.values(artifact.configurations)[0]?.history?.length ?? 0,
           seed: 0,
           pipeline: { revision: '0'.repeat(40), dirty: false },
           architecture: { blocks: 0, channels: [], spatial: [], parameters: 0 },

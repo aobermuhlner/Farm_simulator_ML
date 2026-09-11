@@ -8,6 +8,20 @@ as static files to GitHub Pages.
 that is actually specified and built; `openspec/changes/` holds what is proposed. When
 those disagree with anything below, they win — this file records intent, not contract.
 
+## This is a prototype: build the frame before the contents
+
+What matters now is that the structure holds — that a task can offer several model
+families, that a family is bought, gated behind a comprehension puzzle, selected, tuned
+and put to work. Whether any particular model is *good* does not matter yet.
+
+A family whose predictions are placeholders is worth more today than a family with a real
+fitting pipeline behind it: the placeholder proves the frame carries a second model, and
+the pipeline only proves that one model works. Prefer breadth.
+
+So while any part of the frame is still missing, do not spend a change on measuring one
+model against another, on tuning accuracy, or on producing real weights. Those are cheap
+to do once the shape is settled and expensive to redo every time it moves.
+
 ## How the pieces fit
 
 - A task is **data**, not code: `declarations/*.json`, validated at load by

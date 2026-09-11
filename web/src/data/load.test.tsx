@@ -18,6 +18,12 @@ const FAMILY = String(INDEX.familyId)
 const COVERED = Object.keys(INDEX.configurations as Record<string, unknown>)
 const FIRST = COVERED[0] ?? ''
 const PREDICTIONS = readSource(`artifacts/apple-harvest/predictions/${FIRST}.json`)
+/**
+ * The other family's store. A task loads every family it declares, so the harness has
+ * to serve both — and serving only one would have the loader refuse the whole task,
+ * which is the behaviour a lesson that will not load is supposed to have.
+ */
+const TREES = readSource('artifacts/apple-harvest/trees/index.json') as Record<string, unknown>
 
 /** Serves whatever each data URL is mapped to, the way the plugin would. */
 function serve(bodies: Readonly<Record<string, unknown>>): void {
@@ -42,6 +48,7 @@ function shippedBodies(overrides: Readonly<Record<string, unknown>> = {}) {
     'data/pools/apple-harvest/manifest.json': MANIFEST,
     'data/artifacts/apple-harvest/predictions/index.json': INDEX,
     [`data/artifacts/apple-harvest/predictions/${FIRST}.json`]: PREDICTIONS,
+    'data/artifacts/apple-harvest/trees/index.json': TREES,
     ...overrides,
   }
 }
@@ -186,7 +193,7 @@ describe('loading one configuration', () => {
     expect(entry.ok).toBe(true)
     if (!entry.ok) return
     expect(entry.value.history).toHaveLength(
-      task.families[FAMILY]?.index?.configurations[FIRST]?.epochs ?? 0,
+      task.families[FAMILY]?.index?.configurations[FIRST]?.steps ?? 0,
     )
     expect(entry.value.imageIdsIn('pool')).toHaveLength(1000)
   })

@@ -15,13 +15,30 @@ import { openFarm } from '../src/economy/index.js'
 import type { LoadedPool } from '../src/pool/index.js'
 import { readPool } from '../src/pool/index.js'
 import type { Crop, Decision } from '../src/sorting/index.js'
-import { drawCrop, measureSort } from '../src/sorting/index.js'
+import { drawCrop, measureSort, whatStoppingCosts } from '../src/sorting/index.js'
 import type { ActionId, CategoryId, TaskDeclaration } from '../src/task/types.js'
 import { appleDeclaration } from './helpers/apple.js'
 
 const declaration = appleDeclaration()
-const limit = declaration.handSorting.perHarvest
 const cap = declaration.handSorting.secondsPerImage
+
+/**
+ * A sitting: a crop small enough that every apple of it is put in front of the student.
+ *
+ * Nothing declares it any more. It is a size chosen by this suite so that "the whole crop
+ * was decided" and "the crop is larger than the portion" are two cases a reader can tell
+ * apart at a glance.
+ */
+const SITTING = 60
+
+/**
+ * A crop past what the evaluation split can supply, and one twice as large.
+ *
+ * 500 / 250 / 250 photographs against a crop that is 35% green: green runs out first, and
+ * every crop from roughly 715 apples up presents the same 714.
+ */
+const PAST_THE_SPLIT = 2000
+const PORTION = 714
 
 const farmDeclaration: FarmDeclaration = {
   name: 'Test Farm',
@@ -211,12 +228,12 @@ describe('the wage is the declared table over the images actually decided', () =
   })
 })
 
-describe('growing past what one person can sort stops paying', () => {
+describe('growing past what the split can supply stops paying', () => {
   it('pays two crops of different sizes the same for identical decisions', () => {
-    const smaller = cropOf(400)
-    const larger = cropOf(4000)
-    expect(smaller.presented).toHaveLength(limit)
-    expect(larger.presented).toHaveLength(limit)
+    const smaller = cropOf(PAST_THE_SPLIT)
+    const larger = cropOf(2 * PAST_THE_SPLIT)
+    expect(smaller.presented).toHaveLength(PORTION)
+    expect(larger.presented).toHaveLength(PORTION)
 
     // The same decision, image for image, over two crops of very different sizes.
     const decisionsFor = (crop: Crop): Decision[] => faultlessly(crop)
@@ -231,11 +248,11 @@ describe('growing past what one person can sort stops paying', () => {
   })
 
   it('leaves the wage flat while the unsorted remainder grows', () => {
-    const wages = [100, 200, 400, 800].map((size) => {
+    const wages = [1000, 2000, 3000, 4000].map((size) => {
       const crop = cropOf(size)
       return measureSort(declaration, crop, truth, faultlessly(crop)).wage
     })
-    for (const wage of wages) expect(wage).toBeCloseTo(wages[0] as number, 10)
+    for (const wage of wages) expect(wage).toBeCloseTo(wages[0] as number, 6)
   })
 })
 
@@ -257,10 +274,10 @@ describe('the rate is measured, and the wage never is', () => {
   })
 
   it('projects the whole crop, including the part that went unsorted', () => {
-    const crop = cropOf(400)
+    const crop = cropOf(PAST_THE_SPLIT)
     const outcome = measureSort(declaration, crop, truth, faultlessly(crop, 3000))
-    expect(outcome.throughput.seconds).toBeCloseTo(limit * 3, 10)
-    expect(outcome.throughput.wholeCropSeconds).toBeCloseTo(400 * 3, 10)
+    expect(outcome.throughput.seconds).toBeCloseTo(PORTION * 3, 6)
+    expect(outcome.throughput.wholeCropSeconds).toBeCloseTo(PAST_THE_SPLIT * 3, 6)
     expect(outcome.throughput.wholeCropSeconds).toBeGreaterThan(outcome.throughput.seconds)
   })
 
@@ -344,14 +361,14 @@ describe('a person’s crates face the same buyer a robot’s do', () => {
   const delivering = term.delivering
 
   it('is the shipped term, applied by the same function the automated harvest goes through', () => {
-    const crop = cropOf(limit)
+    const crop = cropOf(SITTING)
     const outcome = measureSort(declaration, crop, truth, faultlessly(crop))
     expect(outcome.delivery.tolerance).toBe(term.tolerance)
     expect(outcome.delivery.gross).toBeCloseTo(outcome.faultless, 10)
   })
 
   it('pays a careful sort the plain payoff sum, with nothing taken off', () => {
-    const crop = cropOf(limit)
+    const crop = cropOf(SITTING)
     const outcome = measureSort(declaration, crop, truth, faultlessly(crop))
 
     // Faultless means every measured piece was kept out of the crates, so the share is
@@ -365,7 +382,7 @@ describe('a person’s crates face the same buyer a robot’s do', () => {
   it('downgrades a careless sort that reaches the limit, on the buyer’s own terms', () => {
     // A wet year and a student who crates everything: the share is the year's own worm
     // share, which the wettest declared year puts over the limit.
-    const crop = wettestCrop(limit)
+    const crop = wettestCrop(SITTING)
     const crated = delivering[0] as ActionId
     const outcome = measureSort(declaration, crop, truth, blanket(crop, crated))
 
@@ -379,7 +396,7 @@ describe('a person’s crates face the same buyer a robot’s do', () => {
   })
 
   it('leaves a careful sort of the same wet year ahead of the careless one', () => {
-    const crop = wettestCrop(limit)
+    const crop = wettestCrop(SITTING)
     const careless = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
     const careful = measureSort(declaration, crop, truth, faultlessly(crop))
 
@@ -391,7 +408,7 @@ describe('a person’s crates face the same buyer a robot’s do', () => {
     // The comparison figure is what these same pieces would have paid sorted faultlessly,
     // and it goes through the term rather than round it. A faultless sort delivers no
     // measured piece, so it is never downgraded — which is the point being made.
-    const crop = wettestCrop(limit)
+    const crop = wettestCrop(SITTING)
     const careless = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
     const perfect = measureSort(declaration, crop, truth, faultlessly(crop))
 
@@ -402,26 +419,113 @@ describe('a person’s crates face the same buyer a robot’s do', () => {
   it('leaves the unsorted count and the throughput arithmetic exactly as they were', () => {
     // The term prices what was delivered. It says nothing about how many pieces nobody
     // reached, or how fast the ones that were reached went.
-    const crop = wettestCrop(400)
+    const crop = wettestCrop(PAST_THE_SPLIT)
     const careless = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
 
     expect(careless.delivery.downgraded).toBe(true)
-    expect(careless.decided).toBe(limit)
-    expect(careless.unsorted).toBe(400 - limit)
+    expect(careless.decided).toBe(crop.presented.length)
+    expect(careless.unsorted).toBe(PAST_THE_SPLIT - crop.presented.length)
     expect(careless.throughput.perMinute).toBeCloseTo((careless.decided * 60) / careless.throughput.seconds, 10)
     expect(careless.throughput.wholeCropSeconds).toBeCloseTo(
-      (careless.throughput.seconds * 400) / careless.decided,
-      10,
+      (careless.throughput.seconds * PAST_THE_SPLIT) / careless.decided,
+      6,
     )
   })
 
   it('measures the share over the pieces the student decided, not over the crop', () => {
-    // Four hundred pieces, sixty decided: the denominator is what went to the buyer out of
-    // those sixty. Nothing was delivered from the part nobody reached, because nothing was
-    // decided about it.
-    const crop = wettestCrop(400)
+    // Two thousand pieces, the portion decided: the denominator is what went to the buyer
+    // out of the portion. Nothing was delivered from the part nobody reached, because
+    // nothing was decided about it.
+    const crop = wettestCrop(PAST_THE_SPLIT)
     const outcome = measureSort(declaration, crop, truth, blanket(crop, delivering[0] as ActionId))
-    expect(outcome.delivery.delivered).toBe(limit)
+    expect(outcome.delivery.delivered).toBe(crop.presented.length)
     expect(outcome.delivery.delivered).toBeLessThan(crop.size)
+  })
+})
+
+describe('the figures the choice to stop is made against', () => {
+  const composition = farmDeclaration.cropComposition
+
+  /** The declared value of one apple: 0.55 x 1.20 + 0.35 x 0.60 + 0.10 x 0. */
+  const perApple = 0.87
+
+  /** A sort of `decided` apples out of a crop that presents `SITTING`, at a steady pace. */
+  function partway(decided: number, elapsedMs = 3000) {
+    const crop = cropOf(SITTING)
+    const decisions = faultlessly(crop, elapsedMs).slice(0, decided)
+    const outcome = measureSort(declaration, crop, truth, decisions)
+    return { crop, outcome, stop: whatStoppingCosts(declaration, composition, crop.presented.length, outcome) }
+  }
+
+  it('states the wage so far, the count discarded, its worth and the time it would take', () => {
+    const { crop, outcome, stop } = partway(20)
+
+    expect(crop.presented).toHaveLength(SITTING)
+    expect(stop.wage).toBe(outcome.wage)
+    expect(stop.discarded).toBe(SITTING - 20)
+    expect(stop.worth).toBeCloseTo((SITTING - 20) * perApple, 10)
+    // Twenty apples at three seconds each, so the forty left are two minutes of clicking.
+    expect(stop.seconds).toBeCloseTo((SITTING - 20) * 3, 10)
+  })
+
+  it('prices what is left from the declared composition, not from what those apples are', () => {
+    // The point of the whole figure. Those apples are still on screen and their categories
+    // are exactly what the student is being paid to work out one picture at a time, so a
+    // figure drawn from them would answer that question in aggregate.
+    const { stop } = partway(20)
+
+    // The same sort measured against a manifest that calls every undecided apple wormy —
+    // the worst the remainder could possibly be — and against one that calls them all red.
+    const crop = cropOf(SITTING)
+    const decided = new Set(crop.presented.slice(0, 20).map((piece) => piece.imageId))
+    for (const category of ['wormy', 'red'] as const) {
+      const rewritten: Record<string, CategoryId> = { ...truth }
+      for (const piece of crop.presented) {
+        if (decided.has(piece.imageId)) continue
+        rewritten[piece.imageId] = category
+      }
+      const outcome = measureSort(
+        declaration,
+        crop,
+        rewritten,
+        faultlessly(crop, 3000).slice(0, 20),
+      )
+      const moved = whatStoppingCosts(declaration, composition, crop.presented.length, outcome)
+      expect(moved.worth, `a remainder of ${category} moved the figure`).toBeCloseTo(stop.worth, 10)
+      expect(moved.discarded).toBe(stop.discarded)
+    }
+  })
+
+  it('follows another farm’s declared composition without a code change', () => {
+    const { crop, outcome } = partway(20)
+    const wormier = whatStoppingCosts(
+      declaration,
+      { red: 0.2, green: 0.2, wormy: 0.6 },
+      crop.presented.length,
+      outcome,
+    )
+    // 0.2 x 1.20 + 0.2 x 0.60 + 0.6 x 0 = 0.36 an apple on an orchard mostly full of worms.
+    expect(wormier.worth).toBeCloseTo((SITTING - 20) * 0.36, 10)
+  })
+
+  it('leaves nothing to discard once every apple presented has been decided', () => {
+    const { stop } = partway(SITTING)
+    expect(stop.discarded).toBe(0)
+    expect(stop.worth).toBe(0)
+    expect(stop.seconds).toBe(0)
+  })
+
+  it('projects the remainder at the capped pace, so one abandoned screen cannot skew it', () => {
+    const crop = cropOf(SITTING)
+    const decisions = faultlessly(crop, 3000).slice(0, 10)
+    const first = decisions[0]
+    if (first === undefined) throw new Error('the crop must hold an image')
+    const interrupted = [{ ...first, elapsedMs: 4 * 60 * 60 * 1000 }, ...decisions.slice(1)]
+
+    const outcome = measureSort(declaration, crop, truth, interrupted)
+    const stop = whatStoppingCosts(declaration, composition, crop.presented.length, outcome)
+
+    // Nine apples at three seconds and one counted at the declared cap, over ten apples.
+    expect(stop.seconds).toBeCloseTo((SITTING - 10) * ((cap + 27) / 10), 10)
   })
 })

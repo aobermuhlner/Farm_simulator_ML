@@ -1,13 +1,15 @@
 /**
- * The market: everything the farm can buy, rendered from the declared catalog.
+ * The market: everything the farm buys away from the workshop, from the declared catalog.
  *
- * Nothing here knows what any of it is. The groups, their order, the items under them,
- * their copy and their prices are all read from the value handed in, so a market for an
- * entirely different farm renders through this same screen.
+ * Nothing here knows what any of it is. The sections, the shelves under them, their
+ * order, the items, their copy and their prices are all read from the value handed in,
+ * so a market for an entirely different farm renders through this same screen — and a
+ * second part of the farm appears with no change here at all, because a section heading
+ * is a task's own declared title and never a word written down twice.
  *
- * Which of the four states an item is in is decided by the engine, not here. A screen
- * that worked it out itself could present "you cannot afford this" as "you are not
- * allowed this", and money being the only key is exactly what the market has to show.
+ * Which of the four states an item is in is decided by the engine, not here, and the
+ * offer and its confirmation are the shared ones the upgrade bench also uses: the
+ * counter is where a thing is bought and nothing more.
  *
  * A purchase is confirmed before any money moves, with the item and its price named, and
  * the result is shown in place — a student never leaves the market to find out what
@@ -17,6 +19,7 @@
 import { useState } from 'react'
 import type { MarketItem, MarketView } from '../../../src/progression/index.js'
 import type { ValidationIssue } from '../../../src/task/validate.js'
+import { ConfirmPurchase, Offer } from '../components/Offer.js'
 import { Issues } from '../components/Issues.js'
 
 export interface MarketProps {
@@ -27,28 +30,6 @@ export interface MarketProps {
   readonly onBack: () => void
   /** Why the last purchase did not happen, as the engine reported it. */
   readonly refusal?: readonly ValidationIssue[]
-}
-
-/**
- * How much of a repeatable item has been bought and how much is left, or nothing at all
- * for an item the catalog permits once.
- *
- * Shown so a student can see what is left to earn towards rather than discovering the
- * limit by reaching it. An item at its limit says what it gave; it is never presented as
- * unaffordable, because no amount of money would obtain another one.
- */
-function tallyNote(entry: MarketItem): string | undefined {
-  if (entry.limit === 1) return undefined
-  if (entry.remaining === 0) return `All ${entry.limit} bought`
-  return `${entry.held} of ${entry.limit} bought, ${entry.remaining} to go`
-}
-
-/** What an item's state says about it, in words the catalog does not supply. */
-function stateNote(entry: MarketItem, formatPrice: (units: number) => string): string {
-  if (entry.state === 'owned') return 'Owned'
-  if (entry.state === 'not-for-sale') return entry.item.notForSaleReason ?? 'Not for sale yet'
-  const price = entry.item.priceUnits === undefined ? '' : formatPrice(entry.item.priceUnits)
-  return entry.state === 'buyable' ? price : `${price} — saving for it`
 }
 
 export function Market({ view, formatPrice, onBuy, onBack, refusal }: MarketProps) {
@@ -66,56 +47,42 @@ export function Market({ view, formatPrice, onBuy, onBack, refusal }: MarketProp
         <Issues title="That purchase did not happen" issues={refusal} />
       )}
 
-      {view.groups.map((group) => (
-        <section key={group.group.id} className="market-group" aria-label={group.group.label}>
-          <h2>{group.group.label}</h2>
-          <ul className="market-items">
-            {group.items.map((entry) => (
-              <li key={entry.item.id} className={`market-item ${entry.state}`}>
-                <h3>{entry.item.label}</h3>
-                <p className="shop-copy">{entry.item.copy}</p>
-                {tallyNote(entry) === undefined ? null : (
-                  <p className="market-tally" data-testid={`tally-${entry.item.id}`}>
-                    {tallyNote(entry)}
-                  </p>
-                )}
-                <p className="market-state" data-testid={`state-${entry.item.id}`}>
-                  {stateNote(entry, formatPrice)}
-                </p>
-                {entry.state === 'buyable' ? (
-                  <button type="button" onClick={() => setConfirming(entry)}>
-                    Buy {entry.item.label}
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+      {view.sections.map((section) => (
+        <section
+          key={section.taskId ?? ''}
+          className="market-section"
+          aria-label={section.title}
+          data-section={section.taskId ?? ''}
+        >
+          <h2>{section.title}</h2>
+          {section.groups.map((group) => (
+            <section key={group.group.id} className="market-group" aria-label={group.group.label}>
+              <h3>{group.group.label}</h3>
+              <ul className="market-items">
+                {group.items.map((entry) => (
+                  <Offer
+                    key={entry.item.id}
+                    entry={entry}
+                    formatPrice={formatPrice}
+                    onBuy={setConfirming}
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
         </section>
       ))}
 
       {confirming === undefined ? null : (
-        <section className="confirm" role="dialog" aria-label="Confirm this purchase">
-          <p>
-            {`Buy ${confirming.item.label} for ${
-              confirming.item.priceUnits === undefined
-                ? ''
-                : formatPrice(confirming.item.priceUnits)
-            }? This cannot be undone.`}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              const bought = confirming.item.id
-              setConfirming(undefined)
-              onBuy(bought)
-            }}
-          >
-            Confirm
-          </button>
-          <button type="button" onClick={() => setConfirming(undefined)}>
-            Cancel
-          </button>
-        </section>
+        <ConfirmPurchase
+          entry={confirming}
+          formatPrice={formatPrice}
+          onConfirm={(itemId) => {
+            setConfirming(undefined)
+            onBuy(itemId)
+          }}
+          onCancel={() => setConfirming(undefined)}
+        />
       )}
     </section>
   )

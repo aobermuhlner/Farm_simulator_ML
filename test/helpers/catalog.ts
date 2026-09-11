@@ -48,14 +48,21 @@ export function soundCatalog(input: unknown, farm: FarmDeclaration = testFarm): 
   return validated.catalog
 }
 
+/** The shelves the built catalogs stand on: two at the market, one at the bench. */
+export const testGroups: readonly Record<string, unknown>[] = [
+  { id: 'models', label: 'Models', soldAt: 'market' },
+  { id: 'orchard', label: 'Orchard', soldAt: 'market' },
+  { id: 'capacity', label: 'Capacity', soldAt: 'bench' },
+]
+
 /** The raw shape of a catalog that validates, as the base for changing one field. */
-export function catalogWith(items: readonly Record<string, unknown>[]): Record<string, unknown> {
+export function catalogWith(
+  items: readonly Record<string, unknown>[],
+  groups: readonly Record<string, unknown>[] = testGroups,
+): Record<string, unknown> {
   return {
     schemaVersion: '1.0.0',
-    groups: [
-      { id: 'models', label: 'Models' },
-      { id: 'orchard', label: 'Orchard' },
-    ],
+    groups,
     ownedAtStart: [],
     items,
   }

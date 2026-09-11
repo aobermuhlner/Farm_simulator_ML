@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TrainingEpoch } from '../../../src/task/artifact.js'
+import type { TrainingStep } from '../../../src/task/artifact.js'
 
 /**
  * What one step of this history is called, as a family would declare it.
@@ -24,13 +24,13 @@ import { TrainingRun } from './TrainingRun.js'
 afterEach(cleanup)
 
 /** A run that falls and then flattens, the way a real one does. */
-function history(): readonly TrainingEpoch[] {
+function history(): readonly TrainingStep[] {
   return [
-    { epoch: 1, trainLoss: 1.1, valLoss: 1.12, trainAccuracy: 0.33, valAccuracy: 0.3 },
-    { epoch: 2, trainLoss: 0.8, valLoss: 0.85, trainAccuracy: 0.55, valAccuracy: 0.5 },
-    { epoch: 3, trainLoss: 0.5, valLoss: 0.58, trainAccuracy: 0.78, valAccuracy: 0.7 },
-    { epoch: 4, trainLoss: 0.3, valLoss: 0.42, trainAccuracy: 0.92, valAccuracy: 0.8 },
-    { epoch: 5, trainLoss: 0.22, valLoss: 0.4, trainAccuracy: 0.96, valAccuracy: 0.825 },
+    { step: 1, trainLoss: 1.1, valLoss: 1.12, trainAccuracy: 0.33, valAccuracy: 0.3 },
+    { step: 2, trainLoss: 0.8, valLoss: 0.85, trainAccuracy: 0.55, valAccuracy: 0.5 },
+    { step: 3, trainLoss: 0.5, valLoss: 0.58, trainAccuracy: 0.78, valAccuracy: 0.7 },
+    { step: 4, trainLoss: 0.3, valLoss: 0.42, trainAccuracy: 0.92, valAccuracy: 0.8 },
+    { step: 5, trainLoss: 0.22, valLoss: 0.4, trainAccuracy: 0.96, valAccuracy: 0.825 },
   ]
 }
 

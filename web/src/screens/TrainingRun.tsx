@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import type { TrainingEpoch } from '../../../src/task/artifact.js'
+import type { TrainingStep } from '../../../src/task/artifact.js'
 
 /** How long a replay takes, whatever the history's length. Short enough to run again. */
 export const REPLAY_MS = 5_000
@@ -28,7 +28,7 @@ export const REPLAY_MS = 5_000
 export const DEFAULT_AXIS = 'step'
 
 export interface TrainingRunProps {
-  readonly history: readonly TrainingEpoch[]
+  readonly history: readonly TrainingStep[]
   /**
    * What one step of this history is called, as the family declares it.
    *

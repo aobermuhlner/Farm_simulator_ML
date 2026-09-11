@@ -29,7 +29,7 @@ function renderMarket(
 ) {
   render(
     <Market
-      view={marketView(catalog, owned, balanceUnits)}
+      view={marketView(catalog, [], farm, owned, balanceUnits)}
       formatPrice={(units) => formatUnits(units, farm)}
       onBuy={onBuy}
       onBack={vi.fn()}
@@ -45,8 +45,14 @@ function stateOf(id: string): string {
 describe('the catalog is rendered as declared', () => {
   it('shows the groups in the order the catalog declares them', () => {
     renderMarket()
-    const headings = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent)
     expect(headings).toEqual(['Planting', 'Sheds'])
+  })
+
+  it('shows a group belonging to no task under the farm, and heads it with nothing of its own', () => {
+    renderMarket()
+    const sections = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent)
+    expect(sections).toEqual([farm.name])
   })
 
   it('shows no group with nothing in it', () => {
@@ -143,7 +149,7 @@ describe('a refusal is shown with the cause the engine named', () => {
   it('renders it without hiding the market', () => {
     render(
       <Market
-        view={marketView(catalog, ['starter-plot'], 200000)}
+        view={marketView(catalog, [], farm, ['starter-plot'], 200000)}
         formatPrice={(units) => formatUnits(units, farm)}
         onBuy={vi.fn()}
         onBack={vi.fn()}
@@ -167,7 +173,7 @@ describe('a market for another farm renders through the same screen', () => {
     const other = shopCatalog()
     render(
       <Market
-        view={marketView(other, [], 0)}
+        view={marketView(other, [], farm, [], 0)}
         formatPrice={(units) => formatUnits(units, farm)}
         onBuy={vi.fn()}
         onBack={vi.fn()}
@@ -177,7 +183,7 @@ describe('a market for another farm renders through the same screen', () => {
     // Nothing is owned and nothing is affordable, so every priced row reads as saving.
     expect(stateOf('starter-plot')).toBe(formatUnits(0, farm))
     expect(stateOf('second-row')).toContain('saving')
-    expect(screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent)).toEqual([
+    expect(screen.getAllByRole('heading', { level: 4 }).map((node) => node.textContent)).toEqual([
       'Starter plot',
       'Second row',
       'Stone shed',
@@ -191,7 +197,7 @@ describe('a row the catalog permits to be bought more than once', () => {
     const owned = Array.from({ length: held }, () => 'another-row')
     render(
       <Market
-        view={marketView(repeatShopCatalog(), owned, balanceUnits)}
+        view={marketView(repeatShopCatalog(), [], farm, owned, balanceUnits)}
         formatPrice={(units) => formatUnits(units, farm)}
         onBuy={onBuy}
         onBack={vi.fn()}

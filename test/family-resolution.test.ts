@@ -146,7 +146,14 @@ function rawModelIndex(over: Record<string, unknown> = {}): Record<string, unkno
     taskId: task.id,
     familyId: chain.id,
     pool: POOL,
-    configurations: { [DEPTH1]: { file: `${DEPTH1}.json`, tier: 'starter' } },
+    configurations: {
+      [DEPTH1]: {
+        file: `${DEPTH1}.json`,
+        knobs: { depth: 1, dataset: 'starter' },
+        tier: 'starter',
+        provenance: { origin: 'authored', authoredBy: 'the two-family fixture' },
+      },
+    },
     ...over,
   }
 }

@@ -349,11 +349,13 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
     }
   })
 
-  it('prices the table against the crop mix Game_design.md §4.5 quotes', () => {
-    // 55% red, 35% green, 10% wormy — the mix behind the ~1 740 CHF on 6 000 apples §4.5
-    // gives for year one. The blanket strategies are the check that matters: under §4.1's
-    // uncorrected table one of them earned most of perfect play while never once rejecting
-    // a worm, which is the diagnosis trap inverted.
+  it('prices the table against the crop mix the farm declares', () => {
+    // 55% red, 35% green, 10% wormy. The table was tripled by `smallholding-economy` so a
+    // 10 000 robot's eye sits within reach of the 400 trees the orchard ladder terminates
+    // at; every entry scaled by the same factor, so no relationship between mistakes
+    // moved. The blanket strategies are the check that matters: under `Game_design.md`
+    // §4.1's uncorrected table one of them earned most of perfect play while never once
+    // rejecting a worm, which is the diagnosis trap inverted.
     const mix: Record<string, number> = { red: 0.55, green: 0.35, wormy: 0.1 }
     const perApple = (chosen: (category: string) => string): number =>
       categories.reduce(
@@ -363,8 +365,11 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
       )
 
     const perfect = perApple((category) => mappedTo(category))
-    expect(perfect).toBeCloseTo(0.29, 10)
-    expect(perfect * 6000).toBeCloseTo(1740, 6)
+    expect(perfect).toBeCloseTo(0.87, 10)
+    // 400 trees at five apples each is 2 000 apples, and perfect play over them pays the
+    // 1 740 `Game_design.md` §4.5 quoted for the orchard the game used to *open* on. The
+    // endgame arrives where the game began.
+    expect(perfect * 2000).toBeCloseTo(1740, 6)
 
     const blanket = actions.map((action) => [action, perApple(() => action)] as const)
     for (const [action, earned] of blanket) {
@@ -384,32 +389,34 @@ describe('apple-harvest declaration: payoffs, policy and teaching copy', () => {
 })
 
 describe('apple-harvest declaration: what one person can sort by hand', () => {
-  const handSorting = declaration.handSorting as { perHarvest: number; secondsPerImage: number }
-  const declared = declaration.categories as { id: string }[]
-
-  it('declares how many apples one person gets through in a harvest', () => {
-    expect(handSorting.perHarvest).toBe(60)
-  })
+  const handSorting = declaration.handSorting as Record<string, unknown>
 
   it('declares the most seconds one apple may contribute to the measured rate', () => {
     expect(handSorting.secondsPerImage).toBe(60)
   })
 
-  it('can show one apple of every declared category in a single harvest', () => {
-    expect(handSorting.perHarvest).toBeGreaterThanOrEqual(declared.length)
+  it('declares no bound of its own on how many apples one person may sort', () => {
+    // The student draws that line themselves, and what stops them beyond it is the
+    // evaluation split running out of distinct photographs — not a declared figure.
+    expect(Object.keys(handSorting)).toEqual(['secondsPerImage'])
   })
 })
 
-describe('apple-harvest declaration: its one model family', () => {
-  it('declares exactly one family, and everything about the model under it', () => {
+describe('apple-harvest declaration: its model families', () => {
+  it('declares two families, and everything about each model under it', () => {
     const families = declaration.families as Record<string, unknown>[]
 
-    expect(families).toHaveLength(1)
-    expect(family.id).toBeTypeOf('string')
-    expect(family.label).toBeTypeOf('string')
-    // The knobs, the drawing and the prediction reference are the family's, not the task's.
-    for (const field of ['knobs', 'diagram', 'predictions']) {
-      expect(family[field], field).toBeDefined()
+    // Two rungs of the ladder, and the frame carries both: the convolutional network
+    // whose predictions ship, and the tree that ships its own model.
+    expect(families).toHaveLength(2)
+    for (const declared of families) {
+      expect(declared.id).toBeTypeOf('string')
+      expect(declared.label).toBeTypeOf('string')
+      // The knobs and where the model comes from are the family's, not the task's.
+      expect(declared.knobs, String(declared.id)).toBeDefined()
+      expect(declared.predictions ?? declared.models, String(declared.id)).toBeDefined()
+    }
+    for (const field of ['knobs', 'diagram', 'predictions', 'models']) {
       expect(declaration[field], field).toBeUndefined()
     }
   })

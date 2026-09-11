@@ -16,19 +16,26 @@
  *
  * | Crop | Presented | Sorted faultlessly | Left unsorted | At 2.5 s an image |
  * | ---: | --------: | -----------------: | ------------: | ----------------: |
- * |   10 |        10 |          CHF  2.80 |             0 |    25 s, whole crop 25 s |
- * |   40 |        40 |          CHF 11.60 |             0 |  1.7 min, whole crop 1.7 min |
- * |  400 |        60 |          CHF 17.40 |           340 |  2.5 min, whole crop 16.7 min |
- * | 4000 |        60 |          CHF 17.40 |          3940 |  2.5 min, whole crop 2.8 h |
+ * |    5 |         5 |          CHF  3.60 |             0 |   12.5 s, whole crop 12.5 s |
+ * |   40 |        40 |          CHF 34.80 |             0 |  1.7 min, whole crop 1.7 min |
+ * |  400 |       400 |                  — |             0 |   — (offered, not clicked through) |
+ * | 2000 |       721 |                  — |          1279 |   — (offered, not clicked through) |
  *
  * The money figures are derived from the crop the shell actually drew rather than typed
  * out, because the year's mix is drawn within a declared range and a retuned range would
  * otherwise mean sweeping this file again. The table above is what they currently come to;
  * the assertions are what they must agree with.
  *
- * The wage stops rising at a crop of 60 — the declared limit — and every piece grown past
- * it is time on the projection and nothing in the pocket. That is the plateau, and it is
- * the whole argument for buying something that does the job.
+ * Two things bound a harvest, and only one of them is a number anyone declared. The crop
+ * is offered entire however large it is — 400 apples is 400 clicks if the student wants
+ * them — and what finally stops it is the evaluation split running out of distinct
+ * photographs at about 720. Everything grown past that is time on the projection and
+ * nothing in the pocket. That is the plateau, and it is the whole argument for buying
+ * something that does the job.
+ *
+ * The five-apple opening pays 3.60 rather than the 5 x 0.87 its declared shares suggest:
+ * five apples cannot be 55 / 35 / 10, so the crop is two, two and one, and the drawn
+ * counts are what pays. `harvest-run` requires exactly that.
  */
 
 import { cleanup, render, screen, within } from '@testing-library/react'
@@ -55,9 +62,9 @@ const SECONDS_PER_PIECE = 2.5
 /**
  * How long one of these cases may take.
  *
- * A harvest here is sixty simulated clicks through the real shell, which outruns the
+ * A harvest here is dozens of simulated clicks through the real shell, which outruns the
  * default five seconds whenever the suite is busy. Nothing about the app is slow; the
- * test is genuinely doing sixty of everything.
+ * test is genuinely doing all of them.
  */
 const PLAYING_TIME = 60_000
 
@@ -70,11 +77,14 @@ function money(amount: number): string {
 /**
  * What a faultless sort of the pieces on screen comes to, from the declaration.
  *
- * Derived rather than written down: what one person is presented with is the year's mix
- * over the declared limit, and the year's mix is drawn from a declared range. A figure
- * typed out here would be a second statement of the same thing, able to disagree.
+ * Derived rather than written down: what one person is presented with is the crop itself,
+ * and the year's mix is drawn from a declared range. A figure typed out here would be a
+ * second statement of the same thing, able to disagree.
  */
-function faultlessWage(crop: { presented: readonly { imageId: string }[]; truth: Readonly<Record<string, string>> }): string {
+function faultlessWage(crop: {
+  presented: readonly { imageId: string }[]
+  truth: Readonly<Record<string, string>>
+}): string {
   const total = crop.presented.reduce((sum, piece) => {
     const category = crop.truth[piece.imageId] as string
     const action = declaration.categoryActions[category] as string
@@ -88,22 +98,27 @@ function figure(attribute: string): string {
   return document.querySelector(`[${attribute}]`)?.textContent ?? ''
 }
 
+/** Everything the summary reports once a sort has settled. */
+function reported() {
+  return {
+    wage: figure('data-wage'),
+    faultless: figure('data-faultless'),
+    elapsed: figure('data-elapsed'),
+    rate: figure('data-rate'),
+    projection: figure('data-projection'),
+    unsorted: document.querySelector('[data-unsorted]')?.getAttribute('data-unsorted') ?? '0',
+  }
+}
+
 /**
- * Plays one whole harvest of a farm whose crop is `cropSize`, deciding every piece the
- * way the task says it should be decided, and returns what the screen then reports.
+ * Opens the sorting screen on a farm whose crop is `cropSize`, and hands back the crop
+ * the shell drew along with a clicker for it.
+ *
+ * The clock is the shell's, so the pace on screen is the pace this test set.
  */
-async function harvest(
-  cropSize: number,
-  task = appleTask(),
-): Promise<{
-  readonly presented: number
-  readonly faultlessly: string
-  readonly wage: string
-  readonly faultless: string
-  readonly elapsed: string
-  readonly rate: string
-  readonly projection: string
-  readonly unsorted: string
+async function openSort(cropSize: number): Promise<{
+  readonly crop: ReturnType<typeof appleCrop>
+  readonly decide: (count: number) => Promise<void>
 }> {
   vi.stubGlobal('fetch', (input: string) =>
     String(input).endsWith('manifest.json')
@@ -112,7 +127,7 @@ async function harvest(
   )
 
   let clock = 0
-  const crop = appleCrop(farmSorting(cropSize), SEED, task.declaration)
+  const crop = appleCrop(farmSorting(cropSize), SEED, declaration)
 
   render(
     <App
@@ -138,51 +153,39 @@ async function harvest(
   await userEvent.click(await screen.findByRole('button', { name: SORT_BUTTON }))
   await screen.findByRole('img', { name: 'The piece you are deciding about' })
 
-  for (const piece of crop.presented) {
-    const category = crop.truth[piece.imageId] as string
-    const action = task.declaration.categoryActions[category] as string
-    const label =
-      task.declaration.actions.find((candidate) => candidate.id === action)?.label ?? ''
-    clock += SECONDS_PER_PIECE * 1000
-    await userEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+  async function decide(count: number): Promise<void> {
+    for (const piece of crop.presented.slice(0, count)) {
+      const category = crop.truth[piece.imageId] as string
+      const action = declaration.categoryActions[category] as string
+      const label = declaration.actions.find((candidate) => candidate.id === action)?.label ?? ''
+      clock += SECONDS_PER_PIECE * 1000
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+    }
   }
 
-  return {
-    presented: crop.presented.length,
-    /** What a faultless sort of exactly these pieces is worth, from the declaration. */
-    faultlessly: faultlessWage(crop),
-    wage: figure('data-wage'),
-    faultless: figure('data-faultless'),
-    elapsed: figure('data-elapsed'),
-    rate: figure('data-rate'),
-    projection: figure('data-projection'),
-    unsorted: document.querySelector('[data-unsorted]')?.getAttribute('data-unsorted') ?? '0',
-  }
+  return { crop, decide }
 }
 
-/** The apple task with one of its hand-sorting figures changed, and nothing else. */
-function retuned(perHarvest: number) {
-  const task = appleTask()
-  return {
-    ...task,
-    declaration: {
-      ...task.declaration,
-      handSorting: { ...task.declaration.handSorting, perHarvest },
-    },
-  }
+/** Plays one whole harvest of a crop of `cropSize`, deciding every piece as declared. */
+async function harvest(cropSize: number) {
+  const { crop, decide } = await openSort(cropSize)
+  await decide(crop.presented.length)
+  return { presented: crop.presented.length, faultlessly: faultlessWage(crop), ...reported() }
 }
 
 describe('the first harvests, as the app plays them', () => {
-  it('pays a crop of ten sorted whole', async () => {
-    const played = await harvest(10)
+  it('pays the opening crop of five, sorted whole', async () => {
+    const played = await harvest(5)
 
-    expect(played.presented).toBe(10)
+    expect(played.presented).toBe(5)
     expect(played.wage).toBe(played.faultlessly)
     expect(played.faultless).toBe(played.faultlessly)
-    expect(played.wage).toBe(money(2.8))
-    expect(played.elapsed).toBe('25 s')
+    // Two red, two green and one wormy — five apples cannot be 55 / 35 / 10, and what
+    // pays is what was drawn.
+    expect(played.wage).toBe(money(3.6))
+    expect(played.elapsed).toBe('12.5 s')
     expect(played.rate).toBe('24')
-    expect(played.projection).toBe('25 s')
+    expect(played.projection).toBe('12.5 s')
     expect(played.unsorted).toBe('0')
   }, PLAYING_TIME)
 
@@ -191,50 +194,77 @@ describe('the first harvests, as the app plays them', () => {
 
     expect(played.presented).toBe(40)
     expect(played.wage).toBe(played.faultlessly)
-    expect(played.wage).toBe(money(11.6))
+    expect(played.wage).toBe(money(34.8))
     expect(played.elapsed).toBe('1.7 min')
     expect(played.projection).toBe('1.7 min')
     expect(played.unsorted).toBe('0')
   }, PLAYING_TIME)
 
-  it('stops paying past what one person can sort, and says how much was left', async () => {
-    const played = await harvest(400)
+  it('offers the whole of a crop of four hundred, which no declared number bounds', async () => {
+    // Far more than anyone will click through in a sitting, and offered all the same:
+    // where the sort stops is the student's own decision.
+    const { crop } = await openSort(400)
 
-    expect(played.presented).toBe(declaration.handSorting.perHarvest)
-    expect(played.wage).toBe(money(17.4))
-    expect(played.elapsed).toBe('2.5 min')
-    expect(played.projection).toBe('16.7 min')
-    expect(played.unsorted).toBe(String(400 - declaration.handSorting.perHarvest))
+    expect(crop.presented).toHaveLength(400)
+    expect(figure('data-progress')).toBe('Piece 1 of 400')
   }, PLAYING_TIME)
 
-  it('pays a crop ten times larger again not one franc more', async () => {
-    const played = await harvest(4000)
+  it('runs out of photographs before it runs out of apples, past the split', async () => {
+    // 2 000 apples against a split holding 500 red, 250 green and 250 wormy photographs.
+    // Green is what runs short — a quarter of the split against a third of the crop — and
+    // the portion keeps the crop's own mix rather than being filled out with the reds and
+    // worms that were left. The exact figure follows the year's drawn share of worms.
+    const { crop } = await openSort(2000)
 
-    expect(played.presented).toBe(declaration.handSorting.perHarvest)
-    expect(played.wage).toBe(money(17.4))
-    expect(played.elapsed).toBe('2.5 min')
-    // The same afternoon's work, and a whole crop that would now take days.
-    expect(played.projection).toBe('2.8 h')
-    expect(played.unsorted).toBe(String(4000 - declaration.handSorting.perHarvest))
+    expect(crop.size).toBe(2000)
+    expect(crop.presented).toHaveLength(721)
+    expect(figure('data-progress')).toBe('Piece 1 of 721')
+  }, PLAYING_TIME)
+})
+
+describe('the student draws the line, and the screen prices it first', () => {
+  it('states the wage, the count left and what the orchard bears on them', async () => {
+    const { crop, decide } = await openSort(2000)
+    await decide(20)
+
+    const discarded = crop.presented.length - 20
+    expect(figure('data-stop-discarded')).toBe(String(discarded))
+    // 0.55 x 1.20 + 0.35 x 0.60 + 0.10 x 0 an apple, over what would be left.
+    expect(figure('data-stop-worth')).toContain(money(discarded * 0.87))
+    expect(figure('data-stop-time')).toBe('29.2 min')
+  }, PLAYING_TIME)
+
+  it('closes the year on a delivered part of a crop, and counts the rest as left', async () => {
+    const { crop, decide } = await openSort(2000)
+    await decide(20)
+
+    const offered = figure('data-stop-wage')
+    await userEvent.click(screen.getByRole('button', { name: /Deliver what you have sorted/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Deliver and close the year/ }))
+
+    const played = reported()
+    // Exactly what the offer promised, and the whole of the rest of the crop — the 701
+    // still presentable and the 1 279 there were never photographs for — earns nothing.
+    expect(played.wage).toBe(offered)
+    expect(played.wage).toBe(faultlessWage({ ...crop, presented: crop.presented.slice(0, 20) }))
+    expect(played.unsorted).toBe(String(2000 - 20))
+    expect(played.elapsed).toBe('50 s')
+
+    // And the year is closed on the same step a completed sort closes it on: the wage is
+    // against the balance, and the farm has moved on to the next one.
+    const bar = screen.getByRole('region', { name: 'Farm status' })
+    expect(within(bar).getByRole('definition', { name: 'Year' }).textContent).toBe(
+      String(shipped.openingYear + 1),
+    )
+    expect(within(bar).getByRole('definition', { name: 'Balance' }).textContent).toBe(played.wage)
   }, PLAYING_TIME)
 })
 
 describe('the numbers move as declared data', () => {
-  it('moves the plateau with the declared limit, and with no code change', async () => {
-    // The same crop, the same table and the same screens; only the task's declared figure
-    // for what one person gets through is different, and the whole shape moves with it.
-    const played = await harvest(400, retuned(20))
-
-    expect(played.presented).toBe(20)
-    expect(played.wage).toBe(money(5.8))
-    expect(played.unsorted).toBe('380')
-    expect(played.projection).toBe('16.7 min')
-  }, PLAYING_TIME)
-
   it('moves the opening harvest with the farm’s declared crop', async () => {
     const small = await harvest(4)
     expect(small.presented).toBe(4)
     expect(small.unsorted).toBe('0')
-    expect(small.wage).toBe(money(1))
+    expect(small.wage).toBe(money(3))
   }, PLAYING_TIME)
 })

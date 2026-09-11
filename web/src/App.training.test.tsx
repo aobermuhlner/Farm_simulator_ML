@@ -42,6 +42,25 @@ function configurationFiles(): Map<string, unknown> {
 }
 
 /**
+ * The shipped catalog's item that opens the family the task opens at.
+ *
+ * Read out of the catalog rather than named, so a rename of the item or a reshuffle of
+ * the shelf moves this with it.
+ */
+const ownsTheFamily = (() => {
+  const source = sourcePathFor(SHIPPED_CATALOG) ?? ''
+  const raw = JSON.parse(readFileSync(join(process.cwd(), source), 'utf8')) as {
+    items: readonly { id: string; opens: readonly Record<string, unknown>[] }[]
+  }
+  const wanted = firstFamily(task.declaration).id
+  const item = raw.items.find((entry) =>
+    entry.opens.some((unlock) => unlock.kind === 'model-family' && unlock.family === wanted),
+  )
+  if (item === undefined) throw new Error(`the shipped catalog opens no family "${wanted}"`)
+  return item.id
+})()
+
+/**
  * Serves the manifest and the predictions a run needs, counting manifest fetches so
  * laziness stays observable.
  */
@@ -52,12 +71,18 @@ function serveManifest(): { readonly calls: () => number } {
     const url = String(input)
     if (url.endsWith(SHIPPED_CATALOG)) {
       // Served from the shipped file rather than a stand-in, so this suite also asserts
-      // that the catalog students get passes every check the shell runs on it.
+      // that the catalog students get passes every check the shell runs on it — with one
+      // thing owned that the shipped file gives nobody. The farm opens owning no model at
+      // all now, and a workshop with no family selected has no training data to show; what
+      // is being held here is the browser, not how the model was paid for.
       const source = sourcePathFor(SHIPPED_CATALOG) ?? ''
+      const shippedCatalogJson = JSON.parse(
+        readFileSync(join(process.cwd(), source), 'utf8'),
+      ) as Record<string, unknown>
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(JSON.parse(readFileSync(join(process.cwd(), source), 'utf8'))),
+        json: () => Promise.resolve({ ...shippedCatalogJson, ownedAtStart: [ownsTheFamily] }),
       } as Response)
     }
     if (url.endsWith(SHIPPED_FARM)) {

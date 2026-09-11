@@ -24,7 +24,7 @@ const farm = farmDeclaration()
 
 const catalog = soundCatalog({
   schemaVersion: '1.0.0',
-  groups: [{ id: 'models', label: 'Models' }],
+  groups: [{ id: 'models', label: 'Models', soldAt: 'market' }],
   ownedAtStart: [],
   items: [
     {

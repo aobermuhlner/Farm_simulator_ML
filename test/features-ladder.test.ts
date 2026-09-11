@@ -38,6 +38,7 @@ import { valueDelivery } from '../src/scoring/index.js'
 import type { Crop } from '../src/sorting/index.js'
 import type { TaskDeclaration } from '../src/task/types.js'
 import { appleDeclaration } from './helpers/apple.js'
+import { maxLand } from '../src/progression/index.js'
 import { shippedCatalogJson, soundCatalog } from './helpers/catalog.js'
 import {
   committedPool,
@@ -54,7 +55,15 @@ const apple = appleDeclaration()
 const farm = shippedFarm()
 const pool = committedPool(apple)
 const split = cropSplit(pool)
-const LAND = farm.orchard.opening
+/**
+ * The orchard the earnings are recorded on: the largest the shipped catalog reaches.
+ *
+ * Not the opening one. The farm opens broke on a single tree, and a figure for what a
+ * model earns there would be a figure about five apples. What this recording is for is
+ * the comparison between a rule and a network over a year, and the year that comparison
+ * is about is the one a student stands in once they have bought either of them.
+ */
+const LAND = maxLand(soundCatalog(shippedCatalogJson(), farm), farm)
 const CONFIGURATIONS = shippedConfigurations(apple)
 
 /** The best rule the declared budget allows, thresholds fitted on the browsable images. */
@@ -148,35 +157,40 @@ const MEASURED = measuredFigures()
  * measured value. Re-record it, and say in the change why it moved.
  */
 const RECORDED: Readonly<Record<string, number>> = {
+  // The earnings were re-recorded by `smallholding-economy`, which tripled the payoff
+  // table and shrank the orchard the ladder reaches from 36 000 apples to 2 000. The two
+  // very nearly cancel — every figure below moved by less than one per cent — because the
+  // endgame orchard was priced to pay what the old *opening* one did. The scores did not
+  // move at all: they are measured over the evaluation split, which nothing here touched.
   'budget.maxNodes': 3,
 
   'rule.score.overall': 0.825,
   'rule.score.red': 0.972,
   'rule.score.green': 1,
   'rule.score.wormy': 0.356,
-  'rule.earnings.mild': 1647,
-  'rule.earnings.wet': 1378,
+  'rule.earnings.mild': 1643,
+  'rule.earnings.wet': 1377,
 
   'blocks2-channels8-regularization1-dropout0-datasetstarter.score.overall': 0.766,
   'blocks2-channels8-regularization1-dropout0-datasetstarter.score.red': 0.866,
   'blocks2-channels8-regularization1-dropout0-datasetstarter.score.green': 1,
   'blocks2-channels8-regularization1-dropout0-datasetstarter.score.wormy': 0.332,
-  'blocks2-channels8-regularization1-dropout0-datasetstarter.earnings.mild': 1476,
-  'blocks2-channels8-regularization1-dropout0-datasetstarter.earnings.wet': 1215,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.earnings.mild': 1484,
+  'blocks2-channels8-regularization1-dropout0-datasetstarter.earnings.wet': 1214,
 
   'blocks2-channels16-regularization1-dropout0-datasetstarter.score.overall': 0.764,
   'blocks2-channels16-regularization1-dropout0-datasetstarter.score.red': 0.856,
   'blocks2-channels16-regularization1-dropout0-datasetstarter.score.green': 1,
   'blocks2-channels16-regularization1-dropout0-datasetstarter.score.wormy': 0.344,
-  'blocks2-channels16-regularization1-dropout0-datasetstarter.earnings.mild': 1465,
-  'blocks2-channels16-regularization1-dropout0-datasetstarter.earnings.wet': 1207,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.earnings.mild': 1469,
+  'blocks2-channels16-regularization1-dropout0-datasetstarter.earnings.wet': 1206,
 
   'blocks2-channels32-regularization1-dropout0-datasetstarter.score.overall': 0.786,
   'blocks2-channels32-regularization1-dropout0-datasetstarter.score.red': 0.868,
   'blocks2-channels32-regularization1-dropout0-datasetstarter.score.green': 1,
   'blocks2-channels32-regularization1-dropout0-datasetstarter.score.wormy': 0.408,
-  'blocks2-channels32-regularization1-dropout0-datasetstarter.earnings.mild': 1495,
-  'blocks2-channels32-regularization1-dropout0-datasetstarter.earnings.wet': 1250,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.earnings.mild': 1493,
+  'blocks2-channels32-regularization1-dropout0-datasetstarter.earnings.wet': 1248,
 }
 
 describe('the recording has something real to measure', () => {
@@ -190,6 +204,7 @@ describe('the recording has something real to measure', () => {
   it('draws the mildest and the wettest year the declaration permits', () => {
     expect(YEARS.wet.composition.wormy ?? 0).toBeGreaterThan(YEARS.mild.composition.wormy ?? 0)
     expect(YEARS.mild.size).toBe(LAND * farm.orchard.piecesPerUnit)
+    expect(YEARS.mild.size).toBe(2000)
   })
 })
 
